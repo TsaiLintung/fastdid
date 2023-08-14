@@ -1,0 +1,122 @@
+---
+title: "Get Started"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{DiDforBigData}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+There are only 3 functions in this package:
+
+1. `SimDiD()`: This function simulates data.
+2. `DiDge()`: This function estimates DiD for a single cohort and a single event time.
+3. `DiD()`: This function estimates DiD for all available cohorts and event times. 
+
+We now demonstrate the simplest application of the 3 functions.
+
+Detailed documentation for each of these function is available from the Reference tab above.
+
+## 0. Installation
+
+
+```{r echo=T, eval=FALSE, message=FALSE}
+devtools::install_github("setzler/DiDforBigData")
+```
+
+```{r echo=T, eval=T, message=FALSE}
+library(DiDforBigData)
+```
+
+
+## 1. Prepare Data
+
+I provide a simple data simulator as follows:
+
+```{r echo=T, eval=T, message=FALSE}
+sim = SimDiD(sample_size = 400, seed=123)
+
+# true ATTs in the simulation
+print(sim$true_ATT)
+
+# simulated data
+simdata = sim$simdata
+print(simdata)
+```
+
+Your real data needs to have this "long" format, i.e., there need to be variables for the individual identifier (e.g. `id`), the time variable (e.g. `year`), the cohort at which treatment begins (e.g. `cohort`), and the outcome variable (e.g. `Y`). No other variables are required. These variables can have any names you prefer.
+
+Before going to the estimation, we need to prepare a list of the variable names:
+
+```{r echo=T, eval=T, message=FALSE}
+varnames = list()
+varnames$time_name = "year" 
+varnames$outcome_name = "Y"
+varnames$cohort_name = "cohort"
+varnames$id_name = "id"
+```
+
+
+
+## 2. Estimate DiD for a Single Cohort 
+
+We choose an event time (+3) and a cohort of treated units (2010), then estimate DiD:
+
+```{r echo=T, eval=T, message=FALSE}
+did_2010 = DiDge(inputdata = simdata, varnames = varnames, 
+             cohort_time = 2010, event_postperiod = 3)
+
+print(did_2010)
+```
+
+
+Comparing this estimate to the true ATT above, we see that the estimation performed well.
+
+Note that it used -1 as the base year by default. This is easy to change.
+
+
+
+## 3. Estimate DiD for All Cohorts and Event Times
+
+Suppose we want to estimate the ATT at each event time from -3 to +5. We can do so as follows:
+
+```{r echo=T, eval=T, message=FALSE}
+did_all = DiD(inputdata = simdata, varnames = varnames, min_event = -3, max_event = 5)
+```
+
+The output of DiD() is a list. One object in the list is results_average, which includes the average ATT across cohorts:
+
+
+```{r echo=T, eval=T, message=FALSE}
+print(did_all$results_average)
+```
+
+
+The other output from DiD() is results_cohort, which includes all combinations of event times and cohorts. It is too large to print here, so let's just print the results for event times 1 and 2:
+
+```{r echo=T, eval=T, message=FALSE}
+print(did_all$results_cohort[EventTime==1 | EventTime==2])
+```
+
+Note: the simulated data ends in 2013, so event time 2 is not available for treatment cohort 2012.
+
+To take an average across multiple event times, use the `Esets` argument. It accepts a list, in which each item is a vector of event times over which to average:
+
+
+```{r echo=T, eval=T, message=FALSE}
+did_all = DiD(inputdata = simdata, varnames = varnames, min_event = -3, max_event = 5, 
+              Esets = list(c(1,2), c(1,2,3)))
+```
+
+```{r echo=T, eval=T, message=FALSE}
+print(did_all$results_Esets)
+```
+
+

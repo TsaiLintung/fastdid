@@ -1,0 +1,401 @@
+---
+title: "Examples"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Examples}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+
+Before getting started, make sure that you have installed the package.
+
+To install the package from CRAN:
+
+```{r echo=T, eval=FALSE, message=FALSE}
+install.packages("DiDforBigData")
+```
+
+To install the package from Github:
+
+```{r echo=T, eval=FALSE, message=FALSE}
+devtools::install_github("setzler/DiDforBigData")
+```
+
+If the package is installed, make sure that you load it:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+library(DiDforBigData)
+```
+
+
+# 1. Choosing the Control Group
+
+### The `control_group` argument
+
+Depending on empirical context, the parallel-trends assumption may only hold for one of these possible control groups:
+
+- `"never-treated"`: These are the control units that are never observed receiving the treatment within the sampling time frame.
+- `"future-treated"`: These are the control units that are observed receiving the treatment within the sampling time frame.
+- `"all"`: These include both the "never-treated" and "future-treated" groups.
+
+`DiDforBigData` makes it easy to choose among these possibilities by setting the `control_group` argument of the `DiD` function.
+
+### Example
+
+We start by simulating some data to work with:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+sim = SimDiD(seed=123, sample_size = 1000)
+simdata = sim$simdata
+print(simdata)
+```
+
+
+We can check what the true ATT is in the simulated data. In particular, let's focus on the ATT for Cohort 2007:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+print(sim$true_ATT[cohort==2007])
+```
+
+
+We also set up the variable names as a list so that `DiDforBigData` knows which variable is the outcome, which variable is the treatment cohort, etc.:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+varnames = list()
+varnames$time_name = "year" 
+varnames$outcome_name = "Y"
+varnames$cohort_name = "cohort"
+varnames$id_name = "id"
+```
+
+
+Now, we are ready to estimate DiD. We focus on the ATT for the 2007 cohort at event times -3,...,5. Initially, the control group is not set, so the function will use the default option  `control_group = "all"`:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+did = DiD(inputdata = simdata, varnames = varnames, min_event = -3, max_event=5)
+
+print(did$results_cohort[Cohort==2007])
+```
+
+We now consider changing the estimation to only use the "never-treated" control group:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+did = DiD(inputdata = simdata, varnames = varnames, 
+          control_group = "never-treated", min_event = -3, max_event=5)
+
+print(did$results_cohort[Cohort==2007])
+```
+
+Note that the sample size for the control group, `Ncontrol`, is now substantially lower. Finally, we consider changing this to only use the "future-treated" group:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+did = DiD(inputdata = simdata, varnames = varnames, 
+          control_group = "future-treated", min_event = -3, max_event=5)
+
+print(did$results_cohort[Cohort==2007])
+```
+
+We see that, because there are no future-treated cohorts left at event time +5, it is no longer possible to provide an ATT estimate at event time +5 if using the future-treated control group.
+
+
+
+
+
+
+
+
+# 2. Avoiding anticipation
+
+
+### The `base_event` argument 
+
+In DiD designs, the researcher must choose a base pre-period against which differences are measured. A natural choice is `base_event = -1`, which means to use the time period just before treatment onset at event time 0. 
+
+As discussed by Callaway & Sant'Anna (2021), one possibility is that the treatment group begins responding to treatment prior to treatment onset, which is called "anticipation." If anticipation begins at period -1, then differences measured relative to `base_event = -1` yield inconsistent DiD estimates. 
+
+Fortunately, there is an easy solution: choose a base pre-period from before anticipation began. If it seems reasonable to assume that the treatment group could not have anticipated treatment 3 years before treatment onset, then `base_event = -3` should be free of anticipation.
+
+
+### Example
+
+We can simulate data that is subject to anticipation using the `anticipation` argument in the `SimDiD` function:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+sim = SimDiD(seed=123, sample_size = 200, anticipation = 2)
+simdata = sim$simdata
+print(simdata)
+```
+
+
+
+Let's focus on the average ATT across all cohorts. There are two periods of treatment effects prior to treatment, which we can verify by checking the true ATT from the simulation:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+print(sim$true_ATT[cohort=="Average"])
+```
+
+
+
+We set up the `varnames` to prepare for estimation:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+varnames = list()
+varnames$time_name = "year" 
+varnames$outcome_name = "Y"
+varnames$cohort_name = "cohort"
+varnames$id_name = "id"
+```
+
+
+If we estimate DiD using the default argument that `base_event = -1`, the estimate will be biased and inconsistent:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+did = DiD(inputdata = simdata, varnames = varnames, min_event = -3, max_event=3)
+
+print(did$results_average)
+```
+
+We now set `base_event = -3` to avoid the anticipation at -1 and -2:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+did = DiD(inputdata = simdata, varnames = varnames, 
+          base_event = -3, min_event = -3, max_event=3)
+
+print(did$results_average) 
+```
+
+We see that the estimate is now close to the true ATT.
+
+
+
+
+
+
+
+
+
+
+# 3. Controlling for Time-varying Covariates
+
+
+### The `covariate_names` entry
+
+
+We sometimes worry that treatment cohorts are selected on time-varying observables, and those time-varying observables also directly affect the outcome. If the growth rate in the observables differs between the treatment and control groups, it creates a violation of the parallel-trends assumption:  the treatment and control groups would have experienced different growth profiles in the absence of treatment due to their different observables.
+
+Fortunately, this is easy to fix: Since the confounding variables are observable, we just need to control for those observables. `DiDforBigData` requires only that the list of variable names, `varnames`, is modified to include a `covariate_names` entry. For example, `varnames$covariate_names = c("X1","X2")` tells it to control linearly for time-variation in X1 and X2.
+
+
+### Example
+
+There is an option in `SimDiD()` to add a couple of covariates. 
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+
+sim = SimDiD(sample_size=1000, time_covars=TRUE)
+simdata = sim$simdata
+print(simdata)
+
+print(sim$true_ATT[cohort==2007])
+```
+
+There are two covariates, X1 and X2. In particular, X2  differs in growth rates across treatment cohorts, which means that it causes violations of parallel trends if not controlled. 
+
+
+We set up the `varnames` to prepare for estimation, ignoring the covariates for now:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+varnames = list()
+varnames$time_name = "year" 
+varnames$outcome_name = "Y"
+varnames$cohort_name = "cohort"
+varnames$id_name = "id"
+```
+
+
+We verify that DiD gives the wrong answer for cohort 2007:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+did = DiD(inputdata = simdata, varnames = varnames, min_event = -3, max_event=5)
+
+print(did$results_cohort[Cohort==2007])
+```
+
+
+To control linearly for X1 and X2, we just need to add them to the `covariate_names` argument of `varnames`:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+varnames$covariate_names = c("X1","X2")
+```
+
+Now we check DiD with controls for time-variation in X1 and X2:
+
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+did = DiD(inputdata = simdata, varnames = varnames, min_event = -3, max_event=5)
+
+print(did$results_cohort[Cohort==2007])
+```
+
+We see that the bias has been removed thanks to the control variables.
+
+
+
+
+
+
+
+
+
+# 4. Robust and Clustered Standard Errors
+ 
+### The  `cluster_names` entry
+
+By default, this package always provides heteroskedasticity-robust standard errors. However, in difference-in-differences applications, it is often the case that treatment is assigned to groups of individuals (e.g., a change in  state-wide policy treats all individuals in a state simultaneously). If those groups are also subject to common shocks, this induces correlation in the estimation errors within cluster, and standard errors will tend to be too small.
+
+Fortunately, this is easy to fix: If the groups within which the estimation errors are correlated are known to the researcher, we just need to cluster standard errors by group. `DiDforBigData` requires only that the list of variable names, `varnames`, is modified to include a `cluster_names` entry. For example, `varnames$cluster_names = c("group1","group2")` tells it to use multi-way clustering in a way that accounts for common shocks to each of observable groups, "group1" and "group2".
+
+Note: When estimating a regression that combines multiple treatment cohorts and/or multiple event times, it is necessary to always cluster on unit (individual). `DiDforBigData` adds this clustering by default.
+
+
+
+
+### Example
+
+There is an option in `SimDiD()` using `clusters=TRUE` to group individuals into bins that are differentially selected for treatment and that also face common shocks within each bin:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+
+sim = SimDiD(sample_size=1000, clusters = TRUE)
+simdata = sim$simdata
+print(simdata)
+
+print(sim$true_ATT[cohort=="Average"])
+```
+
+
+We set up the `varnames` to prepare for estimation:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+varnames = list()
+varnames$time_name = "year" 
+varnames$outcome_name = "Y"
+varnames$cohort_name = "cohort"
+varnames$id_name = "id"
+```
+
+
+We check the usual standard errors, which are clustered on unit based on `varnames$id_name` by default:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+did = DiD(inputdata = simdata, varnames = varnames, min_event = -1, max_event=3)
+
+print(did$results_average)
+
+```
+
+Next, we cluster on the "cluster" variable by adding it to the `varnames` and re-estimating:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+
+varnames$cluster_names = "cluster" 
+
+did = DiD(inputdata = copy(simdata), varnames = varnames, min_event = -1, max_event=3)
+
+print(did$results_average)
+
+```
+
+
+
+
+
+# 5. Parallelization
+ 
+### The  `parallel_cores` argument
+
+If you have the `parallel` package installed, it is trivial to execute your DiD estimation in parallel by setting the `parallel_cores` argument in the `DiD()` command. For example, `DiD(..., parallel_cores = 4)` will utilize 4 cores in parallel. To determine how many cores are available on your system, just run the command `parallel::detectCores()` in R. (I suggest leaving at least 1 core free to keep your system from freezing.)
+
+While parallel processing usually does not interact well with the progress bar, I have written a modified version of R's parallelization protocol that correctly updates the progress bar as it completes its tasks. Thus, if you have the `progress` package installed, you will correctly see a progress bar and predicted completion time while your `DiD` estimation is executing in parallel.
+
+
+### Example
+
+We simulate some data:
+
+```{r echo=TRUE, eval = TRUE, message=FALSE}
+sim = SimDiD(seed=123, sample_size = 1000)
+simdata = sim$simdata
+```
+
+We set up the `varnames` to prepare for estimation:
+
+```{r echo=TRUE, eval=FALSE, message=FALSE}
+varnames = list()
+varnames$time_name = "year" 
+varnames$outcome_name = "Y"
+varnames$cohort_name = "cohort"
+varnames$id_name = "id"
+```
+
+We run the estimation not in parallel:
+
+```{r echo=TRUE, eval=FALSE, message=FALSE}
+did = DiD(inputdata = copy(simdata), varnames = varnames, min_event = -1, max_event=3)
+```
+
+
+We run the estimation in parallel with 2 processes:
+
+```{r echo=TRUE, eval=FALSE, message=FALSE}
+did = DiD(inputdata = copy(simdata), varnames = varnames, min_event = -1, max_event=3, parallel_cores = 2)
+```
+
+
+
+# 6. Average across Event Times
+
+### The `Esets` argument
+
+Suppose you wish to average the DiD estimate across a few event times, with a corresponding standard error for the average across event times. This is done by providing a list to the `Esets` argument in the `DiD()` command. 
+
+For example, if `Esets = list(c(1,2,3))`, then the output will include the average DiD for event times `e=1,2,3`. Multiple sets of event times can be provided, e.g., `Esets = list(c(1,2,3), c(1,3))` will provide the average across `e=1,2,3` as well as the average for `e=1` and `e=3`.
+
+Event set averages are returned in the `$results_Esets` argument of the output list. Sample size is not provided, as it is unclear how to define the sample size when averaging multiple statistics, each of which has a different sample size.
+
+### Example
+
+
+We simulate some data:
+
+```{r echo=TRUE, eval=TRUE, message=FALSE}
+sim = SimDiD(seed=123, sample_size = 1000)
+simdata = sim$simdata
+```
+
+We set up the `varnames` to prepare for estimation:
+
+```{r echo=TRUE, eval=TRUE, message=FALSE}
+varnames = list()
+varnames$time_name = "year" 
+varnames$outcome_name = "Y"
+varnames$cohort_name = "cohort"
+varnames$id_name = "id"
+```
+
+We run the estimation with two event set averages:
+
+```{r echo=TRUE, eval=TRUE, message=FALSE}
+did = DiD(inputdata = copy(simdata), varnames = varnames, min_event = -1, max_event=3, Esets = list(c(1,2,3), c(1,3)))
+
+print(did)
+```
+
