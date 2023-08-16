@@ -16,7 +16,7 @@ estimate_event_dynamics <- function(panel, start, end, outcomes, control = c(), 
                                              covariate_base_balance = control,
                                              covariate_base_stratify = stratify,
                                              never_treat_action = ifelse(use_never_treat, "both", "exclude"),
-                                             balanced_panel = FALSE)
+                                             balanced_panel = TRUE)
   
   event_panel <- event_ATTs_head(event_panel, outcomes)
   

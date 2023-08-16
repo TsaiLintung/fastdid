@@ -200,8 +200,6 @@ create_event_data<-function(maindata,
   rm(controldata)
   gc()
   
-
-  
   eventdata[,post:=event_time >= 0]
   eventdata[,id:=as.factor(id)]
   eventdata[,treatgroup:=as.factor(treatgroup)]

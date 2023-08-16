@@ -12,8 +12,7 @@ setwd("~/GitHub/EventStudyCode")
 
 source("source_raw/DiDforBigData/R/DiD_simulator.R")
 
-
-sim <- SimDiD(sample_size = 100000)
+sim <- SimDiD(sample_size = 10000)
 dt <- sim$simdata
 true_ATT <- dt$true_ATT
 
@@ -21,27 +20,25 @@ true_ATT <- dt$true_ATT
 
 library(DiDforBigData)
 
-source("source/DiDforBigData/R/DiD_combine_cohorts.R")
-source("source/DiDforBigData/R/DiD_within_cohort.R")
-source("source/DiDforBigData/R/Utils.R")
-source("source/DiDforBigData/R/DiD_SEs.R")
-
+source("source_raw/DiDforBigData/R/DiD_combine_cohorts.R")
+source("source_raw/DiDforBigData/R/DiD_within_cohort.R")
+source("source_raw/DiDforBigData/R/Utils.R")
+source("source_raw/DiDforBigData/R/DiD_SEs.R")
 
 varnames = list()
 varnames$time_name = "year"
 varnames$outcome_name = "Y"
 varnames$cohort_name = "cohort"
 varnames$id_name = "id"
-DiD(dt, varnames)
 
-estimate <- DiD_hb(dt, varnames)
+profvis(DiD(dt, varnames))
 
 # EventCode --------------------------------------------------------------------
 
-source("source/EventCode/eventcode_Max_ver7_raw.R")
-source("source/EventCode/eventcode_helper.R")
+source("source_raw/EventCode/eventcode_Max_ver7_raw.R")
+source("source_raw/EventCode/eventcode_helper.R")
 
-profvis(estimate <- estimate_event_dynamics(dt, start = -9, end = 6, outcomes = "Y", unitvar = "id", timevar = "year", cohortvar = "cohort", use_never_treat = TRUE)
+profvis(estimate <- estimate_event_dynamics(dt, start = -2, end = 2, outcomes = "Y", unitvar = "id", timevar = "year", cohortvar = "cohort", use_never_treat = FALSE)
 )
 
 microbenchmark(
