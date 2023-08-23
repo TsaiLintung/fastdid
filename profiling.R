@@ -10,11 +10,13 @@ library(dplyr)
 library(stringr)
 library(fixest)
 library(kit)
+library(collapse)
+library(doFuture)
+library(purrr)
 
 setwd("~/GitHub/EventStudyCode")
 
 source("sim_did.R")
-source("source/eventcode.R")
 
 #load functions
 
@@ -31,9 +33,9 @@ source("source/eventcode.R")
 
 #test with did
 
-source("source/eventcode_factor.R")
+source("source/eventcode.R")
 
-simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic")
+simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic")
 dt <- simdt$dt
 
 # event code ---------------------------------------------------------------------

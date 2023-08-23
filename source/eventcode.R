@@ -26,7 +26,8 @@ create_event_data<-function(maindata,
                             lower_event_time = -Inf, #Earliest period (relative to treatment time) for which to estimate effects
                             upper_event_time = Inf, #Latest period (relative to treatment time) for which to estimate effects
                             balanced_panel = FALSE, #If TRUE, keep only units observed over full interval [lower_event_time, upper_event_time]
-                            stratify_balance_val = NA) 
+                            stratify_balance_val = NA,
+                            parallel = FALSE) 
 {
   
   #deal with with name
@@ -34,8 +35,6 @@ create_event_data<-function(maindata,
     maindata[,anycohortvar:=get(cohortvar)]
     anycohortvar<-"anycohortvar"
   }
-  if(is.numeric(base_time)) maindata[,base_time:=base_time]
-  else setnames(maindata,base_time,"base_time")
   setnames(maindata,c(timevar,unitvar,cohortvar,anycohortvar),c("time","id","cohort","anycohort"))
   if(base_restrict != 1) setnames(maindata,base_restrict,"base_restrict")
   if(treated_restrict != 1) setnames(maindata,treated_restrict,"treated_restrict")
@@ -45,6 +44,7 @@ create_event_data<-function(maindata,
   if(!is.data.table(maindata)) stop("rawdata must be a data.table")
   if(any(is.na(maindata$cohort))) stop("cohort variable should not be missing (it can be infinite instead)")
   if(any(is.na(maindata$anycohort))) stop("anycohort variable should not be missing (it can be infinite instead)")
+  if(any(fduplicated(maindata[,.(time, id)]))){stop ("some unit-time is observed more then once")}
   
   maindata[, id := charToFact(as.character(id))]
   
@@ -107,22 +107,13 @@ create_event_data<-function(maindata,
   controldata<-controldata[event_time >= lower_event_time & event_time <= upper_event_time,]
   
   
-  #make sure observations are only observed once in the base period
-  treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-  controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-  if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
-  if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
-  treatdata <- treatdata[obsbase==1,]
-  controldata <- controldata[obsbase==1,]
-  
-  
 
   #If base_time varies across units, reassigning it to a common reference value:
   #This is relevant, for instance, with a dataset that moves from annual to bi-annual
-  treatdata[event_time == base_time,event_time :=max(base_time)]
-  treatdata[,base_time :=max(base_time)]
-  controldata[event_time == base_time,event_time :=max(base_time)]
-  controldata[,base_time :=max(base_time)]
+  #treatdata[event_time == base_time, event_time :=max(base_time)]
+  #treatdata[,base_time :=max(base_time)]
+  #controldata[event_time == base_time,event_time :=max(base_time)]
+  #controldata[,base_time :=max(base_time)]
   
   #count how many times a id is viewed
   treatdata[,obscount:=1]
@@ -177,37 +168,59 @@ create_event_data<-function(maindata,
   controldata[, event_time_fact := charToFact(as.character(event_time))]
   controldata[, cohort_fact := charToFact(as.character(cohort))]
   
+  #make sure observations are only observed once in the base period
+  #treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
+  #controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
+  #if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
+  #if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
+  #treatdata <- treatdata[obsbase==1,]
+  #controldata <- controldata[obsbase==1,]
   
-  event_times<-treatdata[,unique(event_time)]
-  eventdata<-NULL
   #For the final dataset, we must stack each pairwise combo of (base year, other year)
   #for each household. The reason? We will assign control households weights that vary
   #based on the other year, as households enter/exit the sample.
-  if(balanced_panel==FALSE){
-    for(t in event_times){
-      treatdata[,obst:=sum(event_time==t),by=.(id,cohort)]
-      controldata[,obst:=sum(event_time==t),by=.(id,cohort)]
-      
-      pairdata<-rbind(treatdata[obsbase==1 & obst==1 & base_time != t & (event_time == t | event_time == base_time),],
-                      controldata[obsbase==1 & obst==1 & base_time != t & (event_time == t | event_time == base_time),])
-      pairdata[,time_pair:= charToFact(as.character(t))]
-      eventdata<-rbind(eventdata, 
-                       pairdata)
-    }
+  event_times<- as.integer(as.character(treatdata[,unique(event_time)]))
+  event_times <- event_times[event_times %!=% -1]
+  
+  stack_eventtime <- function(t, treatdata, controldata){
+    treatdata[,obst:=anyv(event_time,t),by=.(id,cohort)]
+    controldata[,obst:=anyv(event_time,t),by=.(id,cohort)]
     
-    eventdata[,obst:=NULL]
+    pair_treat_data <- treatdata[obst == TRUE & event_time %in% c(t, base_time),]
+    pair_control_data <- controldata[obst == TRUE & event_time %in% c(t, base_time),]
     
+    fact_t <- charToFact(as.character(t))
+    
+    pair_treat_data[,time_pair := fact_t]
+    pair_control_data[,time_pair := fact_t]
+    
+    #return this
+    return(c(list(pair_treat_data), list(pair_control_data)))
   }
   
+  data_list <- list()
   
-  eventdata[,obsbase:=NULL]
+  if(parallel == TRUE){
+    options(future.globals.maxSize= 1000*1024*1024)
+    doFuture::registerDoFuture()
+    plan("multisession")
+    data_list <- foreach(t = event_times) %dopar% stack_eventtime(t, treatdata, controldata)
+  } else {
+    data_list <- foreach(t = event_times) %do% stack_eventtime(t, treatdata, controldata)
+  }
+
+
+  data_list <- flatten(data_list)
+  eventdata <- rbindlist(data_list, use.names=TRUE)
+
+  eventdata[,obst:=NULL]
   eventdata[,anycohort:=NULL]
   
   rm(treatdata)
   rm(controldata)
   gc()
   
-  eventdata[,post:=event_time >= 0]
+  eventdata[,post:= event_time >= 0]
   
   #calculate ipw
   #Note: this may have a lot of fixed effects, and may need to be broken down into multiple smaller regressions:
@@ -263,7 +276,8 @@ event_ATTs_head<-function(eventdata,
                           outcomes,#vector of variable names
                           clustervar="id", 
                           weights="pweight",
-                          keep_trends=TRUE){
+                          keep_trends=TRUE,
+                          base_time = -1){
   
   #These regressions should work identically if the fixed effects (after the "|") were replaced with:
   # interaction(time_pair,id,cohort)
@@ -284,13 +298,16 @@ event_ATTs_head<-function(eventdata,
   eventdata[,treated_event_time_stratify := interaction(event_time_fact,stratify, drop = TRUE)]
   
   #Omitting base year for all levels of --stratify--:
-  eventdata[event_time==base_time,event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
+  
+  base_stratify <-  paste0(c(base_time,1),collapse=".")
+  
+  eventdata[event_time==base_time,event_time_stratify := base_stratify]
+  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = base_stratify)]
   
   #Omitting base year for all levels of --stratify--, for treated people
-  eventdata[treated == 0 ,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[event_time==base_time,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
+  eventdata[treated == 0 ,treated_event_time_stratify :=base_stratify]
+  eventdata[event_time==base_time,treated_event_time_stratify :=base_stratify]
+  eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_stratify)]
   
   #Omitting effect for untreated people or observations in pre-period:
   #eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
@@ -306,7 +323,10 @@ get_result_dynamic<-function(eventdata_panel,start,end,variable,table = data.tab
   b = end-start+ifelse(-1 %in% start:end, 0, 1)
   for(eventtime in start:end){
     if(eventtime == -1){next}
+    
     results[[pos]] <- event_ATTs_dynamic(eventdata_panel[as.character(time_pair)==eventtime,],outcomes=c(variable),keep_trends=trends)
+    
+    
     pos<-pos+1
   }
   for(i in 1:b){
