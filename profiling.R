@@ -36,9 +36,34 @@ dt <- simdt$dt
 # event code ---------------------------------------------------------------------
 
 started.at <- proc.time()
-event_code_est <- estimate_event_dynamics(dt, start = -8, end = 8, 
-                                          outcomes = "y", unitvar = "unit", timevar = "time", cohortvar = "G", control = "x",
-                                          use_never_treat = TRUE)
+
+  event_panel <- copy(dt) #copying so that the original does not change
+  
+  min_time <- -8
+  max_time <- 8
+  y_name <- "y"
+  t_name <- "time"
+  unit_name <- "unit"
+  cohort_name <- "G"
+  balance_covariate <- "x"
+  
+  onset <- event_panel[, min(get(cohort_name)) - 1]
+  event_panel[, onset_time := onset]
+  
+  event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
+                                                   cohortvar = cohort_name,
+                                                   onset_agevar = "onset_time",
+                                                   covariate_base_balance = balance_covariate,
+                                                   covariate_base_stratify = c(),
+                                                   never_treat_action = "both",
+                                                   balanced_panel = FALSE)
+  
+  event_panel <- event_ATTs_head(event_panel, yname)
+  
+  dt_dynamic <- data.table()
+  
+  event_code_est <- suppressMessages(get_result_dynamic(event_panel,min_time,max_time,y_name,trends = FALSE))
+
 timetaken(started.at)
 
 dynamic_att <- event_code_est[str_starts(variable, "treated"), ]

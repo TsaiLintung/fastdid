@@ -83,7 +83,6 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
 validate_att_est <- function(true_att, att_hat, att_se_hat, type = "all"){
   
   
-  
   if(type == "all"){
     
     #input vector like G,time = 2,2, 2,3,......, 3,2
@@ -110,10 +109,11 @@ validate_att_est <- function(true_att, att_hat, att_se_hat, type = "all"){
   att[, ci_ub := att_hat+att_se_hat*1.96]
   att[, ci_lb := att_hat-att_se_hat*1.96]
   att[, par_in_ci := (attgt <= ci_ub & attgt >= ci_lb)]
+
   
   ratio <- round(att[, mean(par_in_ci)], 2)
   
-  message(ratio, " of post-treatment true parameter is in the CI")
+  message(ratio, " of true parameter is in the CI")
   
   return(ratio)
   

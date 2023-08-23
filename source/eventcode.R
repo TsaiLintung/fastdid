@@ -285,10 +285,53 @@ create_event_data<-function(maindata,
   return(eventdata)
 }
 
-get_result_dynamic<-function(eventdata_panel,start,end,variable,table,results=list(),pos=1,trends=TRUE){
+event_ATTs_head<-function(eventdata,
+                          outcomes,#vector of variable names
+                          clustervar="id", 
+                          weights="pweight",
+                          keep_trends=TRUE){
   
-  b = end-start+1
+  
+  #These regressions should work identically if the fixed effects (after the "|") were replaced with:
+  # interaction(time_pair,id,cohort)
+  eventdata[,treated_post := as.factor((treated == 1) * (post == 1))]
+  eventdata[,treated_pre := as.factor((treated == 1) * (post == 0))]
+  eventdata[,treated_event_time := event_time]
+  eventdata[treated==0,treated_event_time := 1] #1 is the base level
+  
+  eventdata[,event_time_stratify:=interaction(event_time,stratify, drop = TRUE)]
+  eventdata[,treated_post_stratify := interaction(treated_post,stratify, drop = TRUE)]
+  
+  eventdata[,treated_pre_stratify := interaction(treated_pre,stratify,drop=TRUE)]
+  eventdata[treated_pre==0,treated_pre_stratify := 1]
+  eventdata[event_time==base_time,treated_pre_stratify := 1]
+  
+  eventdata[,unitfe := interaction(time_pair,id,treated,cohort,stratify, drop = TRUE)]
+  eventdata[,treated_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
+  
+  #Omitting base year for all levels of --stratify--:
+  eventdata[event_time==base_time,event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
+  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
+  
+  #Omitting base year for all levels of --stratify--, for treated people
+  eventdata[treated == 0 ,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
+  eventdata[event_time==base_time,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
+  eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
+  
+  #Omitting effect for untreated people or observations in pre-period:
+  eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
+  eventdata[,treated_post_stratify:=relevel(treated_post_stratify,ref = paste0(c(0,1),collapse="."))]
+  
+  return(eventdata)
+  
+}
+
+
+get_result_dynamic<-function(eventdata_panel,start,end,variable,table = data.table(), results=list(),pos=1,trends=TRUE){
+  
+  b = end-start+ifelse(-1 %in% start:end, 0, 1)
   for(eventtime in start:end){
+    if(eventtime == -1){next}
     results[[pos]] <- event_ATTs_dynamic(eventdata_panel[time_pair==eventtime,],outcomes=c(variable),keep_trends=trends)
     pos<-pos+1
   }
@@ -401,51 +444,9 @@ plot_event_study <-function(dt, graphname, note = ""){
 }
 
 
-# BELOW IS NOT CHANGED -------------------------------------------------------------------------------------------------------
+# BELOW IS NOT USED -------------------------------------------------------------------------------------------------------
 
 
-event_ATTs_head<-function(eventdata,
-                          outcomes,#vector of variable names
-                          clustervar="id", 
-                          weights="pweight",
-                          keep_trends=TRUE){
-  #These regressions should work identically if the fixed effects (after the "|") were replaced with:
-  # interaction(time_pair,id,cohort)
-  eventdata[,treated_post := as.factor((treated == 1) * (post == 1))]
-  eventdata[,treated_pre := as.factor((treated == 1) * (post == 0))]
-  eventdata[,treated_event_time := event_time]
-  eventdata[treated==0,treated_event_time := 1] #1 is the base level
-  
-  eventdata[,event_time_stratify:=interaction(event_time,stratify, drop = TRUE)]
-  eventdata[,treated_post_stratify := interaction(treated_post,stratify, drop = TRUE)]
-  
-  eventdata[,treated_pre_stratify := interaction(treated_pre,stratify,drop=TRUE)]
-  eventdata[treated_pre==0,treated_pre_stratify := 1]
-  eventdata[event_time==base_time,treated_pre_stratify := 1]
-  
-  eventdata[,unitfe := interaction(time_pair,id,treated,cohort,stratify, drop = TRUE)]
-  
-  
-  eventdata[,treated_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
-  
-  
-  #Omitting base year for all levels of --stratify--:
-  eventdata[event_time==base_time,event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
-  
-  #Omitting base year for all levels of --stratify--, for treated people
-  eventdata[treated == 0 ,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[event_time==base_time,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
-  
-  
-  #Omitting effect for untreated people or observations in pre-period:
-  eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
-  eventdata[,treated_post_stratify:=relevel(treated_post_stratify,ref = paste0(c(0,1),collapse="."))]
-  
-  return(eventdata)
-  
-}
 
 
 event_ATTs_means<-function(eventdata,
