@@ -2,7 +2,7 @@
 #some wrappers
 library(fixest)
 
-estimate_event_dynamics <- function(panel, start, end, outcomes, control = c(), stratify = c(), use_never_treat = FALSE,
+estimate_event_dynamics <- function(panel, start, end, outcomes, control = c(), stratify = c(), use_never_treat = TRUE,
                                timevar = "time", unitvar = "id", cohortvar = "event_time"){
   
   event_panel <- copy(panel) #copying so that the original does not change
