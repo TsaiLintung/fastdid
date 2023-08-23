@@ -3,7 +3,6 @@ rm(list = ls())
 gc()
 
 library(profvis)
-library(bench)
 library(data.table)
 library(sandwich)
 library(dplyr)
@@ -13,6 +12,7 @@ library(kit)
 library(collapse)
 library(doFuture)
 library(purrr)
+library(ast2ast)
 
 setwd("~/GitHub/EventStudyCode")
 
@@ -26,25 +26,26 @@ source("sim_did.R")
 
 #source("~/GitHub/EventStudyCode/source_raw/EventCode/eventcode_helper.R")
 #source("~/GitHub/EventStudyCode/source_raw/EventCode/eventcode_revised_MaxLouis_ver7.R")
-
+source("source/eventcode.R")
 
 
 # simulation ---------------------------------------------------------------------
 
 #test with did
 
-source("source/eventcode.R")
 
-simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic")
+
+simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic")
 dt <- simdt$dt
 
 # event code ---------------------------------------------------------------------
 
 profvis({
+  
   event_panel <- copy(dt) #copying so that the original does not change
   
-  min_time <- -8
-  max_time <- 8
+  min_time <- -5
+  max_time <- 5
   y_name <- "y"
   t_name <- "time"
   unit_name <- "unit"
@@ -64,15 +65,14 @@ profvis({
   
   event_panel <- event_ATTs_head(event_panel, yname)
   
-  event_code_est <- suppressMessages(get_result_dynamic(event_panel,min_time,max_time,y_name,trends = FALSE))
+  event_code_est <- suppressMessages(get_result_dynamic(event_panel,min_time,-2,y_name, table = NULL,trends = FALSE))
+  event_code_est <- suppressMessages(get_result_dynamic(event_panel,0,max_time,y_name, table = event_code_est,trends = FALSE))
 })
 
 dynamic_att <- event_code_est[str_starts(variable, "treated"), ]
-dynamic_att[, event_time := as.integer(str_remove_all(str_extract(variable, "y(.*?)\\."), "y|\\."))]
 dynamic_att <- dynamic_att[, .(att = Estimate, att_se = `Std. Error`, event_time)]
-setorder(dynamic_att, event_time)
 
-ratio <- validate_att_est(simdt$att, dynamic_att$att, dynamic_att$att_se, type = "dynamic")
+att_comp <- validate_att_est(simdt$att, dynamic_att$att, dynamic_att$att_se, type = "dynamic")
 
 #did -------------------------------------------------------------------------------
 

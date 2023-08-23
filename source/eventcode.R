@@ -197,7 +197,7 @@ create_event_data<-function(maindata,
     #return this
     return(c(list(pair_treat_data), list(pair_control_data)))
   }
-  
+
   data_list <- list()
   
   if(parallel == TRUE){
@@ -208,7 +208,6 @@ create_event_data<-function(maindata,
   } else {
     data_list <- foreach(t = event_times) %do% stack_eventtime(t, treatdata, controldata)
   }
-
 
   data_list <- flatten(data_list)
   eventdata <- rbindlist(data_list, use.names=TRUE)
@@ -318,37 +317,25 @@ event_ATTs_head<-function(eventdata,
 }
 
 
-get_result_dynamic<-function(eventdata_panel,start,end,variable,table = data.table(), results=list(),pos=1,trends=TRUE){
+get_result_dynamic<-function(eventdata_panel,start,end,variable,table = data.table(), results=list(),trends=FALSE, 
+                             clustervar = "id", weights = "pweight"){
   
   b = end-start+ifelse(-1 %in% start:end, 0, 1)
-  for(eventtime in start:end){
-    if(eventtime == -1){next}
-    
-    results[[pos]] <- event_ATTs_dynamic(eventdata_panel[as.character(time_pair)==eventtime,],outcomes=c(variable),keep_trends=trends)
-    
-    
-    pos<-pos+1
-  }
-  for(i in 1:b){
-    dt<-data.table(variable = row.names(results[[i]]$dynamic$coeftable),model=i,results[[i]]$dynamic$coeftable,obs=results[[i]]$dynamic$nobs)
+  trend_call <- ifelse(trends, "+ event_time_stratify |", "| event_time_stratify + ")
+  call <- paste0("c(", paste0(variable,collapse=","), ") ~ treated_event_time_stratify ", trend_call, " unitfe")
+  results<-feols(as.formula(call),
+                 data = eventdata_panel,
+                 weights= eventdata_panel[,get(weights)],
+                 split = "time_pair",
+                 cluster=clustervar, lean = TRUE, mem.clean = FALSE)
+  for(result in results){
+    dt<-data.table(variable = row.names(result$coeftable),model=i,result$coeftable,obs=result$nobs)
     table<-rbind(dt,table)
   }
+  table[, event_time := as.integer(str_remove_all(str_extract(variable, "y(.*?)\\."), "y|\\."))]
+  setorder(table, event_time)
   return(table)
-}
-
-event_ATTs_dynamic<-function(eventdata,
-                             outcomes,#vector of variable names
-                             clustervar="id", 
-                             weights="pweight",
-                             keep_trends=TRUE){
-  trend_call <- ifelse(keep_trends, "+ event_time_stratify |", "| event_time_stratify + ")
-  call <- paste0("c(", paste0(outcomes,collapse=","), ") ~ treated_event_time_stratify ", trend_call, " unitfe")
-  results<-feols(as.formula(call),
-                 data = eventdata,
-                 weights= eventdata[,get(weights)],
-                 cluster=clustervar, lean = TRUE, mem.clean = FALSE)
   
-  return(list(dynamic = results))
 }
 
 # wrapers ---------------------------------------------------------------------------------------------------------

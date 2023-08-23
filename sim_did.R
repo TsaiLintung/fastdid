@@ -50,7 +50,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   dt[, y0 := unit_fe + time_fe + x*x_trend + rnorm(sample_size*time_period, sd = 0.1)]
   
   #ATE is group-time specific
-  att <- CJ(G = 2:time_period, time = 2:time_period)
+  att <- CJ(G = 1:time_period, time = 1:time_period)
   if(hetero == "all"){
     
     att[, attgt := rnorm((time_period-1)*(time_period-1), mean = 2, sd = 0.5)]
@@ -97,25 +97,26 @@ validate_att_est <- function(true_att, att_hat, att_se_hat, type = "all"){
     true_att[, event_time := time-G]
     true_att <- true_att[, .(attgt = mean(attgt)), by = "event_time"]
     setorder(true_att, event_time)
-    
+
     
     att <- true_att
-    att <- att[event_time != -1] #base time is not estimated
+    att <- att[event_time != -1 & event_time != max(event_time)] #base time is not estimated
     att[, att_hat := att_hat]
     att[, att_se_hat := att_se_hat]
     
   }
   
+
+  
   att[, ci_ub := att_hat+att_se_hat*1.96]
   att[, ci_lb := att_hat-att_se_hat*1.96]
   att[, par_in_ci := (attgt <= ci_ub & attgt >= ci_lb)]
 
-  
   ratio <- round(att[, mean(par_in_ci)], 2)
   
   message(ratio, " of true parameter is in the CI")
   
-  return(ratio)
+  return(att)
   
 }
 
