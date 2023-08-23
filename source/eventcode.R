@@ -46,6 +46,20 @@ create_event_data<-function(maindata,
   if(any(is.na(maindata$cohort))) stop("cohort variable should not be missing (it can be infinite instead)")
   if(any(is.na(maindata$anycohort))) stop("anycohort variable should not be missing (it can be infinite instead)")
   
+  maindata[, id := charToFact(as.character(id))]
+  
+  #turn the covariates into a single interacted factor
+  if(is.character(covariate_base_stratify)) {
+    maindata[, stratify:= charToFact(as.character(.GRP)), by =covariate_base_stratify]
+  }else {
+    maindata[,stratify:="base_strat"]
+  }
+  if(is.character(covariate_base_balance)) {
+    maindata[, balancevars:= charToFact(as.character(.GRP)), by =covariate_base_balance]
+  }else {
+    maindata[,balancevars:="base_balance"]
+  }
+  
   #create treated data
   treatdata<-copy(maindata[onset_agevar>=onset_minimum  & ! is.infinite(cohort) & !is.infinite(anycohort) ,])
   treatdata[,treated:=1]
@@ -56,6 +70,7 @@ create_event_data<-function(maindata,
   #stack control cohorts for each treated cohort
   #I assume people who never suffer the event have a value cohort = Inf
   controldata<-NULL
+
   for(o in unique(treatdata$cohort)){
     if(never_treat_action=="both") {
       controlcohort <- maindata[(anycohort > o | is.infinite(anycohort)) ,]
@@ -74,6 +89,7 @@ create_event_data<-function(maindata,
     controlcohort[,cohort := o]
     controlcohort[,event_time := time - cohort]
     
+    
     #Make sure people in the control cohort are actually observed in that period
     #(to verify they don't belong to the cohort)
     controlcohort[ ,obscohort := max(time == o),by=id]
@@ -87,7 +103,6 @@ create_event_data<-function(maindata,
   rm(controlcohort)
   gc()
   
-  
   controldata[,treated:=0]
   controldata<-controldata[event_time >= lower_event_time & event_time <= upper_event_time,]
   
@@ -99,7 +114,6 @@ create_event_data<-function(maindata,
   if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
   treatdata <- treatdata[obsbase==1,]
   controldata <- controldata[obsbase==1,]
-  gc()
   
   
 
@@ -117,27 +131,20 @@ create_event_data<-function(maindata,
   controldata[,obscount:=sum(obscount),by=.(id,cohort)]
   
   #if a covariate is > 9e9 and , it is set to NA
-  #set the covariate as factor
   if(is.character(covariate_base_stratify)){
     for(out in covariate_base_stratify){
       controldata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
       controldata[get(out) >= 9e9,eval(out) := NA, ]
-      controldata[,eval(out) := as.factor(get(out))]
       treatdata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
       treatdata[get(out) >= 9e9,eval(out) := NA, ]
-      treatdata[,eval(out) := as.factor(get(out))]
     }
   }
   if(is.character(covariate_base_balance)){
     for(out in covariate_base_balance){
-      
-      
       controldata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
       controldata[get(out) >= 9e9,eval(out) := Inf, ]
-      controldata[,eval(out) := as.factor(get(out))]
       treatdata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
       treatdata[get(out) >= 9e9,eval(out) := Inf, ]
-      treatdata[,eval(out) := as.factor(get(out))]
     }
   }
   
@@ -148,35 +155,27 @@ create_event_data<-function(maindata,
   treatdata <- treatdata[base_restrict == 1,]
   treatdata <- treatdata[treated_restrict == 1,]
   
-  #turn the covariates into a single interacted factor
-  if(is.character(covariate_base_stratify)) {
-    treatdata[,stratify:=interaction(treatdata[,covariate_base_stratify,with=FALSE], drop=TRUE)]#, mem.clean=TRUE)]
-    controldata[,stratify:=interaction(controldata[,covariate_base_stratify,with=FALSE], drop=TRUE)]#, mem.clean=TRUE)]
-  }else {
-    treatdata[,stratify:=factor(1,levels=c(1,"OMIT"))]
-    controldata[,stratify:=factor(1,levels=c(1,"OMIT"))]
-  }
-  if(is.character(covariate_base_balance)) {
-    treatdata[,balancevars:=interaction(treatdata[,covariate_base_balance,with=FALSE], drop=TRUE)]#, mem.clean=TRUE)]
-    controldata[,balancevars:=interaction(controldata[,covariate_base_balance,with=FALSE], drop=TRUE)]#, mem.clean=TRUE)]
-  }else {
-    treatdata[,balancevars:=factor(1,levels=c(1,"OMIT"))]
-    controldata[,balancevars:=factor(1,levels=c(1,"OMIT"))]
-  }
-  treatdata[,temp:=interaction(balancevars,stratify,event_time,cohort,drop=TRUE)]
-  controldata[,temp:=interaction(balancevars,stratify,event_time,cohort,drop=TRUE)]
-  
-  
   #only keep observations that have common support on covariates
-  commonvals<-intersect(unique(treatdata$temp),unique(controldata$temp))
+  #treat_unique <- funique(treatdata[, .(balancevars,stratify,event_time, cohort)]) |> as.data.table()
+  #control_unique <-funique(controldata[, .(balancevars,stratify,event_time, cohort)]) |> as.data.table()
+  #common_unique <- fintersect(treat_unique, control_unique)
   
-  treatdata<-treatdata[temp%in%commonvals,]
-  controldata<-controldata[temp%in%commonvals,]
+  #treatdata[,temp:=interaction(balancevars,stratify,event_time,cohort,drop=TRUE)]
+  #controldata[,temp:=interaction(balancevars,stratify,event_time,cohort,drop=TRUE)]
+  #commonvals<-intersect(unique(treatdata$temp),unique(controldata$temp))
+  #treatdata<-treatdata[temp%in%commonvals,]
+  #controldata<-controldata[temp%in%commonvals,]
   
-  treatdata[,temp:=NULL]
-  controldata[,temp:=NULL]
-  rm(commonvals)
+  #treatdata[,temp:=NULL]
+  #controldata[,temp:=NULL]
+  #rm(commonvals)
   gc()
+  
+  #before stacking turn cohort and event time into fact
+  treatdata[, event_time_fact := charToFact(as.character(event_time))]
+  treatdata[, cohort_fact := charToFact(as.character(cohort))]
+  controldata[, event_time_fact := charToFact(as.character(event_time))]
+  controldata[, cohort_fact := charToFact(as.character(cohort))]
   
   
   event_times<-treatdata[,unique(event_time)]
@@ -184,7 +183,6 @@ create_event_data<-function(maindata,
   #For the final dataset, we must stack each pairwise combo of (base year, other year)
   #for each household. The reason? We will assign control households weights that vary
   #based on the other year, as households enter/exit the sample.
-
   if(balanced_panel==FALSE){
     for(t in event_times){
       treatdata[,obst:=sum(event_time==t),by=.(id,cohort)]
@@ -192,7 +190,7 @@ create_event_data<-function(maindata,
       
       pairdata<-rbind(treatdata[obsbase==1 & obst==1 & base_time != t & (event_time == t | event_time == base_time),],
                       controldata[obsbase==1 & obst==1 & base_time != t & (event_time == t | event_time == base_time),])
-      pairdata[,time_pair:= t]
+      pairdata[,time_pair:= charToFact(as.character(t))]
       eventdata<-rbind(eventdata, 
                        pairdata)
     }
@@ -202,18 +200,6 @@ create_event_data<-function(maindata,
   }
   
   
-  #This stacking is unnecessary if we restrict to a balanced panel. Then no one enters
-  #or exits the panel, and weights are fixed at the household level.
-  if(balanced_panel==TRUE){
-    eventdata<-rbind(eventdata,
-                     treatdata[obscount== max(treatdata$obscount),],
-                     controldata[obscount>=max(treatdata$obscount),]
-    )
-    
-    pairdata[,time_pair:= event_time]
-    
-  }
-  
   eventdata[,obsbase:=NULL]
   eventdata[,anycohort:=NULL]
   
@@ -222,23 +208,13 @@ create_event_data<-function(maindata,
   gc()
   
   eventdata[,post:=event_time >= 0]
-  eventdata[,id:=as.factor(id)]
-  eventdata[,treatgroup:=as.factor(treatgroup)]
-  eventdata[,cohort:=as.factor(cohort)]  
-  eventdata[,event_time:=as.factor(event_time)]
-  eventdata[,time_pair:=as.factor(time_pair)]
-  eventdata[,time:=as.factor(time)]
-  
-  basefactor<-unique(eventdata[event_time==base_time,event_time])
-  basefactor<-basefactor[length(basefactor)]
-  eventdata[,event_time:=relevel(event_time,ref=as.character(basefactor))]
-  
   
   #calculate ipw
   #Note: this may have a lot of fixed effects, and may need to be broken down into multiple smaller regressions:
   eventdata[,pweight:=NA]
-  eventdata[,pval:=feols(treated ~ 1 | interaction(cohort,event_time,time_pair,stratify,balancevars, drop = TRUE),
-                         data = eventdata, lean = FALSE)$fitted.values]
+  
+  eventdata[,pval:= feols(treated ~ 1 | cohort_fact^event_time_fact^time_pair^stratify^balancevars,
+                          data = eventdata, lean = FALSE, combine.quick = TRUE)$fitted.values]
   
   eventdata[treated==1 & pval < 1 & pval > 0,pweight:=1.00]
   eventdata[, pweight := as.double(pweight)] #TSAI addition
@@ -280,8 +256,6 @@ create_event_data<-function(maindata,
     }
   }
   
-  eventdata[,treated:=as.factor(treated)]
-  
   return(eventdata)
 }
 
@@ -291,23 +265,23 @@ event_ATTs_head<-function(eventdata,
                           weights="pweight",
                           keep_trends=TRUE){
   
-  
   #These regressions should work identically if the fixed effects (after the "|") were replaced with:
   # interaction(time_pair,id,cohort)
-  eventdata[,treated_post := as.factor((treated == 1) * (post == 1))]
-  eventdata[,treated_pre := as.factor((treated == 1) * (post == 0))]
-  eventdata[,treated_event_time := event_time]
-  eventdata[treated==0,treated_event_time := 1] #1 is the base level
+  #eventdata[,treated_post := charToFact(as.character((treated == 1) * (post == 1)))]
+  #eventdata[,treated_pre := charToFact(as.character((treated == 1) * (post == 0)))]
+  #eventdata[,treated_event_time := event_time]
+  #eventdata[treated==0,treated_event_time := 1] #1 is the base level
+
   
-  eventdata[,event_time_stratify:=interaction(event_time,stratify, drop = TRUE)]
-  eventdata[,treated_post_stratify := interaction(treated_post,stratify, drop = TRUE)]
+  eventdata[,event_time_stratify := interaction(event_time_fact,stratify, drop=TRUE)]
+  #eventdata[,treated_post_stratify := interaction(treated_post,stratify, drop = TRUE)]
   
-  eventdata[,treated_pre_stratify := interaction(treated_pre,stratify,drop=TRUE)]
-  eventdata[treated_pre==0,treated_pre_stratify := 1]
-  eventdata[event_time==base_time,treated_pre_stratify := 1]
+  #eventdata[,treated_pre_stratify := interaction(treated_pre,stratify,drop=TRUE)]
+  #eventdata[treated_pre==0,treated_pre_stratify := 1]
+  #eventdata[event_time==base_time,treated_pre_stratify := 1]
   
-  eventdata[,unitfe := interaction(time_pair,id,treated,cohort,stratify, drop = TRUE)]
-  eventdata[,treated_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
+  eventdata[,unitfe := .GRP, by = .(time_pair,id,treated,cohort_fact,stratify)]
+  eventdata[,treated_event_time_stratify := interaction(event_time_fact,stratify, drop = TRUE)]
   
   #Omitting base year for all levels of --stratify--:
   eventdata[event_time==base_time,event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
@@ -319,8 +293,8 @@ event_ATTs_head<-function(eventdata,
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
   
   #Omitting effect for untreated people or observations in pre-period:
-  eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
-  eventdata[,treated_post_stratify:=relevel(treated_post_stratify,ref = paste0(c(0,1),collapse="."))]
+  #eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
+  #eventdata[,treated_post_stratify:=relevel(treated_post_stratify,ref = paste0(c(0,1),collapse="."))]
   
   return(eventdata)
   
@@ -332,7 +306,7 @@ get_result_dynamic<-function(eventdata_panel,start,end,variable,table = data.tab
   b = end-start+ifelse(-1 %in% start:end, 0, 1)
   for(eventtime in start:end){
     if(eventtime == -1){next}
-    results[[pos]] <- event_ATTs_dynamic(eventdata_panel[time_pair==eventtime,],outcomes=c(variable),keep_trends=trends)
+    results[[pos]] <- event_ATTs_dynamic(eventdata_panel[as.character(time_pair)==eventtime,],outcomes=c(variable),keep_trends=trends)
     pos<-pos+1
   }
   for(i in 1:b){
@@ -347,10 +321,8 @@ event_ATTs_dynamic<-function(eventdata,
                              clustervar="id", 
                              weights="pweight",
                              keep_trends=TRUE){
-  
   trend_call <- ifelse(keep_trends, "+ event_time_stratify |", "| event_time_stratify + ")
   call <- paste0("c(", paste0(outcomes,collapse=","), ") ~ treated_event_time_stratify ", trend_call, " unitfe")
-  
   results<-feols(as.formula(call),
                  data = eventdata,
                  weights= eventdata[,get(weights)],
@@ -445,211 +417,3 @@ plot_event_study <-function(dt, graphname, note = ""){
 
 
 # BELOW IS NOT USED -------------------------------------------------------------------------------------------------------
-
-
-
-
-event_ATTs_means<-function(eventdata,
-                           outcomes,#vector of variable names
-                           clustervar="id", 
-                           weights="pweight",
-                           keep_trends=TRUE){
-  
-  results_means<-feols(as.formula(paste0("c(",
-                                         paste0(outcomes,collapse=",") , 
-                                         ") ~ interaction(stratify) - 1"
-  )),
-  data = eventdata[treated == 1 & event_time == base_time & get(weights) == 1,],
-  cluster=clustervar, lean = TRUE, mem.clean = FALSE)
-  
-  return(list(means = results_means))
-}
-
-event_ATTs_pooled<-function(eventdata,
-                            outcomes,#vector of variable names
-                            clustervar="id", 
-                            weights="pweight",
-                            keep_trends=TRUE){
-  
-  if(keep_trends == TRUE){
-    results_pooled<-feols(as.formula(paste0("c(",
-                                            paste0(outcomes,collapse=",") , 
-                                            ") ~ event_time_stratify + treated_pre_stratify + treated_post_stratify | unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = FALSE)
-  }
-  else{
-    results_pooled<-feols(as.formula(paste0("c(",
-                                            paste0(outcomes,collapse=",") , 
-                                            ") ~ treated_pre_stratify + treated_post_stratify | event_time_stratify + unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = FALSE
-    )
-  }
-  return(list(pooled = results_pooled))
-}
-
-event_ATTs<-function(eventdata,
-                     outcomes,#vector of variable names
-                     clustervar="id", 
-                     weights="pweight",
-                     keep_trends=TRUE){
-  #These regressions should work identically if the fixed effects (after the "|") were replaced with:
-  # interaction(time_pair,id,cohort)
-  eventdata[,treated_post := as.factor((treated == 1) * (post == 1))]
-  eventdata[,treated_pre := as.factor((treated == 1) * (post == 0))]
-  eventdata[,treated_event_time := event_time]
-  eventdata[treated==0,treated_event_time := 1] #1 is the base level
-  
-  eventdata[,event_time_stratify:=interaction(event_time,stratify, drop = TRUE)]
-  eventdata[,treated_post_stratify := interaction(treated_post,stratify, drop = TRUE)]
-  
-  eventdata[,treated_pre_stratify := interaction(treated_pre,stratify,drop=TRUE)]
-  eventdata[treated_pre==0,treated_pre_stratify := 1]
-  eventdata[event_time==base_time,treated_pre_stratify := 1]
-  
-  eventdata[,unitfe := interaction(time_pair,id,treated,cohort,stratify, drop = TRUE)]
-  
-  
-  eventdata[,treated_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
-  
-  
-  #Omitting base year for all levels of --stratify--:
-  eventdata[event_time==base_time,event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
-  
-  #Omitting base year for all levels of --stratify--, for treated people
-  eventdata[treated == 0 ,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[event_time==base_time,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
-  
-  
-  #Omitting effect for untreated people or observations in pre-period:
-  eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
-  eventdata[,treated_post_stratify:=relevel(treated_post_stratify,ref = paste0(c(0,1),collapse="."))]
-  
-  if(keep_trends == TRUE){
-    results<-feols(as.formula(paste0("c(",
-                                     paste0(outcomes,collapse=",") , ") ~ event_time_stratify + treated_event_time_stratify | unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = FALSE)
-    
-    
-    results_pooled<-feols(as.formula(paste0("c(",
-                                            paste0(outcomes,collapse=",") , 
-                                            ") ~ event_time_stratify + treated_pre_stratify + treated_post_stratify | unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = FALSE)
-  }
-  else{
-    results<-feols(as.formula(paste0("c(",
-                                     paste0(outcomes,collapse=",") , ") ~ treated_event_time_stratify | event_time_stratify + unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = FALSE)
-    
-    
-    results_pooled<-feols(as.formula(paste0("c(",
-                                            paste0(outcomes,collapse=",") , 
-                                            ") ~ treated_pre_stratify + treated_post_stratify | event_time_stratify + unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = FALSE
-    )
-  }
-  
-  results_means<-feols(as.formula(paste0("c(",
-                                         paste0(outcomes,collapse=",") , 
-                                         ") ~ interaction(stratify) - 1"
-  )),
-  data = eventdata[treated == 1 & event_time == base_time & get(weights) == 1,],
-  cluster=clustervar, lean = TRUE, mem.clean = FALSE)
-  
-  return(list(pooled = results_pooled,
-              dynamic = results,
-              means = results_means))
-}
-
-event_ATTs_pooledmeans<-function(eventdata,
-                                 outcomes,#vector of variable names
-                                 clustervar="id", 
-                                 weights="pweight",
-                                 keep_trends=TRUE){
-  if(keep_trends == TRUE){
-    results_pooled<-feols(as.formula(paste0("c(",
-                                            paste0(outcomes,collapse=",") , 
-                                            ") ~ event_time_stratify + treated_pre_stratify + treated_post_stratify | unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = FALSE)
-  }
-  else{
-    results_pooled<-feols(as.formula(paste0("c(",
-                                            paste0(outcomes,collapse=",") , 
-                                            ") ~ treated_pre_stratify + treated_post_stratify | event_time_stratify + unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = FALSE)
-  }
-  
-  results_means<-feols(as.formula(paste0("c(",
-                                         paste0(outcomes,collapse=",") , 
-                                         ") ~ interaction(stratify) - 1"
-  )),
-  data = eventdata[treated == 1 & event_time == base_time & get(weights) == 1,],
-  cluster=clustervar, lean = TRUE, mem.clean = FALSE)
-  
-  return(list(pooled = results_pooled,means = results_means))
-}
-
-
-
-get_result_pooledmeans<-function(eventdata_panel,variable,trends=TRUE){
-  
-  results<-event_ATTs_pooledmeans(eventdata_panel,outcomes = c(variable),keep_trends = trends)
-  dt1<-data.table(variable = row.names(results$pooled$coeftable),model=i,results$pooled$coeftable,obs=results$pooled$nobs)
-  dt2<-data.table(variable = row.names(results$means$coeftable),model=i,results$means$coeftable,obs=results$means$nobs)
-  dt<-rbind(dt1[,result:="pooled"],dt2[,result:="means"],fill=T)
-  
-  return(dt)
-  
-}
-
-get_result_pooled<-function(eventdata_panel,variable,trends=TRUE){
-  
-  results<-event_ATTs_pooled(eventdata_panel,outcomes = c(variable),keep_trends = trends)
-  dt1<-data.table(variable = row.names(results$pooled$coeftable),model=i,results$pooled$coeftable,obs=results$pooled$nobs)
-  #dt2<-data.table(variable = row.names(results$means$coeftable),model=i,results$means$coeftable,obs=results$means$nobs)
-  dt<-rbind(dt1[,result:="pooled"],fill=T)
-  
-  return(dt)
-  
-}
-
-get_result_means<-function(eventdata_panel,variable,trends=TRUE){
-  
-  results<-event_ATTs_means(eventdata_panel,outcomes = c(variable),keep_trends = trends)
-  #dt1<-data.table(variable = row.names(results$pooled$coeftable),model=i,results$pooled$coeftable,obs=results$pooled$nobs)
-  dt2<-data.table(variable = row.names(results$means$coeftable),model=i,results$means$coeftable,obs=results$means$nobs)
-  dt<-rbind(dt2[,result:="means"],fill=T)
-  
-  return(dt)
-  
-}
-
-
-
-
-

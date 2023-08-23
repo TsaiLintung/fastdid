@@ -9,6 +9,7 @@ library(sandwich)
 library(dplyr)
 library(stringr)
 library(fixest)
+library(kit)
 
 setwd("~/GitHub/EventStudyCode")
 
@@ -30,13 +31,14 @@ source("source/eventcode.R")
 
 #test with did
 
-simdt <- sim_did(2000, 10, cov = "int", hetero = "dynamic")
+source("source/eventcode_factor.R")
+
+simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic")
 dt <- simdt$dt
 
 # event code ---------------------------------------------------------------------
 
-started.at <- proc.time()
-
+profvis({
   event_panel <- copy(dt) #copying so that the original does not change
   
   min_time <- -8
@@ -60,11 +62,8 @@ started.at <- proc.time()
   
   event_panel <- event_ATTs_head(event_panel, yname)
   
-  dt_dynamic <- data.table()
-  
   event_code_est <- suppressMessages(get_result_dynamic(event_panel,min_time,max_time,y_name,trends = FALSE))
-
-timetaken(started.at)
+})
 
 dynamic_att <- event_code_est[str_starts(variable, "treated"), ]
 dynamic_att[, event_time := as.integer(str_remove_all(str_extract(variable, "y(.*?)\\."), "y|\\."))]
