@@ -5,39 +5,56 @@ library(fixest)
 #Treated households:
 create_event_data<-function(maindata,
                             #if no covariates for balancing or stratification, just specify a constant (as follows):
-                            covariate_base_stratify=1, #vector of variable names, treatment effects are stratified by their joint unique values.
-                            covariate_base_balance=1, #vector of variable names to include in finding exact matches for treated units
+                            covariate_base_stratify=c(), #vector of variable names, treatment effects are stratified by their joint unique values.
+                            covariate_base_balance=c(), #vector of variable names to include in finding exact matches for treated units
                             timevar,
                             unitvar,
+                            outcomevar,
+                            clustervar = NULL,
                             cohortvar, #period when the particular event of interest arises
                             base_time = -1, #reference value for event time; the period from which differences over time are taken
                             never_treat_action = "both", #options: "both", "only", and "exclude"
                             lower_event_time = -Inf, #Earliest period (relative to treatment time) for which to estimate effects
                             upper_event_time = Inf, #Latest period (relative to treatment time) for which to estimate effects
-                            parallel = FALSE) 
+                            data_validate = "check"
+  ) 
 {
   
-
+  #handle names
   setnames(maindata,c(timevar,unitvar,cohortvar),c("time","id","cohort"))
+  if(is.null(clustervar)){clustervar <- "id"}
   
-  if(!is.data.table(maindata)) stop("rawdata must be a data.table")
-  if(any(is.na(maindata$cohort))) stop("cohort variable should not be missing (it can be infinite instead)")
-  if(any(fduplicated(maindata[,.(time, id)]))){stop ("some unit-time is observed more then once")}
+  if(data_validate == "check"){
+    
+    if(!is.data.table(maindata)) stop("rawdata must be a data.table")
+    if(any(is.na(maindata$cohort))) stop("cohort variable should not be missing (it can be infinite instead)")
+    if(any(fduplicated(maindata[,.(time, id)]))){stop ("some unit-time is observed more than once")}
+    if(any(missing_cases(maindata, cols = c("cohort", "time", "id")))){stop ("some units have missing cohort / time / id. Set cohort to Inf if it is never-treated")}
+    if(any(missing_cases(maindata, cols = c(covariate_base_stratify, covariate_base_balance)))){stop ("some balance / stratify cov is missing")}
+    if(any(missing_cases(maindata, cols = outcomevar))){stop ("some outcome is missing")}
+    
+  } else if (data_validate == "fix") { #fix the maindata as much as possible
+    
+    #not implemented yet
+  
+  } else if (data_validate != "trust") { #trust the data, perform no checks
+    stop("pick either check / fix / trust for data validation strategy")
+  }
   
   maindata[, id := charToFact(as.character(id))]
   
   #turn the covariates into a single interacted factor
-  if(is.character(covariate_base_stratify)) {
-    maindata[, stratify:= charToFact(as.character(.GRP)), by =covariate_base_stratify]
+  if(length(covariate_base_stratify) > 0) {
+    maindata[, stratify:= charToFact(as.character(.GRP)), by = covariate_base_stratify]
   }else {
     maindata[,stratify:="base_strat"]
   }
-  if(is.character(covariate_base_balance)) {
+  if(length(covariate_base_balance) > 0){
     maindata[, balancevars:= charToFact(as.character(.GRP)), by =covariate_base_balance]
   }else {
     maindata[,balancevars:="base_balance"]
   }
-  
+
   #create treated data
   treatdata<-copy(maindata[!is.infinite(cohort),])
   treatdata[,treated:=1]
@@ -71,6 +88,7 @@ create_event_data<-function(maindata,
     control_list<- c(control_list, list(controlcohort))
     
   }
+  
   rm(controlcohort)
   gc()
   
@@ -78,7 +96,6 @@ create_event_data<-function(maindata,
   
   controldata[,treated:=0]
 
-  
   #drop someone from the control cohort when they get treated:
   controldata<-controldata[time < cohort ,]
   
@@ -97,62 +114,50 @@ create_event_data<-function(maindata,
   event_times<- as.integer(as.character(treatdata[,unique(event_time)]))
   event_times <- event_times[event_times %!=% -1]
   
+  controldata[, `:=`(min_event_time = min(event_time),
+                  max_event_time = max(event_time)), by = .(id, cohort_pair)]
+  treatdata[, `:=`(min_event_time = min(event_time),
+                  max_event_time = max(event_time)), by = .(id, cohort_pair)]
+  
   stack_eventtime <- function(t, treatdata, controldata){
     
-    #use the guy observed in the period
-    treatdata[,obst:=anyv(event_time,t),by=.(id,cohort_pair)]
-    controldata[,obst:=anyv(event_time,t),by=.(id,cohort_pair)]
+    #t is the event time
     
-    pair_treat_data <- treatdata[obst == TRUE & event_time %in% c(t, base_time),]
-    pair_control_data <- controldata[obst == TRUE & event_time %in% c(t, base_time),]
+    pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time][event_time %in% c(t, base_time),]
+    pair_control_data <- controldata[t >= min_event_time & t <= max_event_time][event_time %in% c(t, base_time),]
     
-    fact_t <- charToFact(as.character(t))
-    
-    pair_treat_data[,time_pair := fact_t]
-    pair_control_data[,time_pair := fact_t]
+    pair_treat_data[,time_pair := t]
+    pair_control_data[,time_pair := t]
     
     #return this
     return(c(list(pair_treat_data), list(pair_control_data)))
+    
   }
 
-  data_list <- list()
-  
-  if(parallel == TRUE){
-    options(future.globals.maxSize= 1000*1024*1024)
-    doFuture::registerDoFuture()
-    plan("multisession")
-    data_list <- foreach(t = event_times) %dopar% stack_eventtime(t, treatdata, controldata)
-  } else {
-    data_list <- foreach(t = event_times) %do% stack_eventtime(t, treatdata, controldata)
-  }
+  data_list <- foreach(t = event_times) %do% stack_eventtime(t, treatdata, controldata)
 
   data_list <- flatten(data_list)
   eventdata <- rbindlist(data_list, use.names=TRUE)
-
-  eventdata[,obst:=NULL]
+  
+  eventdata[, time_pair := charToFact(as.character(time_pair))]
   
   rm(treatdata)
   rm(controldata)
   gc()
   
-  eventdata[,post:= event_time >= 0]
-  
   #calculate ipw
-  #Note: this may have a lot of fixed effects, and may need to be broken down into multiple smaller regressions:
   eventdata[,pweight:=NA]
-  
-  eventdata[,pval:= feols(treated ~ 1 | cohort_pair_fact^event_time_fact^time_pair^stratify^balancevars,
+  eventdata[,pval:= feols(treated ~ 1 | interaction(cohort_pair_fact,event_time_fact,time_pair,stratify,balancevars),
                           data = eventdata, lean = FALSE, combine.quick = TRUE)$fitted.values]
-  
   
   eventdata[treated==1 & pval < 1 & pval > 0,pweight:=1.00] #att is estimated
   eventdata[, pweight := as.double(pweight)] #TSAI addition
   eventdata[treated==0 & pval < 1 & pval > 0,pweight:=pval/(1-pval)]
-  eventdata[,pval:=NULL]
-  eventdata<- eventdata[!is.na(pweight),] #ppl with pval outside 0 and 1 <-> no common support is dropped
+  
+  eventdata <- eventdata[!is.na(pweight),] #ppl with pval outside 0 and 1 <-> no common support is dropped
   
   #calculating weights to match control and treated households on characteristics, across strata
-  if(covariate_base_stratify != 1){
+  if(length(covariate_base_stratify) > 0 ){
     eventdata[,treated_base := treated == 1 & stratify == stratify_balance_val]
     
     stratvals<-levels(eventdata$stratify)
@@ -200,11 +205,13 @@ create_event_data<-function(maindata,
   eventdata[event_time==base_time,treated_event_time_stratify :=base_stratify]
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_stratify)]
   
+  keep_columns <- c(outcomevar, clustervar, "event_time_stratify", "treated_event_time_stratify", "unitfe", "time_pair", "pweight")
+  eventdata <- eventdata[, .SD, .SDcols = keep_columns]
+  gc()
+  
   return(eventdata)
   
 }
-
-
 
 get_result_dynamic<-function(eventdata_panel,start,end,variable,table = data.table(), results=list(),trends=FALSE, 
                              clustervar = "id", weights = "pweight"){
@@ -222,48 +229,14 @@ get_result_dynamic<-function(eventdata_panel,start,end,variable,table = data.tab
     table<-rbind(dt,table)
   }
   table[, event_time := as.integer(str_remove_all(str_extract(variable, "y(.*?)\\."), "y|\\."))]
+  setnames(table, c("Estimate", "Std. Error"), c("att", "se"))
   setorder(table, event_time)
+  table <- table[,.(event_time, att, se, obs)]
   return(table)
   
 }
 
 # wrapers ---------------------------------------------------------------------------------------------------------
-
-estimate_event_dynamics <- function(panel, start, end, outcomes, control = c(), stratify = c(), use_never_treat = TRUE,
-                                    timevar = "time", unitvar = "id", cohortvar = "event_time"){
-  
-  event_panel <- copy(panel) #copying so that the original does not change
-  
-  setnames(event_panel, cohortvar, "event_time")
-  onset <- event_panel[, min(event_time) - 1]
-  event_panel[, onset_time := onset]
-  event_panel <- event_panel %>% create_event_data(timevar = timevar, unitvar = unitvar, 
-                                                   cohortvar = "event_time",
-                                                   onset_agevar = "onset_time",
-                                                   covariate_base_balance = control,
-                                                   covariate_base_stratify = stratify,
-                                                   never_treat_action = ifelse(use_never_treat, "both", "exclude"),
-                                                   balanced_panel = FALSE)
-  
-  event_panel <- event_ATTs_head(event_panel, outcomes)
-  
-  message("preprocessing done.")
-  
-  dt_dynamic <- data.table()
-  
-  for(outcome in outcomes){
-    dt_dynamic_outcome <-data.table()
-    
-    dt_dynamic_outcome <- suppressMessages(get_result_dynamic(event_panel,start,-2,outcome,dt_dynamic_outcome, trends = FALSE)) #add new result to dt_dynamic
-    dt_dynamic_outcome <- suppressMessages(get_result_dynamic(event_panel,0,end,outcome,dt_dynamic_outcome, trends = FALSE)) #add new result to dt_dynamic
-    
-    dt_dynamic_outcome[, outcome_type := outcome]
-    dt_dynamic <- rbind(dt_dynamic, dt_dynamic_outcome)
-    message(outcome, " done.")
-  }
-  
-  return(dt_dynamic)
-}
 
 plot_event_study <-function(dt, graphname, note = ""){
   

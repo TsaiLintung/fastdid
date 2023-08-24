@@ -38,6 +38,7 @@ source("source/eventcode.R")
 simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic")
 dt <- simdt$dt
 
+
 # event code ---------------------------------------------------------------------
 
 profvis({
@@ -53,17 +54,15 @@ profvis({
   balance_covariate <- "x"
 
   event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
+                                                   outcomevar = y_name,
                                                    cohortvar = cohort_name,
                                                    covariate_base_balance = balance_covariate,
                                                    never_treat_action = "both")
 
-  event_code_est <- suppressMessages(get_result_dynamic(event_panel,min_time,max_time,y_name, table = NULL,trends = FALSE))
+  event_code_est <- get_result_dynamic(event_panel,min_time,max_time,y_name, table = NULL,trends = FALSE)
 })
 
-dynamic_att <- event_code_est[str_starts(variable, "treated"), ]
-dynamic_att <- dynamic_att[, .(att = Estimate, att_se = `Std. Error`, event_time)]
-
-att_comp <- validate_att_est(simdt$att, dynamic_att$att, dynamic_att$att_se, type = "dynamic")
+att_comp <- validate_att_est(simdt$att, event_code_est$att, event_code_est$se, type = "dynamic")
 
 #did -------------------------------------------------------------------------------
 
