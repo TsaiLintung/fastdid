@@ -49,13 +49,13 @@ profvis({
   
   min_time <- -Inf
   max_time <- Inf
-  y_name <- c("y")
+  y_name <- "y"
   t_name <- "time"
   unit_name <- "unit"
   cohort_name <- "G"
   balance_covariate <- "x"
 
-  event_code_est <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
+  event_code_est <- event_panel %>% event_code(timevar = t_name, unitvar = unit_name, 
                                                    outcomevar = y_name,
                                                    cohortvar = cohort_name,
                                                    covariate_base_balance = balance_covariate,
@@ -66,6 +66,8 @@ profvis({
 })
 
 att_comp <- validate_att_est(simdt$att, event_code_est$att, event_code_est$se, type = "dynamic")
+
+plot_event_study(event_code_est)
 
 #did -------------------------------------------------------------------------------
 

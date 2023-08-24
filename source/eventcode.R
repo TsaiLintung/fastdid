@@ -35,6 +35,7 @@ event_code <-function(maindata,
     if(any(missing_cases(maindata, cols = c("cohort", "time", "id")))){stop ("some units have missing cohort / time / id. Set cohort to Inf if it is never-treated")}
     if(any(missing_cases(maindata, cols = c(covariate_base_stratify, covariate_base_balance)))){stop ("some balance / stratify cov is missing")}
     if(any(missing_cases(maindata, cols = outcomevar))){stop ("some outcome is missing")}
+    if("c" %in% outcomevar){stop("please don't use 'c' as outcome name.")}
     
   } else if (data_validate == "fix") { #fix the maindata as much as possible
     
@@ -196,6 +197,7 @@ event_code <-function(maindata,
 get_result_dynamic<-function(eventdata_panel, variable, clustervar = "id", weights = "pweight"){
 
   call <- paste0("c(", paste0(variable,collapse=","), ") ~ treated_event_time_stratify | event_time_stratify + unitfe")
+
   results<-feols(as.formula(call),
                  data = eventdata_panel,
                  weights= eventdata_panel[,get(weights)],
@@ -204,7 +206,8 @@ get_result_dynamic<-function(eventdata_panel, variable, clustervar = "id", weigh
   
   table <- data.table()
   for(result in results){
-    dt<-data.table(outcome = as.character(result$fml[[2]]), variable = row.names(result$coeftable), result$coeftable,obs=result$nobs)
+    dt<-data.table(outcome = (function(x) x[x != "c"])(as.character(result$fml[[2]])),
+                   variable = row.names(result$coeftable), result$coeftable,obs=result$nobs)
     table<-rbind(dt,table)
   }
   table[, event_time := as.integer(str_remove_all(str_extract(variable, "y(.*?)\\."), "y|\\."))]
