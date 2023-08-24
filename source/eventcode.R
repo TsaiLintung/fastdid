@@ -3,7 +3,7 @@
 library(fixest)
 
 #Treated households:
-create_event_data<-function(maindata,
+event_code <-function(maindata,
                             #if no covariates for balancing or stratification, just specify a constant (as follows):
                             covariate_base_stratify=c(), #vector of variable names, treatment effects are stratified by their joint unique values.
                             covariate_base_balance=c(), #vector of variable names to include in finding exact matches for treated units
@@ -16,9 +16,12 @@ create_event_data<-function(maindata,
                             never_treat_action = "both", #options: "both", "only", and "exclude"
                             lower_event_time = -Inf, #Earliest period (relative to treatment time) for which to estimate effects
                             upper_event_time = Inf, #Latest period (relative to treatment time) for which to estimate effects
-                            data_validate = "check"
+                            data_validate = "check",
+                            get_est = TRUE
   ) 
 {
+  
+  # preprocess --------------------------------------------------
   
   #handle names
   setnames(maindata,c(timevar,unitvar,cohortvar),c("time","id","cohort"))
@@ -63,7 +66,8 @@ create_event_data<-function(maindata,
   treatdata<-treatdata[event_time >= lower_event_time & event_time <= upper_event_time,]
   treatdata[,treatgroup:="treated"]
   
-  #stack control cohorts for each treated cohort
+  #stack control cohorts ----------------------------------------
+  
   #I assume people who never suffer the event have a value cohort = Inf
   control_list <- list()
 
@@ -114,6 +118,8 @@ create_event_data<-function(maindata,
   event_times<- as.integer(as.character(treatdata[,unique(event_time)]))
   event_times <- event_times[event_times != -1 & event_times >= lower_event_time & event_times <= upper_event_time]
   
+  # stack by event time ------------------------------------------------
+  
   controldata[, `:=`(min_event_time = min(event_time),
                   max_event_time = max(event_time)), by = .(id, cohort_pair)]
   treatdata[, `:=`(min_event_time = min(event_time),
@@ -142,7 +148,8 @@ create_event_data<-function(maindata,
   rm(controldata)
   gc()
   
-  #calculate ipw
+  #calculate ipw --------------------------
+  
   eventdata[,pweight:=NA]
   eventdata[,pval:= feols(treated ~ 1 | interaction(cohort_pair_fact,event_time_fact,time_pair,stratify,balancevars),
                           data = eventdata, lean = FALSE, combine.quick = TRUE)$fitted.values]
@@ -153,41 +160,9 @@ create_event_data<-function(maindata,
   
   eventdata <- eventdata[!is.na(pweight),] #ppl with pval outside 0 and 1 <-> no common support is dropped
   
-  #calculating weights to match control and treated households on characteristics, across strata
-  if(length(covariate_base_stratify) > 0 ){
-    eventdata[,treated_base := treated == 1 & stratify == stratify_balance_val]
-    
-    stratvals<-levels(eventdata$stratify)
-    for(strat in stratvals){
-      if(strat != stratify_balance_val){
-        stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
-                               data = eventdata[(treated == 1 & stratify == stratify_balance_val) | 
-                                                  (treated == 1 & stratify == strat),], lean = TRUE, mem.clean=TRUE)
-        eventdata[, eval(paste0("pval_1",strat)) := predict(stratbalmodel,
-                                                            eventdata)]
-        
-        eventdata[treated == 1 & stratify == strat, pweight_stratbal := get(paste0("pval_1",strat))/(1-get(paste0("pval_1",strat)))]
-      }
-      else    eventdata[treated == 1 & stratify == strat, pweight_stratbal := 1]
-      
-      stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
-                             data = eventdata[(treated == 1 & stratify == stratify_balance_val) | 
-                                                (treated == 0 & stratify == strat),], lean = TRUE, mem.clean=TRUE)
-      
-      eventdata[, eval(paste0("pval_0",strat)) := predict(stratbalmodel,
-                                                          eventdata)]
-      eventdata[treated == 0 & stratify == strat, pweight_stratbal := get(paste0("pval_0",strat))/(1-get(paste0("pval_0",strat)))]
-      
-      
-    }
-    
-    checkvars <- names(eventdata)[grepl("pval_",names(eventdata))]
-    for(var in checkvars){
-      eventdata[get(var) == 1 | get(var) == 0 | is.na(get(var)),  pweight_stratbal := NA ]
-    }
-  }
+  #post process -------------------------------
+  #originally att head
   
-  #original event att head
   eventdata[,event_time_stratify := interaction(event_time_fact,stratify, drop=TRUE)]
   eventdata[,unitfe := .GRP, by = .(id,cohort_pair_fact)]
   eventdata[,treated_event_time_stratify := interaction(event_time_fact,stratify, drop = TRUE)]
@@ -206,7 +181,15 @@ create_event_data<-function(maindata,
   eventdata <- eventdata[, .SD, .SDcols = keep_columns]
   gc()
   
-  return(eventdata)
+  # estimation -----------------------
+  
+  if(get_est == FALSE){return(eventdata)}
+  else {
+    
+    est <- get_result_dynamic(eventdata, outcomevar, clustervar)
+    return(est)
+    
+  }
   
 }
 
@@ -218,52 +201,44 @@ get_result_dynamic<-function(eventdata_panel, variable, clustervar = "id", weigh
                  weights= eventdata_panel[,get(weights)],
                  split = "time_pair",
                  cluster=clustervar, lean = TRUE, mem.clean = FALSE)
+  
   table <- data.table()
   for(result in results){
-    dt<-data.table(variable = row.names(result$coeftable),result$coeftable,obs=result$nobs)
+    dt<-data.table(outcome = as.character(result$fml[[2]]), variable = row.names(result$coeftable), result$coeftable,obs=result$nobs)
     table<-rbind(dt,table)
   }
   table[, event_time := as.integer(str_remove_all(str_extract(variable, "y(.*?)\\."), "y|\\."))]
   setnames(table, c("Estimate", "Std. Error"), c("att", "se"))
-  setorder(table, event_time)
-  table <- table[,.(event_time, att, se, obs)]
+  setorder(table, outcome, event_time)
+  table <- table[,.(outcome, event_time, att, se, obs)]
   return(table)
   
 }
 
 # wrapers ---------------------------------------------------------------------------------------------------------
 
-plot_event_study <-function(dt, graphname, note = ""){
+plot_event_study <-function(dt, graphname = "event study plot", note = ""){
   
   # Author : 冠儒, Hsiao, Don
-  # Motified from graph 2 and graph2 0720
+  # Modified from graph 2 and graph2 0720
   
   #add the base period
-  for (outcome in dt[, unique(outcome_type)]) {
-    dt <- add_row(dt, variable = "treated_event_time_stratify-1.0", 
-                  model = 1, Estimate = 0, "Std. Error" = 0, "t value" = 0, "Pr(>|t|)" = 0, obs = 196890,
-                  outcome_type = outcome)
-    dt <- add_row(dt, variable = "treated_event_time_stratify-1.1", 
-                  model = 1, Estimate = 0, "Std. Error" = 0, "t value" = 0, "Pr(>|t|)" = 0, obs = 196890,
-                  outcome_type = outcome)
+  for (out_name in dt[, unique(outcome)]) {
+    dt <- rbind(dt, data.table(outcome = out_name, event_time = -1, att = 0, se = 0, obs = 0))
   }
   
   significance_level <- 0.05
-  dt[, c("first", "stratify_dummy") := tstrsplit(variable, ".", fixed = TRUE)]
-  dt[, coefficient := str_extract(first, '([a-z\\_]+)')]
-  dt[, event_time := str_extract(first, '([-0-9]+)')]
-  dt[, event_time := as.numeric(event_time)]
-  dt[, conf_upb := Estimate + qnorm(1-significance_level/2) * `Std. Error`]
-  dt[, conf_lwb := Estimate - qnorm(1-significance_level/2) * `Std. Error`]
+  dt[, conf_upb := att + qnorm(1-significance_level/2) * se]
+  dt[, conf_lwb := att - qnorm(1-significance_level/2) * se]
   
-  figure <- dt[str_sub(variable, 1, 7) == "treated"] %>%
+  figure <- dt %>%
     ggplot() +
     geom_hline(yintercept = 0, linetype = 'dashed', col = 'red') +
-    geom_line(aes(x = event_time, y = Estimate, color = "black")) + 
-    geom_point(aes(x = event_time, y = Estimate, color = "black")) +
+    geom_line(aes(x = event_time, y = att, color = "black")) + 
+    geom_point(aes(x = event_time, y = att, color = "black")) +
     geom_errorbar(aes(x = event_time, ymin = conf_lwb, ymax = conf_upb), 
                   width = 0.1, linetype = "dashed") +
-    facet_wrap(~ outcome_type, scales = "free") +
+    facet_wrap(~ outcome, scales = "free") +
     theme_classic() +
     theme(legend.position = "bottom",
           legend.background = element_rect(linetype = "dashed", color = "black"),

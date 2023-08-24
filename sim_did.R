@@ -3,7 +3,8 @@
 library(data.table)
 library(did)
 
-sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", hetero = "dynamic"){
+sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", hetero = "dynamic",
+                    multiple_outcome = TRUE){
   
   #unit specific stuff
   dt_i <- data.table(unit = 1:sample_size)
@@ -73,8 +74,9 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   #potential outcome
   dt[, y1 := y0 + tau]
   dt[, y := y1*D + y0*(1-D)]
-  
   dt <- dt[, .(time, G, unit, x, y)]
+  
+  if(multiple_outcome == TRUE){  dt[, y2 := y + 1]}
   
   return(list(dt = dt, att = att))
   
