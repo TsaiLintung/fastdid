@@ -1,6 +1,18 @@
-#by LinTung Tsai to be used with Max's event code
-#some wrappers
-library(fixest)
+#this code is originally written by Maxwell Kellogg for his paper on DI, url: https://doi.org/10.2139/ssrn.4187881.
+#also modified by Louis Tseng and 蕭博鋼
+#this version is modified by Lin-tung Tsai
+
+require(fixest)
+require(data.table)
+require(sandwich)
+require(dplyr)
+require(stringr)
+require(fixest)
+require(kit)
+require(collapse)
+require(foreach)
+require(purrr)
+require(ggplot2)
 
 #Treated households:
 event_code <-function(maindata,

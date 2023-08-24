@@ -3,16 +3,8 @@ rm(list = ls())
 gc()
 
 library(profvis)
-library(data.table)
-library(sandwich)
-library(dplyr)
-library(stringr)
-library(fixest)
-library(kit)
-library(collapse)
-library(doFuture)
-library(purrr)
-library(ast2ast)
+
+
 
 setwd("~/GitHub/EventStudyCode")
 
