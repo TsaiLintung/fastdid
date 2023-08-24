@@ -56,9 +56,7 @@ profvis({
                                                    cohortvar = cohort_name,
                                                    covariate_base_balance = balance_covariate,
                                                    never_treat_action = "both")
-  
-  event_panel <- event_ATTs_head(event_panel, yname)
-  
+
   event_code_est <- suppressMessages(get_result_dynamic(event_panel,min_time,max_time,y_name, table = NULL,trends = FALSE))
 })
 

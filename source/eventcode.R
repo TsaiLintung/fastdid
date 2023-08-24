@@ -185,35 +185,10 @@ create_event_data<-function(maindata,
     }
   }
   
-  return(eventdata)
-}
-
-event_ATTs_head<-function(eventdata,
-                          outcomes,#vector of variable names
-                          clustervar="id", 
-                          weights="pweight",
-                          keep_trends=TRUE,
-                          base_time = -1){
-  
-  #These regressions should work identically if the fixed effects (after the "|") were replaced with:
-  # interaction(time_pair,id,cohort)
-  #eventdata[,treated_post := charToFact(as.character((treated == 1) * (post == 1)))]
-  #eventdata[,treated_pre := charToFact(as.character((treated == 1) * (post == 0)))]
-  #eventdata[,treated_event_time := event_time]
-  #eventdata[treated==0,treated_event_time := 1] #1 is the base level
-
-  
+  #original event att head
   eventdata[,event_time_stratify := interaction(event_time_fact,stratify, drop=TRUE)]
-  #eventdata[,treated_post_stratify := interaction(treated_post,stratify, drop = TRUE)]
-  
-  #eventdata[,treated_pre_stratify := interaction(treated_pre,stratify,drop=TRUE)]
-  #eventdata[treated_pre==0,treated_pre_stratify := 1]
-  #eventdata[event_time==base_time,treated_pre_stratify := 1]
-  
   eventdata[,unitfe := .GRP, by = .(time_pair,id,treated,cohort_pair_fact,stratify)]
   eventdata[,treated_event_time_stratify := interaction(event_time_fact,stratify, drop = TRUE)]
-  
-  #Omitting base year for all levels of --stratify--:
   
   base_stratify <- paste0(c(base_time,1),collapse=".")
   
@@ -225,13 +200,10 @@ event_ATTs_head<-function(eventdata,
   eventdata[event_time==base_time,treated_event_time_stratify :=base_stratify]
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_stratify)]
   
-  #Omitting effect for untreated people or observations in pre-period:
-  #eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
-  #eventdata[,treated_post_stratify:=relevel(treated_post_stratify,ref = paste0(c(0,1),collapse="."))]
-  
   return(eventdata)
   
 }
+
 
 
 get_result_dynamic<-function(eventdata_panel,start,end,variable,table = data.table(), results=list(),trends=FALSE, 
