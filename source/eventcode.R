@@ -122,18 +122,15 @@ create_event_data<-function(maindata,
   stack_eventtime <- function(t, treatdata, controldata){
     
     #t is the event time
-    
     pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time][event_time %in% c(t, base_time),]
     pair_control_data <- controldata[t >= min_event_time & t <= max_event_time][event_time %in% c(t, base_time),]
     
     pair_treat_data[,time_pair := t]
     pair_control_data[,time_pair := t]
     
-    #return this
     return(c(list(pair_treat_data), list(pair_control_data)))
     
   }
-
   data_list <- foreach(t = event_times) %do% stack_eventtime(t, treatdata, controldata)
 
   data_list <- flatten(data_list)
@@ -192,7 +189,7 @@ create_event_data<-function(maindata,
   
   #original event att head
   eventdata[,event_time_stratify := interaction(event_time_fact,stratify, drop=TRUE)]
-  eventdata[,unitfe := .GRP, by = .(time_pair,id,treated,cohort_pair_fact,stratify)]
+  eventdata[,unitfe := .GRP, by = .(id,cohort_pair_fact)]
   eventdata[,treated_event_time_stratify := interaction(event_time_fact,stratify, drop = TRUE)]
   
   base_stratify <- paste0(c(base_time,1),collapse=".")

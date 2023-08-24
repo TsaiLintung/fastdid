@@ -26,7 +26,7 @@ source("sim_did.R")
 
 #source("~/GitHub/EventStudyCode/source_raw/EventCode/eventcode_helper.R")
 #source("~/GitHub/EventStudyCode/source_raw/EventCode/eventcode_revised_MaxLouis_ver7.R")
-source("source/eventcode.R")
+
 
 
 # simulation ---------------------------------------------------------------------
@@ -34,10 +34,12 @@ source("source/eventcode.R")
 #test with did
 
 
-
-simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic")
+source("source/eventcode.R")
+simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic")
 dt <- simdt$dt
 
+setDTthreads(0)
+options(kit.nThread = getDTthreads())
 
 # event code ---------------------------------------------------------------------
 
