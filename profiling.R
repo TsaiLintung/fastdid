@@ -45,8 +45,8 @@ profvis({
   
   event_panel <- copy(dt) #copying so that the original does not change
   
-  min_time <- -5
-  max_time <- 5
+  min_time <- -Inf
+  max_time <- Inf
   y_name <- "y"
   t_name <- "time"
   unit_name <- "unit"
@@ -57,9 +57,12 @@ profvis({
                                                    outcomevar = y_name,
                                                    cohortvar = cohort_name,
                                                    covariate_base_balance = balance_covariate,
+                                                   lower_event_time = min_time,
+                                                   upper_event_time = max_time,
                                                    never_treat_action = "both")
 
-  event_code_est <- get_result_dynamic(event_panel,min_time,max_time,y_name, table = NULL,trends = FALSE)
+  event_code_est <- get_result_dynamic(event_panel, y_name)
+  
 })
 
 att_comp <- validate_att_est(simdt$att, event_code_est$att, event_code_est$se, type = "dynamic")

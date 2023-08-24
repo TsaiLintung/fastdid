@@ -112,7 +112,7 @@ create_event_data<-function(maindata,
   #for each household. The reason? We will assign control households weights that vary
   #based on the other year, as households enter/exit the sample.
   event_times<- as.integer(as.character(treatdata[,unique(event_time)]))
-  event_times <- event_times[event_times %!=% -1]
+  event_times <- event_times[event_times != -1 & event_times >= lower_event_time & event_times <= upper_event_time]
   
   controldata[, `:=`(min_event_time = min(event_time),
                   max_event_time = max(event_time)), by = .(id, cohort_pair)]
@@ -213,19 +213,17 @@ create_event_data<-function(maindata,
   
 }
 
-get_result_dynamic<-function(eventdata_panel,start,end,variable,table = data.table(), results=list(),trends=FALSE, 
-                             clustervar = "id", weights = "pweight"){
-  
-  b = end-start+ifelse(-1 %in% start:end, 0, 1)
-  trend_call <- ifelse(trends, "+ event_time_stratify |", "| event_time_stratify + ")
-  call <- paste0("c(", paste0(variable,collapse=","), ") ~ treated_event_time_stratify ", trend_call, " unitfe")
+get_result_dynamic<-function(eventdata_panel, variable, clustervar = "id", weights = "pweight"){
+
+  call <- paste0("c(", paste0(variable,collapse=","), ") ~ treated_event_time_stratify | event_time_stratify + unitfe")
   results<-feols(as.formula(call),
                  data = eventdata_panel,
                  weights= eventdata_panel[,get(weights)],
                  split = "time_pair",
                  cluster=clustervar, lean = TRUE, mem.clean = FALSE)
+  table <- data.table()
   for(result in results){
-    dt<-data.table(variable = row.names(result$coeftable),model=i,result$coeftable,obs=result$nobs)
+    dt<-data.table(variable = row.names(result$coeftable),result$coeftable,obs=result$nobs)
     table<-rbind(dt,table)
   }
   table[, event_time := as.integer(str_remove_all(str_extract(variable, "y(.*?)\\."), "y|\\."))]
