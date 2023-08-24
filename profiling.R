@@ -35,7 +35,7 @@ source("source/eventcode.R")
 
 
 
-simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic")
+simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic")
 dt <- simdt$dt
 
 # event code ---------------------------------------------------------------------
@@ -51,22 +51,15 @@ profvis({
   unit_name <- "unit"
   cohort_name <- "G"
   balance_covariate <- "x"
-  
-  onset <- event_panel[, min(get(cohort_name)) - 1]
-  event_panel[, onset_time := onset]
-  
+
   event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
                                                    cohortvar = cohort_name,
-                                                   onset_agevar = "onset_time",
                                                    covariate_base_balance = balance_covariate,
-                                                   covariate_base_stratify = c(),
-                                                   never_treat_action = "both",
-                                                   balanced_panel = FALSE)
+                                                   never_treat_action = "both")
   
   event_panel <- event_ATTs_head(event_panel, yname)
   
-  event_code_est <- suppressMessages(get_result_dynamic(event_panel,min_time,-2,y_name, table = NULL,trends = FALSE))
-  event_code_est <- suppressMessages(get_result_dynamic(event_panel,0,max_time,y_name, table = event_code_est,trends = FALSE))
+  event_code_est <- suppressMessages(get_result_dynamic(event_panel,min_time,max_time,y_name, table = NULL,trends = FALSE))
 })
 
 dynamic_att <- event_code_est[str_starts(variable, "treated"), ]

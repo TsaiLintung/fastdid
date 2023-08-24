@@ -7,43 +7,21 @@ create_event_data<-function(maindata,
                             #if no covariates for balancing or stratification, just specify a constant (as follows):
                             covariate_base_stratify=1, #vector of variable names, treatment effects are stratified by their joint unique values.
                             covariate_base_balance=1, #vector of variable names to include in finding exact matches for treated units
-                            base_restrict = 1, #a single var, restricting to households for which var == 1 in base period,
-                            treated_restrict=1,
                             timevar,
                             unitvar,
                             cohortvar, #period when the particular event of interest arises
-                            anycohortvar = NULL, #period when ANY kind of event arises, used to find control cohorts
-                            #(for whom no event of any kind has yet to happen)
-                            #Only specify if it differs from cohortvar
-                            onset_agevar, #variable indicating age at which LTC needs arose, for person affected by them
                             base_time = -1, #reference value for event time; the period from which differences over time are taken
-                            onset_minimum=-Inf, #Drop treated guys whose onset happens BEFORE this time period
-                            onset_maximum=Inf, #Drop treated guys whose onset happens AFTER this time period
                             never_treat_action = "both", #options: "both", "only", and "exclude"
-                            #Both: include both never-treated and later-treated units as controls
-                            #Only: use only never-treated units as controls
-                            #Exclude: use only later-treated units as controls
                             lower_event_time = -Inf, #Earliest period (relative to treatment time) for which to estimate effects
                             upper_event_time = Inf, #Latest period (relative to treatment time) for which to estimate effects
-                            balanced_panel = FALSE, #If TRUE, keep only units observed over full interval [lower_event_time, upper_event_time]
-                            stratify_balance_val = NA,
                             parallel = FALSE) 
 {
   
-  #deal with with name
-  if(is.null(anycohortvar)) {
-    maindata[,anycohortvar:=get(cohortvar)]
-    anycohortvar<-"anycohortvar"
-  }
-  setnames(maindata,c(timevar,unitvar,cohortvar,anycohortvar),c("time","id","cohort","anycohort"))
-  if(base_restrict != 1) setnames(maindata,base_restrict,"base_restrict")
-  if(treated_restrict != 1) setnames(maindata,treated_restrict,"treated_restrict")
+
+  setnames(maindata,c(timevar,unitvar,cohortvar),c("time","id","cohort"))
   
-  #data validation
-  if(lower_event_time > base_time) stop("lower_event_time must lie below base_time")
   if(!is.data.table(maindata)) stop("rawdata must be a data.table")
   if(any(is.na(maindata$cohort))) stop("cohort variable should not be missing (it can be infinite instead)")
-  if(any(is.na(maindata$anycohort))) stop("anycohort variable should not be missing (it can be infinite instead)")
   if(any(fduplicated(maindata[,.(time, id)]))){stop ("some unit-time is observed more then once")}
   
   maindata[, id := charToFact(as.character(id))]
@@ -61,121 +39,58 @@ create_event_data<-function(maindata,
   }
   
   #create treated data
-  treatdata<-copy(maindata[onset_agevar>=onset_minimum  & ! is.infinite(cohort) & !is.infinite(anycohort) ,])
+  treatdata<-copy(maindata[!is.infinite(cohort),])
   treatdata[,treated:=1]
   treatdata[,event_time:=time-cohort]
+  treatdata[,cohort_pair := cohort] #the pair
   treatdata<-treatdata[event_time >= lower_event_time & event_time <= upper_event_time,]
   treatdata[,treatgroup:="treated"]
   
   #stack control cohorts for each treated cohort
   #I assume people who never suffer the event have a value cohort = Inf
-  controldata<-NULL
+  control_list <- list()
 
-  for(o in unique(treatdata$cohort)){
+  for(o in unique(treatdata$cohort_pair)){
     if(never_treat_action=="both") {
-      controlcohort <- maindata[(anycohort > o | is.infinite(anycohort)) ,]
-      controlcohort[is.infinite(anycohort),treatgroup:="never-treated"]
-      controlcohort[!is.infinite(anycohort),treatgroup:="later-treated"]
+      controlcohort <- maindata[(cohort > o | is.infinite(cohort)) ,]
+      controlcohort[is.infinite(cohort),treatgroup:="never-treated"]
+      controlcohort[!is.infinite(cohort),treatgroup:="later-treated"]
     }
     if(never_treat_action=="exclude"){
-      controlcohort <- maindata[(anycohort > o & !is.infinite(anycohort)) ,]
+      controlcohort <- maindata[(cohort > o & !is.infinite(cohort)) ,]
       controlcohort[,treatgroup:="later-treated"]
     }
     if(never_treat_action=="only") {
-      controlcohort <- maindata[is.infinite(anycohort) ,]
+      controlcohort <- maindata[is.infinite(cohort) ,]
       controlcohort[,treatgroup:="never-treated"]
     }
     
-    controlcohort[,cohort := o]
-    controlcohort[,event_time := time - cohort]
+    controlcohort[,cohort_pair := o]
+    controlcohort[,event_time := time - cohort_pair]
+
+    control_list<- c(control_list, list(controlcohort))
     
-    
-    #Make sure people in the control cohort are actually observed in that period
-    #(to verify they don't belong to the cohort)
-    controlcohort[ ,obscohort := max(time == o),by=id]
-    controlcohort<-controlcohort[obscohort==1,]
-    controlcohort[,obscohort:=NULL]
-    #drop someone from the control cohort when they get treated:
-    controlcohort<-controlcohort[anycohort - cohort > event_time ,]
-    
-    controldata<-rbind(controldata,controlcohort)
   }
   rm(controlcohort)
   gc()
   
+  controldata <- rbindlist(control_list)
+  
   controldata[,treated:=0]
-  controldata<-controldata[event_time >= lower_event_time & event_time <= upper_event_time,]
-  
-  
 
-  #If base_time varies across units, reassigning it to a common reference value:
-  #This is relevant, for instance, with a dataset that moves from annual to bi-annual
-  #treatdata[event_time == base_time, event_time :=max(base_time)]
-  #treatdata[,base_time :=max(base_time)]
-  #controldata[event_time == base_time,event_time :=max(base_time)]
-  #controldata[,base_time :=max(base_time)]
   
-  #count how many times a id is viewed
-  treatdata[,obscount:=1]
-  controldata[,obscount:=1]
-  treatdata[,obscount:=sum(obscount),by=.(id,cohort)]
-  controldata[,obscount:=sum(obscount),by=.(id,cohort)]
+  #drop someone from the control cohort when they get treated:
+  controldata<-controldata[time < cohort ,]
   
-  #if a covariate is > 9e9 and , it is set to NA
-  if(is.character(covariate_base_stratify)){
-    for(out in covariate_base_stratify){
-      controldata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
-      controldata[get(out) >= 9e9,eval(out) := NA, ]
-      treatdata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
-      treatdata[get(out) >= 9e9,eval(out) := NA, ]
-    }
-  }
-  if(is.character(covariate_base_balance)){
-    for(out in covariate_base_balance){
-      controldata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
-      controldata[get(out) >= 9e9,eval(out) := Inf, ]
-      treatdata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
-      treatdata[get(out) >= 9e9,eval(out) := Inf, ]
-    }
-  }
-  
-  
-  controldata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
-  controldata <- controldata[base_restrict == 1,]
-  treatdata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
-  treatdata <- treatdata[base_restrict == 1,]
-  treatdata <- treatdata[treated_restrict == 1,]
-  
-  #only keep observations that have common support on covariates
-  #treat_unique <- funique(treatdata[, .(balancevars,stratify,event_time, cohort)]) |> as.data.table()
-  #control_unique <-funique(controldata[, .(balancevars,stratify,event_time, cohort)]) |> as.data.table()
-  #common_unique <- fintersect(treat_unique, control_unique)
-  
-  #treatdata[,temp:=interaction(balancevars,stratify,event_time,cohort,drop=TRUE)]
-  #controldata[,temp:=interaction(balancevars,stratify,event_time,cohort,drop=TRUE)]
-  #commonvals<-intersect(unique(treatdata$temp),unique(controldata$temp))
-  #treatdata<-treatdata[temp%in%commonvals,]
-  #controldata<-controldata[temp%in%commonvals,]
-  
-  #treatdata[,temp:=NULL]
-  #controldata[,temp:=NULL]
-  #rm(commonvals)
-  gc()
+  #drop control for event time outside needed
+  controldata<-controldata[event_time >= lower_event_time & event_time <= upper_event_time,]
   
   #before stacking turn cohort and event time into fact
   treatdata[, event_time_fact := charToFact(as.character(event_time))]
-  treatdata[, cohort_fact := charToFact(as.character(cohort))]
+  treatdata[, cohort_pair_fact := charToFact(as.character(cohort_pair))]
   controldata[, event_time_fact := charToFact(as.character(event_time))]
-  controldata[, cohort_fact := charToFact(as.character(cohort))]
-  
-  #make sure observations are only observed once in the base period
-  #treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-  #controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-  #if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
-  #if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
-  #treatdata <- treatdata[obsbase==1,]
-  #controldata <- controldata[obsbase==1,]
-  
+  controldata[, cohort_pair_fact := charToFact(as.character(cohort_pair))]
+
   #For the final dataset, we must stack each pairwise combo of (base year, other year)
   #for each household. The reason? We will assign control households weights that vary
   #based on the other year, as households enter/exit the sample.
@@ -183,8 +98,10 @@ create_event_data<-function(maindata,
   event_times <- event_times[event_times %!=% -1]
   
   stack_eventtime <- function(t, treatdata, controldata){
-    treatdata[,obst:=anyv(event_time,t),by=.(id,cohort)]
-    controldata[,obst:=anyv(event_time,t),by=.(id,cohort)]
+    
+    #use the guy observed in the period
+    treatdata[,obst:=anyv(event_time,t),by=.(id,cohort_pair)]
+    controldata[,obst:=anyv(event_time,t),by=.(id,cohort_pair)]
     
     pair_treat_data <- treatdata[obst == TRUE & event_time %in% c(t, base_time),]
     pair_control_data <- controldata[obst == TRUE & event_time %in% c(t, base_time),]
@@ -213,7 +130,6 @@ create_event_data<-function(maindata,
   eventdata <- rbindlist(data_list, use.names=TRUE)
 
   eventdata[,obst:=NULL]
-  eventdata[,anycohort:=NULL]
   
   rm(treatdata)
   rm(controldata)
@@ -225,17 +141,18 @@ create_event_data<-function(maindata,
   #Note: this may have a lot of fixed effects, and may need to be broken down into multiple smaller regressions:
   eventdata[,pweight:=NA]
   
-  eventdata[,pval:= feols(treated ~ 1 | cohort_fact^event_time_fact^time_pair^stratify^balancevars,
+  eventdata[,pval:= feols(treated ~ 1 | cohort_pair_fact^event_time_fact^time_pair^stratify^balancevars,
                           data = eventdata, lean = FALSE, combine.quick = TRUE)$fitted.values]
   
-  eventdata[treated==1 & pval < 1 & pval > 0,pweight:=1.00]
+  
+  eventdata[treated==1 & pval < 1 & pval > 0,pweight:=1.00] #att is estimated
   eventdata[, pweight := as.double(pweight)] #TSAI addition
   eventdata[treated==0 & pval < 1 & pval > 0,pweight:=pval/(1-pval)]
   eventdata[,pval:=NULL]
-  eventdata<- eventdata[!is.na(pweight),]
+  eventdata<- eventdata[!is.na(pweight),] #ppl with pval outside 0 and 1 <-> no common support is dropped
   
   #calculating weights to match control and treated households on characteristics, across strata
-  if(!is.na(stratify_balance_val)){
+  if(covariate_base_stratify != 1){
     eventdata[,treated_base := treated == 1 & stratify == stratify_balance_val]
     
     stratvals<-levels(eventdata$stratify)
@@ -293,18 +210,18 @@ event_ATTs_head<-function(eventdata,
   #eventdata[treated_pre==0,treated_pre_stratify := 1]
   #eventdata[event_time==base_time,treated_pre_stratify := 1]
   
-  eventdata[,unitfe := .GRP, by = .(time_pair,id,treated,cohort_fact,stratify)]
+  eventdata[,unitfe := .GRP, by = .(time_pair,id,treated,cohort_pair_fact,stratify)]
   eventdata[,treated_event_time_stratify := interaction(event_time_fact,stratify, drop = TRUE)]
   
   #Omitting base year for all levels of --stratify--:
   
-  base_stratify <-  paste0(c(base_time,1),collapse=".")
+  base_stratify <- paste0(c(base_time,1),collapse=".")
   
   eventdata[event_time==base_time,event_time_stratify := base_stratify]
   eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = base_stratify)]
   
   #Omitting base year for all levels of --stratify--, for treated people
-  eventdata[treated == 0 ,treated_event_time_stratify :=base_stratify]
+  eventdata[treated == 0 ,treated_event_time_stratify := base_stratify]
   eventdata[event_time==base_time,treated_event_time_stratify :=base_stratify]
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_stratify)]
   
