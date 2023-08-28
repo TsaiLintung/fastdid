@@ -27,11 +27,14 @@ source("sim_did.R")
 
 
 source("source/eventcode.R")
-simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic")
-dt <- simdt$dt
-
 setDTthreads(0)
 options(kit.nThread = getDTthreads())
+setFixest_nthreads(getDTthreads())
+
+simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic")
+dt <- simdt$dt
+
+
 
 # event code ---------------------------------------------------------------------
 
