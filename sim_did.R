@@ -4,9 +4,9 @@ library(data.table)
 library(did)
 
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", hetero = "dynamic",
-                    multiple_outcome = TRUE){
+                    second_outcome = TRUE, na = "none", balanced = TRUE){
   
-  #unit specific stuff
+  #unit  -------------
   dt_i <- data.table(unit = 1:sample_size)
   if(cov == "int"){
     dt_i[, x := sample.int(5, sample_size, replace = TRUE)] #event code can't take double 
@@ -17,6 +17,8 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   }
 
   dt_i[, treat_latent := x*0.2 + rnorm(sample_size)]
+  
+  #treatment assignment ---------------------
   
   #assign treated group based on a latent related to X
   #unit with larger X tend to be treated and treated earlier
@@ -35,12 +37,12 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   #assign unit FE
   dt_i[, unit_fe := rnorm(sample_size)]
   
-  #time specific stuff
+  #time ------------------
   dt_t <- data.table(time = 1:time_period)
   dt_t[, time_fe := rnorm(time_period)]
   dt_t[, x_trend := rnorm(time_period)]
   
-  #combine i and t inot a panel
+  #panel --------------------------
   dt <- CJ(unit = 1:sample_size, time = 1:time_period)
   dt <- dt |> merge(dt_i, by = "unit")
   dt <- dt |> merge(dt_t, by = "time")
@@ -50,22 +52,16 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   #untreated potential outcomes
   dt[, y0 := unit_fe + time_fe + x*x_trend + rnorm(sample_size*time_period, sd = 0.1)]
   
-  #ATE is group-time specific
+  #generate gtatt
   att <- CJ(G = 1:time_period, time = 1:time_period)
   if(hetero == "all"){
-    
     att[, attgt := rnorm((time_period-1)*(time_period-1), mean = 2, sd = 0.5)]
-    
   } else if (hetero == "dynamic"){
-
-    
     for(event_t in 0:max(att[,time-G])){
-      
       att[time - G == event_t, attgt := rnorm(1, mean = 2, sd = 0.5)]
-      
     }
   }
-  att[time < G, attgt := 0]
+  att[time < G, attgt := 0] #no anticipation
   
   dt <- dt |> merge(att, by = c("time", "G"), all.x = TRUE, all.y = FALSE)
   dt[is.na(attgt), attgt := 0]
@@ -76,7 +72,22 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   dt[, y := y1*D + y0*(1-D)]
   dt <- dt[, .(time, G, unit, x, y)]
   
-  if(multiple_outcome == TRUE){  dt[, y2 := y + 1]}
+  #additional -----------------
+  
+  if(na == "y"){
+    dt[, y := na_insert(y)]
+  } else if (na == "x") {
+    dt[, x := na_insert(x)]
+  } else if( na == "both"){
+    dt[, y := na_insert(y)]
+    dt[, x := na_insert(x)]
+  }
+  
+  if(balanced == FALSE){
+    size <- fnrow(dt)
+    dt <- dt[sample(1:size, size*0.95)]
+  }
+  if(second_outcome == TRUE){  dt[, y2 := y + 1 + rnorm(fnrow(dt), 0, 0.1)]}
   
   return(list(dt = dt, att = att))
   
