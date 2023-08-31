@@ -143,10 +143,12 @@ create_event_data<-function(maindata,
   
   
   # checking observation -----------------------------------------------------------------
-  
-  
-  #check if any unit is observed more then once in the base period
+
   if(!balanced_panel){
+    
+    #check if any unit is observed more then once in the base period
+    #only needed when panel is not already balanced
+    
     treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
     controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
     if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
@@ -170,9 +172,7 @@ create_event_data<-function(maindata,
   treatdata[,base_time :=max(base_time)]
   controldata[event_time == base_time,event_time :=max(base_time)]
   controldata[,base_time :=max(base_time)]
-  
 
-  
   #turn covariates to factor
   covariates <- c(covariate_base_stratify, covariate_base_balance, covariate_base_support)
   covariates <- covariates[covariates %!=% 1]
@@ -185,11 +185,11 @@ create_event_data<-function(maindata,
     treatdata[,eval(out) := as.factor(get(out))]
   }
 
+  #dealing with base-restrict
   controldata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
   controldata <- controldata[base_restrict == 1,]
   treatdata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
   treatdata <- treatdata[base_restrict == 1,]
-
   treatdata[,base_restrict_treated := max(base_restrict_treated * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
   treatdata <- treatdata[base_restrict_treated == 1,]
   controldata <- controldata[, base_restrict_treated := 1]
@@ -214,16 +214,23 @@ create_event_data<-function(maindata,
   }
   
   #check common support
-  treatdata[,temp:=interaction(balancevars,supportvars,stratify,event_time,cohort,drop=TRUE)]
-  controldata[,temp:=interaction(balancevars,supportvars,stratify,event_time,cohort,drop=TRUE)]
-  commonvals<-intersect(unique(treatdata$temp),unique(controldata$temp))
-  treatdata<-treatdata[temp%in%commonvals,]
-  controldata<-controldata[temp%in%commonvals,]
-  
-  treatdata[,temp:=NULL]
-  controldata[,temp:=NULL]
-  rm(commonvals)
-  gc()
+  if(is.character(covariate_base_balance_linear)){
+    
+    #common support checking is only needed when there is linear regression - interpolation and extrapolation
+    #o.w. a propensity score within 0,1 means it has common support
+    
+    treatdata[,temp:=interaction(balancevars,supportvars,stratify,event_time,cohort,drop=TRUE)]
+    controldata[,temp:=interaction(balancevars,supportvars,stratify,event_time,cohort,drop=TRUE)]
+    commonvals<-intersect(unique(treatdata$temp),unique(controldata$temp))
+    treatdata<-treatdata[temp%in%commonvals,]
+    controldata<-controldata[temp%in%commonvals,]
+    
+    treatdata[,temp:=NULL]
+    controldata[,temp:=NULL]
+    rm(commonvals)
+    gc()
+    
+  }
   
   # stacking for event_time -----------------------------------------------------------------
 
@@ -274,7 +281,7 @@ create_event_data<-function(maindata,
   
   if(is.null(eventdata)==T){stop("eventdata is empty!!!")}
 
-  eventdata[,obst:=NULL]
+  #eventdata[,obst:=NULL]
   eventdata[,obsbase:=NULL]
   eventdata[,anycohort:=NULL]
   
@@ -295,32 +302,26 @@ create_event_data<-function(maindata,
   #calculating weights so that controls match treated households on characteristics
   #Note: this may have a lot of fixed effects, and may need to be broken down into 
   #multiple smaller regressions:
-
-  eventdata[,pweight:=NULL]
-  if(is.character(covariate_base_balance_linear))
-    {eventdata[,pval:=feols(as.formula(paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
-                                                                 sep=":interaction(cohort,event_time,time_pair,stratify,balancevars_linear_subset, drop = TRUE)"),
-                                              "| interaction(cohort,event_time,time_pair,stratify,balancevars, drop = TRUE)"
-    )),data = eventdata, lean = FALSE)$fitted.values]
-    }
-  else{
-    eventdata[,pval:=feols(treated ~ 1 | interaction(cohort,event_time,time_pair,stratify,balancevars, drop = TRUE),
-                                  data = eventdata, lean = FALSE)$fitted.values]
-  }
   
-  eventdata[treated==1 & pval < 1 & pval > 0,pweight:=1]
-  eventdata[treated==0 & pval < 1 & pval > 0,pweight:=pval/(1-pval)]
+  call <- ifelse(!is.character(covariate_base_balance_linear),
+                 "treated ~ 1 | interaction(cohort,event_time,time_pair,stratify,balancevars, drop = TRUE)",
+                 paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
+                                           sep=":interaction(cohort,event_time,time_pair,stratify,balancevars_linear_subset, drop = TRUE)"),
+                        "| interaction(cohort,event_time,time_pair,stratify,balancevars, drop = TRUE)"))
+  eventdata[,pval:= feols(as.formula(call), data = eventdata, lean = FALSE)$fitted.values]
+
+  eventdata <- eventdata[pval < 1 & pval > 0]
+  eventdata[,pweight := ifelse(treated == 1, 1, pval/(1-pval))]
   eventdata[,pval:=NULL]
-  eventdata<- eventdata[!is.na(pweight),]
 
   #  deal with extensions ----------------------------------------------
   
   if(!is.na(instrument)){
-    eventdata <- process_iv(eventdata, instrument, instrument_exposure, covs_instrument_base_balance, saturate)
+    eventdata <- eventdata |> process_iv(instrument, instrument_exposure, covs_instrument_base_balance, saturate)
   }
   
   if(!is.na(stratify_balance_val)){
-    eventdata <- process_stratify(eventdata)
+    eventdata <- eventdata |> process_stratify()
   }
   
   eventdata[,treated:=as.factor(treated)]
@@ -358,7 +359,6 @@ construct_event_variables<-function(eventdata,saturate=FALSE,IV=FALSE,response=N
   eventdata[treated == 0 ,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
   eventdata[event_time==base_time,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
-  
 
   #Omitting effect for untreated people or observations in pre-period:
   eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
