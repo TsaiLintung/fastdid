@@ -39,14 +39,6 @@ create_event_data<-function(maindata,
                             ) 
 {
   
-  # validation -----------------------------------
-  
-  if(balanced_panel==TRUE & !is.na(instrument) & !instrument_exposure%in%c("full","base")) stop("If imposing a balanced panel in an IV design, set instrument_exposure to full or base.")
-  if(lower_event_time > base_time) stop("lower_event_time must lie below base_time")
-  if(!is.data.table(maindata)) stop("rawdata must be a data.table")
-  if(!all(is.na(stratify_balance_val)) & all(covariate_base_stratify == 1)) stop("It makes no sense to specify stratify_balance_val without specifying covariate_base_stratify")
-  if(!instrument_exposure%in%c("full","partial","all","base")) stop("instrument_exposure, must be set to either full, partial, all, or base")
-
   # name change ----------------------------------
   
   if(is.null(anycohortvar)) {
@@ -55,7 +47,7 @@ create_event_data<-function(maindata,
   }
   if(is.numeric(base_time)){
     maindata[,base_time:=base_time]
-    } else {
+  } else {
     setnames(maindata,base_time,"base_time")
   }
   if(!is.null(onset_agevar)) {
@@ -68,8 +60,38 @@ create_event_data<-function(maindata,
   if(base_restrict_treated != 1) setnames(maindata,base_restrict_treated,"base_restrict_treated")
   if(any(is.na(maindata$cohort))) stop("cohort variable should not be missing (it can be infinite instead)")
   if(any(is.na(maindata$anycohort))) stop("anycohort variable should not be missing (it can be infinite instead)")
-  
   if(!is.character(covariate_base_balance_linear_subset)) covariate_base_balance_linear_subset <- covariate_base_balance
+  
+  # validation -----------------------------------
+  
+  if(balanced_panel==TRUE & !is.na(instrument) & !instrument_exposure%in%c("full","base")) stop("If imposing a balanced panel in an IV design, set instrument_exposure to full or base.")
+  if(lower_event_time > base_time) stop("lower_event_time must lie below base_time")
+  if(!is.data.table(maindata)) stop("rawdata must be a data.table")
+  if(!all(is.na(stratify_balance_val)) & all(covariate_base_stratify == 1)) stop("It makes no sense to specify stratify_balance_val without specifying covariate_base_stratify")
+  if(!instrument_exposure%in%c("full","partial","all","base")) stop("instrument_exposure, must be set to either full, partial, all, or base")
+
+  if(balanced_panel){
+    
+    #check if any is dup
+    if(any_duplicated(dt[, .(unit, time)])){
+      dup_id <- maindata[fduplicated(maindata[, .(id, time)])]
+      warning(nrow(dup_id), " units is observed more than once in some periods, enforcing balanced panel by dropping them")
+      maindata <- maindata[!id %fin% dup_id$id]
+    }
+    
+    #check if any is missing
+    id_count <- maindata[, .(count = .N), by = id]
+    time_period <- fnunique(maindata[, time])
+    if(any(id_count[, count < time_period])){
+      mis_id <- id_count[count < time_period]
+      warning(nrow(mis_id), " units is missing in some periods, enforcing balanced panel by dropping them")
+      maindata <- maindata[!id %fin% mis_id$id]
+    }
+    
+   #can't just check count = period because one may be missing in one period and observed multiple time in another
+    
+  }
+
   
   # stacking for cohort -----------------------------------------------------------------
   
@@ -124,12 +146,22 @@ create_event_data<-function(maindata,
   
   
   #check if any unit is observed more then once in the base period
-  treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-  controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-  if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
-  if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
-  treatdata <- treatdata[obsbase==1,]
-  controldata <- controldata[obsbase==1,]
+  if(!balanced_panel){
+    treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
+    controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
+    if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
+    if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
+    treatdata <- treatdata[obsbase==1,]
+    controldata <- controldata[obsbase==1,]
+  }
+
+
+  #not really used anywhere
+  #treatdata[,obscount:=1]
+  #controldata[,obscount:=1]
+  #reatdata[,obscount:=sum(obscount),by=.(id,cohort)]
+  #controldata[,obscount:=sum(obscount),by=.(id,cohort)]
+  
   gc()
   
   #If base_time varies across units, reassigning it to a common reference value:
@@ -139,16 +171,7 @@ create_event_data<-function(maindata,
   controldata[event_time == base_time,event_time :=max(base_time)]
   controldata[,base_time :=max(base_time)]
   
-  treatdata[,obscount:=1]
-  controldata[,obscount:=1]
-  treatdata[,obscount:=sum(obscount),by=.(id,cohort)]
-  controldata[,obscount:=sum(obscount),by=.(id,cohort)]
-  
-  if(balanced_panel==TRUE){
-    numperiods<-length(unique(treatdata$event_time))
-    treatdata<- treatdata[obscount== numperiods,]
-    controldata <- controldata[obscount>=numperiods,]
-  }
+
   
   #turn covariates to factor
   covariates <- c(covariate_base_stratify, covariate_base_balance, covariate_base_support)
@@ -205,17 +228,47 @@ create_event_data<-function(maindata,
   # stacking for event_time -----------------------------------------------------------------
 
   event_times<-treatdata[,unique(event_time)]
-  eventdata<-NULL
-
-  for(t in event_times){
-    treatdata[,obst:=sum(event_time==t),by=.(id,cohort)]
-    controldata[,obst:=sum(event_time==t),by=.(id,cohort)]
+  data_list <- list()
+  
+  if(balanced_panel){
     
-    pairdata<-rbind(treatdata[obsbase==1 & obst==1 & base_time != t & (event_time == t | event_time == base_time),],
-                    controldata[obsbase==1 & obst==1 & base_time != t & (event_time == t | event_time == base_time),])
-    pairdata[,time_pair:= t]
-    eventdata<-rbind(eventdata, pairdata)
+    #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
+    
+    controldata[, `:=`(min_event_time = fmin(event_time),
+                       max_event_time = fmax(event_time)), by = .(id, cohort)]
+    treatdata[, `:=`(min_event_time = fmin(event_time),
+                     max_event_time = fmax(event_time)), by = .(id, cohort)]
+    
+    for(t in event_times){
+      
+      pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time][event_time %in% c(t, base_time),]
+      pair_control_data <- controldata[t >= min_event_time & t <= max_event_time][event_time %in% c(t, base_time),]
+      
+      pair_treat_data[,time_pair := t]
+      pair_control_data[,time_pair := t]
+      
+      data_list<-c(data_list, list(pair_treat_data), list(pair_control_data))
+    }
+    
+  } else {
+    
+    #if not, need to check everytime
+    
+    for(t in event_times){
+      
+
+      treatdata[,obst:=sum(event_time==t),by=.(id,cohort)]
+      controldata[,obst:=sum(event_time==t),by=.(id,cohort)]
+      
+      pairdata<-rbind(treatdata[obst==1 & base_time != t & (event_time == t | event_time == base_time),],
+                      controldata[obst==1 & base_time != t & (event_time == t | event_time == base_time),])
+      pairdata[,time_pair:= t]
+      data_list<-c(data_list, list(pair_data))
+    }
+    
   }
+  
+  eventdata <- rbindlist(data_list,use.names=TRUE)
 
   # estimating ipw ----------------------------------------------------------------------------------
   
@@ -439,7 +492,6 @@ process_stratify <- function(eventdata){
 }
 
 process_iv <- function(eventdata, instrument, instrument_exposure, covs_instrument_base_balance, saturate){
-  
   eventdata[,instrument_group_now:=max(get(instrument) == 1 & as.numeric(as.character(time_pair)) == as.numeric(as.character(event_time))),by=.(id,cohort,time_pair)]
   eventdata[,instrument_group_base:=max(get(instrument) == 1 & as.numeric(as.character(base_time)) == as.numeric(as.character(event_time))),by=.(id,cohort,time_pair)]
   if(instrument_exposure=="full") eventdata <- eventdata[instrument_group_now == instrument_group_base,]

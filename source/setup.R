@@ -7,6 +7,7 @@ require(rlist)
 require(car)
 require(kit)
 require(collapse)
+require(fastmatch)
 
 setDTthreads(0)
 options(kit.nThread = getDTthreads())

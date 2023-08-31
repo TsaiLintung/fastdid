@@ -17,7 +17,7 @@ source("source/preprocess.R")
 source("source/estimation.R")
 source("source/report.R")
 
-simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic")
+simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic", balanced = FALSE)
 dt <- simdt$dt
 
 # event code ---------------------------------------------------------------------
@@ -37,6 +37,7 @@ profvis({
   event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
                                                    cohortvar = cohort_name,
                                                    covariate_base_balance = balance_covariate,
+                                                   balanced_panel = TRUE,
                                                    never_treat_action = "both")
   
   event_panel <- construct_event_variables(event_panel)

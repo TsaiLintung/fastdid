@@ -85,7 +85,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   
   if(balanced == FALSE){
     size <- fnrow(dt)
-    dt <- dt[sample(1:size, size*0.95)]
+    dt <- dt[sample(1:size, size*0.99)]
   }
   if(second_outcome == TRUE){  dt[, y2 := y + 1 + rnorm(fnrow(dt), 0, 0.1)]}
   
