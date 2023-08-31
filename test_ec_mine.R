@@ -4,22 +4,9 @@ gc()
 
 library(profvis)
 
-
-
 setwd("~/GitHub/EventStudyCode")
 
 source("sim_did.R")
-
-#load functions
-
-#library(did)
-#library(DiDforBigData)
-
-
-#source("~/GitHub/EventStudyCode/source_raw/EventCode/eventcode_helper.R")
-#source("~/GitHub/EventStudyCode/source_raw/EventCode/eventcode_revised_MaxLouis_ver7.R")
-
-
 
 # simulation ---------------------------------------------------------------------
 
