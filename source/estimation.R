@@ -14,7 +14,7 @@ event_ATTs_dynamic<-function(eventdata,
   eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
   eventdata[,treated_event_time_stratify:=as.factor(as.character(treated_event_time_stratify))]
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
-  
+
   
   if(keep_trends == TRUE){
     results<-feols(as.formula(paste0("c(",
@@ -37,6 +37,36 @@ event_ATTs_dynamic<-function(eventdata,
   return(list(dynamic = results))
 }
 
+get_result_dynamic2 <-function(eventdata_panel, variable, clustervar = "id", weights = "pweight"){
+  
+  base_ref <- paste0(c(max(eventdata_panel$base_time),1),collapse=".")
+  
+  eventdata_panel[,event_time_stratify:=as.factor(as.character(event_time_stratify))]
+  eventdata_panel[,event_time_stratify:=relevel(event_time_stratify,ref = base_ref)]
+  eventdata_panel[,treated_event_time_stratify:=as.factor(as.character(treated_event_time_stratify))]
+  eventdata_panel[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_ref)]
+  
+  call <- paste0("c(", paste0(variable,collapse=","), ") ~ treated_event_time_stratify | event_time_stratify + unitfe")
+  
+  results<-feols(as.formula(call),
+                 data = eventdata_panel,
+                 weights= eventdata_panel[,get(weights)],
+                 split = "time_pair",
+                 cluster=clustervar, lean = TRUE, mem.clean = TRUE)
+  
+  table <- data.table()
+  for(result in results){
+    dt<-data.table(outcome = (function(x) x[x != "c"])(as.character(result$fml[[2]])),
+                   variable = row.names(result$coeftable), result$coeftable,obs=result$nobs)
+    table<-rbind(dt,table)
+  }
+  table[, event_time := as.integer(str_remove_all(str_extract(variable, "y(.*?)\\."), "y|\\."))]
+  setnames(table, c("Estimate", "Std. Error"), c("att", "se"))
+  setorder(table, outcome, event_time)
+  table <- table[,.(outcome, event_time, att, se, obs)]
+  return(table)
+  
+}
 
 event_ATTs_means<-function(eventdata,
                            outcomes,#vector of variable names

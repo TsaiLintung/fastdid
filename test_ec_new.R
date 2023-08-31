@@ -17,7 +17,7 @@ source("source/preprocess.R")
 source("source/estimation.R")
 source("source/report.R")
 
-simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic", balanced = FALSE)
+simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic", balanced = FALSE)
 dt <- simdt$dt
 
 # event code ---------------------------------------------------------------------
@@ -45,6 +45,15 @@ profvis({
   event_est <- get_result_dynamic(event_panel, variable = y_name, trends = FALSE)
   
 })
+
+
+profvis({
+
+  event_est <- get_result_dynamic(event_panel, variable = y_name)
+  
+})
+
+
 
 att_comp <- validate_att_est(simdt$att, event_code_est$att, event_code_est$se, type = "dynamic")
 

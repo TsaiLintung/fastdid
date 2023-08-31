@@ -239,6 +239,7 @@ create_event_data<-function(maindata,
   
   if(balanced_panel){
     
+    base_time_glob <- base_time
     #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
     
     controldata[, `:=`(min_event_time = fmin(event_time),
@@ -248,8 +249,8 @@ create_event_data<-function(maindata,
     
     for(t in event_times){
       
-      pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time][event_time %in% c(t, base_time),]
-      pair_control_data <- controldata[t >= min_event_time & t <= max_event_time][event_time %in% c(t, base_time),]
+      pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time][event_time == t | event_time == base_time_glob),]
+      pair_control_data <- controldata[t >= min_event_time & t <= max_event_time][event_time == t | event_time == base_time_glob),]
       
       pair_treat_data[,time_pair := t]
       pair_control_data[,time_pair := t]
@@ -364,9 +365,16 @@ construct_event_variables<-function(eventdata,saturate=FALSE,IV=FALSE,response=N
   eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
   eventdata[,treated_post_stratify:=relevel(treated_post_stratify,ref = paste0(c(0,1),collapse="."))]
   
-  # IV -------------------------------------------------------------------------------
-  
   if(IV==TRUE){
+    eventdata <- construct_event_variables_iv(eventdata,saturate,IV,response)
+  }
+  
+  return(eventdata)
+  
+}
+
+
+construct_event_variables_iv <- function(eventdata,saturate=FALSE,IV=FALSE,response=NULL){
   eventdata[,Z:=instrument_group[event_time != base_time],by=.(unitfe)]
   eventdata[,R:=get(response)[event_time != base_time],by=.(unitfe)]
   eventdata[,response_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
@@ -414,9 +422,9 @@ construct_event_variables<-function(eventdata,saturate=FALSE,IV=FALSE,response=N
     # eventdata[,treated_instrument_pre_stratify:=interaction(treated_instrument_pre_stratify,balancevars, drop=TRUE)]
     # }
   }
-  }
   
   return(eventdata)
+  
 }
 
 process_stratify <- function(eventdata){
