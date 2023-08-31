@@ -1,0 +1,13 @@
+require(data.table)
+require(tidyverse)
+require(fixest)
+require(Hmisc)
+require(lfe)
+require(rlist)
+require(car)
+require(kit)
+require(collapse)
+
+setDTthreads(0)
+options(kit.nThread = getDTthreads())
+setFixest_nthreads(getDTthreads())

@@ -12,11 +12,10 @@ source("sim_did.R")
 
 #test with did
 
-
-source("source/eventcode_new.R")
-setDTthreads(0)
-options(kit.nThread = getDTthreads())
-setFixest_nthreads(getDTthreads())
+source("source/setup.R")
+source("source/preprocess.R")
+source("source/estimation.R")
+source("source/report.R")
 
 simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic")
 dt <- simdt$dt
