@@ -122,11 +122,10 @@ create_event_data<-function(maindata,
   
   # checking observation -----------------------------------------------------------------
   
-  #constructing the regression dataset, stacking each non-base year 
-  #with a copy of the base year observation.
+  
+  #check if any unit is observed more then once in the base period
   treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
   controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-  
   if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
   if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
   treatdata <- treatdata[obsbase==1,]
@@ -151,9 +150,9 @@ create_event_data<-function(maindata,
     controldata <- controldata[obscount>=numperiods,]
   }
   
+  #turn covariates to factor
   covariates <- c(covariate_base_stratify, covariate_base_balance, covariate_base_support)
   covariates <- covariates[covariates %!=% 1]
-  
   for(out in covariates){
     controldata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
     controldata[get(out) >= 9e9,eval(out) := NA, ]
@@ -215,8 +214,7 @@ create_event_data<-function(maindata,
     pairdata<-rbind(treatdata[obsbase==1 & obst==1 & base_time != t & (event_time == t | event_time == base_time),],
                     controldata[obsbase==1 & obst==1 & base_time != t & (event_time == t | event_time == base_time),])
     pairdata[,time_pair:= t]
-    eventdata<-rbind(eventdata,
-                     pairdata)
+    eventdata<-rbind(eventdata, pairdata)
   }
 
   # estimating ipw ----------------------------------------------------------------------------------
@@ -247,10 +245,9 @@ create_event_data<-function(maindata,
 
   eventdata[,pweight:=NULL]
   if(is.character(covariate_base_balance_linear))
-    {eventdata[,pval:=
-    feols(as.formula(paste0("treated ~", 
-    paste0(covariate_base_balance_linear,collapse="+",sep=":interaction(cohort,event_time,time_pair,stratify,balancevars_linear_subset, drop = TRUE)"),
-    "| interaction(cohort,event_time,time_pair,stratify,balancevars, drop = TRUE)"
+    {eventdata[,pval:=feols(as.formula(paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
+                                                                 sep=":interaction(cohort,event_time,time_pair,stratify,balancevars_linear_subset, drop = TRUE)"),
+                                              "| interaction(cohort,event_time,time_pair,stratify,balancevars, drop = TRUE)"
     )),data = eventdata, lean = FALSE)$fitted.values]
     }
   else{
@@ -262,10 +259,7 @@ create_event_data<-function(maindata,
   eventdata[treated==0 & pval < 1 & pval > 0,pweight:=pval/(1-pval)]
   eventdata[,pval:=NULL]
   eventdata<- eventdata[!is.na(pweight),]
-  
 
-
-  
   #  deal with extensions ----------------------------------------------
   
   if(!is.na(instrument)){
@@ -445,6 +439,7 @@ process_stratify <- function(eventdata){
 }
 
 process_iv <- function(eventdata, instrument, instrument_exposure, covs_instrument_base_balance, saturate){
+  
   eventdata[,instrument_group_now:=max(get(instrument) == 1 & as.numeric(as.character(time_pair)) == as.numeric(as.character(event_time))),by=.(id,cohort,time_pair)]
   eventdata[,instrument_group_base:=max(get(instrument) == 1 & as.numeric(as.character(base_time)) == as.numeric(as.character(event_time))),by=.(id,cohort,time_pair)]
   if(instrument_exposure=="full") eventdata <- eventdata[instrument_group_now == instrument_group_base,]
