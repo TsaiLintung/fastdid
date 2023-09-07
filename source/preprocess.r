@@ -92,7 +92,6 @@ create_event_data<-function(maindata,
     
   }
 
-  
   # stacking for cohort -----------------------------------------------------------------
   
   treatdata<-copy(maindata[onset_age_v>=onset_minimum  & ! is.infinite(cohort) & !is.infinite(anycohort) ,])
@@ -140,7 +139,6 @@ create_event_data<-function(maindata,
   
   controldata[,treated:=0]
   controldata<-controldata[event_time >= lower_event_time & event_time <= upper_event_time,]
-  
   
   # checking observation -----------------------------------------------------------------
 
@@ -237,45 +235,35 @@ create_event_data<-function(maindata,
   event_times<-treatdata[,unique(event_time)]
   data_list <- list()
   
-  if(balanced_panel){
-    
-    base_time_glob <- base_time
-    #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
-    
-    controldata[, `:=`(min_event_time = fmin(event_time),
-                       max_event_time = fmax(event_time)), by = .(id, cohort)]
-    treatdata[, `:=`(min_event_time = fmin(event_time),
-                     max_event_time = fmax(event_time)), by = .(id, cohort)]
-    
-    for(t in event_times){
-      
-      pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time][event_time == t | event_time == base_time_glob),]
-      pair_control_data <- controldata[t >= min_event_time & t <= max_event_time][event_time == t | event_time == base_time_glob),]
-      
-      pair_treat_data[,time_pair := t]
-      pair_control_data[,time_pair := t]
-      
-      data_list<-c(data_list, list(pair_treat_data), list(pair_control_data))
-    }
-    
-  } else {
-    
-    #if not, need to check everytime
-    
-    for(t in event_times){
-      
-
-      treatdata[,obst:=sum(event_time==t),by=.(id,cohort)]
-      controldata[,obst:=sum(event_time==t),by=.(id,cohort)]
-      
-      pairdata<-rbind(treatdata[obst==1 & base_time != t & (event_time == t | event_time == base_time),],
-                      controldata[obst==1 & base_time != t & (event_time == t | event_time == base_time),])
-      pairdata[,time_pair:= t]
-      data_list<-c(data_list, list(pair_data))
-    }
-    
-  }
+  base_time_glob <- base_time
+  #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
+  # TODO: make sure the estimates is valid if there are missing value within the min max (FEOLS)
   
+  controldata[, `:=`(min_event_time = fmin(event_time),
+                     max_event_time = fmax(event_time)), by = .(id, cohort)]
+  treatdata[, `:=`(min_event_time = fmin(event_time),
+                   max_event_time = fmax(event_time)), by = .(id, cohort)]
+  
+  for(t in event_times){
+    
+    pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time][(event_time == t | event_time == base_time_glob),]
+    pair_control_data <- controldata[t >= min_event_time & t <= max_event_time][(event_time == t | event_time == base_time_glob),]
+    
+    pair_treat_data[,time_pair := t]
+    pair_control_data[,time_pair := t]
+    
+    data_list<-c(data_list, list(pair_treat_data), list(pair_control_data))
+  }
+
+  #for(t in event_times){
+  #  treatdata[,obst:=sum(event_time==t),by=.(id,cohort)]
+  #  controldata[,obst:=sum(event_time==t),by=.(id,cohort)]
+  #  pairdata<-rbind(treatdata[obst==1 & base_time != t & (event_time == t | event_time == base_time),],
+  #                 controldata[obst==1 & base_time != t & (event_time == t | event_time == base_time),])
+  #  pairdata[,time_pair:= t]
+  #  data_list<-c(data_list, list(pair_data))
+  #}
+
   eventdata <- rbindlist(data_list,use.names=TRUE)
 
   # estimating ipw ----------------------------------------------------------------------------------
@@ -353,13 +341,16 @@ construct_event_variables<-function(eventdata,saturate=FALSE,IV=FALSE,response=N
   eventdata[,treated_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
 
   #Omitting base year for all levels of --stratify--:
-  eventdata[event_time==base_time,event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
+  
+  base_event_stratify <- paste0(c(max(eventdata$base_time),1),collapse=".")
+  
+  eventdata[event_time==base_time,event_time_stratify := base_event_stratify]
+  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = base_event_stratify)]
   
   #Omitting base year for all levels of --stratify--, for treated people
-  eventdata[treated == 0 ,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[event_time==base_time,treated_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
+  eventdata[treated == 0 ,treated_event_time_stratify := base_event_stratify]
+  eventdata[event_time==base_time,treated_event_time_stratify := base_event_stratify]
+  eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_event_stratify)]
 
   #Omitting effect for untreated people or observations in pre-period:
   eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
@@ -374,7 +365,7 @@ construct_event_variables<-function(eventdata,saturate=FALSE,IV=FALSE,response=N
 }
 
 
-construct_event_variables_iv <- function(eventdata,saturate=FALSE,IV=FALSE,response=NULL){
+construct_event_variables_iv <- function(eventdata,saturate=FALSE,response=NULL){
   eventdata[,Z:=instrument_group[event_time != base_time],by=.(unitfe)]
   eventdata[,R:=get(response)[event_time != base_time],by=.(unitfe)]
   eventdata[,response_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]

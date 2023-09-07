@@ -10,63 +10,26 @@ event_ATTs_dynamic<-function(eventdata,
                              lean=TRUE,
                              ssc=NULL){
   
-  eventdata[,event_time_stratify:=as.factor(as.character(event_time_stratify))]
-  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
-  eventdata[,treated_event_time_stratify:=as.factor(as.character(treated_event_time_stratify))]
-  eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
+  #eventdata[,event_time_stratify:=as.factor(as.character(event_time_stratify))]
+  #eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
+  #eventdata[,treated_event_time_stratify:=as.factor(as.character(treated_event_time_stratify))]
+  #eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
 
-  
-  if(keep_trends == TRUE){
-    results<-feols(as.formula(paste0("c(",
-                                     paste0(outcomes,collapse=",") , ") ~ event_time_stratify + treated_event_time_stratify | unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = TRUE)
-  }
-  else{
-    results<-feols(as.formula(paste0("c(",
-                                     paste0(outcomes,collapse=",") , ") ~ treated_event_time_stratify | event_time_stratify + unitfe"
-    )),
-    data = eventdata,
-    weights= eventdata[,get(weights)],
-    cluster=clustervar, lean = TRUE, mem.clean = TRUE)
-    
-  }
-  
-  return(list(dynamic = results))
-}
+  #construct the call
+  outcomes_call <- paste0("c(", paste0(outcomes,collapse=","), ")")
+  event_stratify_call <- ifelse(keep_trends, "~ event_time_stratify + treated_event_time_stratify |", 
+                                "~ treated_event_time_stratify | event_time_stratify +")
+  call <- paste0(outcomes_call, event_stratify_call, " unitfe" )
 
-get_result_dynamic2 <-function(eventdata_panel, variable, clustervar = "id", weights = "pweight"){
-  
-  base_ref <- paste0(c(max(eventdata_panel$base_time),1),collapse=".")
-  
-  eventdata_panel[,event_time_stratify:=as.factor(as.character(event_time_stratify))]
-  eventdata_panel[,event_time_stratify:=relevel(event_time_stratify,ref = base_ref)]
-  eventdata_panel[,treated_event_time_stratify:=as.factor(as.character(treated_event_time_stratify))]
-  eventdata_panel[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_ref)]
-  
-  call <- paste0("c(", paste0(variable,collapse=","), ") ~ treated_event_time_stratify | event_time_stratify + unitfe")
-  
   results<-feols(as.formula(call),
-                 data = eventdata_panel,
-                 weights= eventdata_panel[,get(weights)],
-                 split = "time_pair",
+                 data = eventdata,
+                 weights= eventdata[,get(weights)],
                  cluster=clustervar, lean = TRUE, mem.clean = TRUE)
   
-  table <- data.table()
-  for(result in results){
-    dt<-data.table(outcome = (function(x) x[x != "c"])(as.character(result$fml[[2]])),
-                   variable = row.names(result$coeftable), result$coeftable,obs=result$nobs)
-    table<-rbind(dt,table)
-  }
-  table[, event_time := as.integer(str_remove_all(str_extract(variable, "y(.*?)\\."), "y|\\."))]
-  setnames(table, c("Estimate", "Std. Error"), c("att", "se"))
-  setorder(table, outcome, event_time)
-  table <- table[,.(outcome, event_time, att, se, obs)]
-  return(table)
+  return(list(dynamic = results))
   
 }
+
 
 event_ATTs_means<-function(eventdata,
                            outcomes,#vector of variable names
@@ -237,6 +200,70 @@ event_ATTs<-function(eventdata,
               covariates = results_covariates))
 }
 
+# get result -------------------
+
+get_result_dynamic<-function(eventdata_panel,variable,trends=TRUE){
+  
+  if(nrow(eventdata_panel)==0){
+    dt<-data.table()
+    return(dt)
+  }else if ((eventdata_panel[,var(get(variable))]==0)==T){
+    dt<-data.table()
+    return(dt)
+  }else{
+    
+    results<-event_ATTs_dynamic(eventdata_panel,outcomes = c(variable),keep_trends = trends)
+    dt<-data.table(variable = row.names(results$dynamic$coeftable),model=i,results$dynamic$coeftable,obs=results$dynamic$nobs)
+    dt<-dt[,result:="dynamic"]
+    rm(eventdata_panel)
+    rm(results)
+    gc()
+    return(dt)
+  }
+}
+
+get_result_pooled<-function(eventdata_panel,variable,trends=TRUE){
+  
+  if(nrow(eventdata_panel)==0){
+    dt<-data.table()
+    return(dt)
+  }else if ((eventdata_panel[,var(get(variable))]==0)==T){
+    dt<-data.table()
+    return(dt)
+  }else{
+    
+    results<-event_ATTs_pooled(eventdata_panel,outcomes = c(variable),keep_trends = trends)
+    dt<-data.table(variable = row.names(results$pooled$coeftable),model=i,results$pooled$coeftable,obs=results$pooled$nobs)
+    dt<-dt[,result:="pooled"]
+    rm(eventdata_panel)
+    rm(results)
+    gc()
+    return(dt)
+    
+  }
+}
+
+get_result_means<-function(eventdata_panel,variable,trends=TRUE){
+  
+  results<-event_ATTs_means(eventdata_panel,outcomes = c(variable),keep_trends = trends)
+  dt<-data.table(variable = row.names(results$means$coeftable),model=i,results$means$coeftable,obs=results$means$nobs)
+  dt<-dt[,result:="means"]
+  
+  return(dt)
+  
+}
+
+get_result_covariates<-function(eventdata_panel,covariate,variable=NULL,trends=TRUE){
+  
+  results<-event_ATTs_covariates(eventdata_panel,covariates=covariate,outcomes = c(variable),keep_trends = trends)
+  dt<-data.table(variable = row.names(results$covariates$coeftable),results$covariates$coeftable,obs=results$covariates$nobs)
+  dt<-dt[,result:="covariates"][,model:=paste0("additional_covariate--",covariate)]
+  
+  return(dt)
+  
+}
+
+# IV related ----------------------------------
 
 event_IVs<-function(eventdata,
                     outcomes,#vector of variable names
@@ -495,69 +522,6 @@ event_IV_ses<-function(outcome,
               sandwich=sandwich,
               dof=dof)
   )
-}
-
-# get result -------------------
-
-get_result_dynamic<-function(eventdata_panel,variable,trends=TRUE){
-  
-  if(nrow(eventdata_panel)==0){
-    dt<-data.table()
-    return(dt)
-  }else if ((eventdata_panel[,var(get(variable))]==0)==T){
-    dt<-data.table()
-    return(dt)
-  }else{
-    
-    results<-event_ATTs_dynamic(eventdata_panel,outcomes = c(variable),keep_trends = trends)
-    dt<-data.table(variable = row.names(results$dynamic$coeftable),model=i,results$dynamic$coeftable,obs=results$dynamic$nobs)
-    dt<-dt[,result:="dynamic"]
-    rm(eventdata_panel)
-    rm(results)
-    gc()
-    return(dt)
-  }
-}
-
-get_result_pooled<-function(eventdata_panel,variable,trends=TRUE){
-  
-  if(nrow(eventdata_panel)==0){
-    dt<-data.table()
-    return(dt)
-  }else if ((eventdata_panel[,var(get(variable))]==0)==T){
-    dt<-data.table()
-    return(dt)
-  }else{
-    
-    results<-event_ATTs_pooled(eventdata_panel,outcomes = c(variable),keep_trends = trends)
-    dt<-data.table(variable = row.names(results$pooled$coeftable),model=i,results$pooled$coeftable,obs=results$pooled$nobs)
-    dt<-dt[,result:="pooled"]
-    rm(eventdata_panel)
-    rm(results)
-    gc()
-    return(dt)
-    
-  }
-}
-
-get_result_means<-function(eventdata_panel,variable,trends=TRUE){
-  
-  results<-event_ATTs_means(eventdata_panel,outcomes = c(variable),keep_trends = trends)
-  dt<-data.table(variable = row.names(results$means$coeftable),model=i,results$means$coeftable,obs=results$means$nobs)
-  dt<-dt[,result:="means"]
-  
-  return(dt)
-  
-}
-
-get_result_covariates<-function(eventdata_panel,covariate,variable=NULL,trends=TRUE){
-  
-  results<-event_ATTs_covariates(eventdata_panel,covariates=covariate,outcomes = c(variable),keep_trends = trends)
-  dt<-data.table(variable = row.names(results$covariates$coeftable),results$covariates$coeftable,obs=results$covariates$nobs)
-  dt<-dt[,result:="covariates"][,model:=paste0("additional_covariate--",covariate)]
-  
-  return(dt)
-  
 }
 
 
