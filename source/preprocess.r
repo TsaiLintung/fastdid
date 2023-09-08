@@ -99,9 +99,11 @@ create_event_data<-function(maindata,
   treatdata[,event_time:=time-cohort]
   treatdata<-treatdata[event_time >= lower_event_time & event_time <= upper_event_time,]
   treatdata[,treatgroup:="treated"]
+  
+  
   #stacking control cohorts.
   #I assume people who never suffer the event have a value cohort = Inf
-  controldata<-NULL
+  control_list <- list()
   for(o in unique(treatdata$cohort)){
     if(never_treat_action=="both") {
       controlcohort <- maindata[(anycohort > o | is.infinite(anycohort)) ,]
@@ -132,9 +134,13 @@ create_event_data<-function(maindata,
     #drop someone from the control cohort when they get treated:
     controlcohort<-controlcohort[anycohort - cohort > event_time ,]
     
-    controldata<-rbind(controldata,controlcohort)
+    control_list <- c(control_list, list(controlcohort))
+    
   }
   rm(controlcohort)
+  
+  controldata<-rbindlist(control_list)
+  
   gc()
   
   controldata[,treated:=0]
@@ -177,10 +183,10 @@ create_event_data<-function(maindata,
   for(out in covariates){
     controldata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
     controldata[get(out) >= 9e9,eval(out) := NA, ]
-    controldata[,eval(out) := as.factor(get(out))]
+    controldata[,eval(out) := qF(get(out))]
     treatdata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
     treatdata[get(out) >= 9e9,eval(out) := NA, ]
-    treatdata[,eval(out) := as.factor(get(out))]
+    treatdata[,eval(out) := qF(get(out))]
   }
 
   #dealing with base-restrict
@@ -202,8 +208,8 @@ create_event_data<-function(maindata,
                        supportvars = covariate_base_support)
     
     if(is.character(cov_vars)){
-      treatdata[,(covariate_type) :=interaction(treatdata[, cov_vars, with = FALSE], drop=TRUE)]
-      controldata[,(covariate_type) :=interaction(controldata[, cov_vars, with = FALSE], drop=TRUE)]
+      treatdata[,(covariate_type) :=  do.call(finteraction, treatdata[, cov_vars, with = FALSE])]
+      controldata[,(covariate_type) := do.call(finteraction, controldata[, cov_vars, with = FALSE])]
     } else {
       treatdata[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
       controldata[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
@@ -217,8 +223,8 @@ create_event_data<-function(maindata,
     #common support checking is only needed when there is linear regression - interpolation and extrapolation
     #o.w. a propensity score within 0,1 means it has common support
     
-    treatdata[,temp:=interaction(balancevars,supportvars,stratify,event_time,cohort,drop=TRUE)]
-    controldata[,temp:=interaction(balancevars,supportvars,stratify,event_time,cohort,drop=TRUE)]
+    treatdata[,temp:=finteraction(balancevars,supportvars,stratify,event_time,cohort)]
+    controldata[,temp:=finteraction(balancevars,supportvars,stratify,event_time,cohort)]
     commonvals<-intersect(unique(treatdata$temp),unique(controldata$temp))
     treatdata<-treatdata[temp%in%commonvals,]
     controldata<-controldata[temp%in%commonvals,]
@@ -232,9 +238,8 @@ create_event_data<-function(maindata,
   
   # stacking for event_time -----------------------------------------------------------------
 
-  event_times<-treatdata[,unique(event_time)]
-  data_list <- list()
-  
+  event_times<-treatdata[,funique(event_time)]
+
   base_time_glob <- base_time
   #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
   # TODO: make sure the estimates is valid if there are missing value within the min max (FEOLS)
@@ -244,6 +249,7 @@ create_event_data<-function(maindata,
   treatdata[, `:=`(min_event_time = fmin(event_time),
                    max_event_time = fmax(event_time)), by = .(id, cohort)]
   
+  data_list <- list()
   for(t in event_times){
     
     pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time][(event_time == t | event_time == base_time_glob),]
@@ -271,7 +277,7 @@ create_event_data<-function(maindata,
   if(is.null(eventdata)==T){stop("eventdata is empty!!!")}
 
   #eventdata[,obst:=NULL]
-  eventdata[,obsbase:=NULL]
+  #eventdata[,obsbase:=NULL]
   eventdata[,anycohort:=NULL]
   
   rm(treatdata)
@@ -282,7 +288,10 @@ create_event_data<-function(maindata,
   
   #turn the cols into factors
   factor_cols <- c("id", "treatgroup", "cohort", "event_time", "time_pair", "time")
-  eventdata[, (factor_cols) := lapply(.SD, as.factor), .SDcols = factor_cols]
+  for(col in factor_cols){
+    eventdata[, (col) := qF(.SD), .SDcols = col]
+  }
+
 
   basefactor<-unique(eventdata[event_time==base_time,event_time])
   basefactor<-basefactor[length(basefactor)]
@@ -292,11 +301,14 @@ create_event_data<-function(maindata,
   #Note: this may have a lot of fixed effects, and may need to be broken down into 
   #multiple smaller regressions:
   
-  call <- ifelse(!is.character(covariate_base_balance_linear),
-                 "treated ~ 1 | interaction(cohort,event_time,time_pair,stratify,balancevars, drop = TRUE)",
-                 paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
-                                           sep=":interaction(cohort,event_time,time_pair,stratify,balancevars_linear_subset, drop = TRUE)"),
-                        "| interaction(cohort,event_time,time_pair,stratify,balancevars, drop = TRUE)"))
+  if(!is.character(covariate_base_balance_linear)){
+    call <- "treated ~ 1 | finteraction(cohort,event_time,time_pair,stratify,balancevars)"
+  } else {
+    call <- paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
+                                      sep="finteraction(cohort,event_time,time_pair,stratify,balancevars_linear_subset,)"),
+                   "| finteraction(cohort,event_time,time_pair,stratify,balancevars)")
+  }
+  
   eventdata[,pval:= feols(as.formula(call), data = eventdata, lean = FALSE)$fitted.values]
 
   eventdata <- eventdata[pval < 1 & pval > 0]
@@ -313,7 +325,7 @@ create_event_data<-function(maindata,
     eventdata <- eventdata |> process_stratify()
   }
   
-  eventdata[,treated:=as.factor(treated)]
+  eventdata[,treated:=qF(treated)]
   
   return(eventdata)
 
@@ -323,22 +335,22 @@ create_event_data<-function(maindata,
 construct_event_variables<-function(eventdata,saturate=FALSE,IV=FALSE,response=NULL){
   #These regressions should work identically if the fixed effects (after the "|") were replaced with:
   # interaction(time_pair,id,cohort)
-  eventdata[,treated_post := as.factor((treated == 1) * (post == 1))]
-  eventdata[,treated_pre := as.factor((treated == 1) * (post == 0))]
+  eventdata[,treated_post := qF((treated == 1) * (post == 1))]
+  eventdata[,treated_pre := qF((treated == 1) * (post == 0))]
   eventdata[,treated_event_time := event_time]
   eventdata[treated==0,treated_event_time := 1] #1 is the base level
   
-  eventdata[,event_time_stratify:=interaction(event_time,stratify, drop = TRUE)]
-  eventdata[,treated_post_stratify := interaction(treated_post,stratify, drop = TRUE)]
+  eventdata[,event_time_stratify:= finteraction(event_time,stratify)]
+  eventdata[,treated_post_stratify := finteraction(treated_post,stratify)]
   
-  eventdata[,treated_pre_stratify := interaction(treated_pre,stratify,drop=TRUE)]
+  eventdata[,treated_pre_stratify := finteraction(treated_pre,stratify)]
   eventdata[treated_pre==0,treated_pre_stratify := 1]
   eventdata[event_time==base_time,treated_pre_stratify := 1]
   
-  if(IV==FALSE) eventdata[,unitfe := interaction(time_pair,treated,stratify, drop = TRUE)]
-  else eventdata[,unitfe := interaction(time_pair,id,treated,cohort,stratify, drop = TRUE)]
+  if(IV==FALSE) eventdata[,unitfe := finteraction(time_pair,treated,stratify)]
+  else eventdata[,unitfe := finteraction(time_pair,id,treated,cohort,stratify)]
   
-  eventdata[,treated_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
+  eventdata[,treated_event_time_stratify := finteraction(event_time,stratify)]
 
   #Omitting base year for all levels of --stratify--:
   

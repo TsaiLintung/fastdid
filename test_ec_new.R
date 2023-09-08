@@ -3,6 +3,7 @@ rm(list = ls())
 gc()
 
 library(profvis)
+library(microbenchmark)
 
 setwd("~/GitHub/EventStudyCode")
 
@@ -17,7 +18,7 @@ source("source/preprocess.R")
 source("source/estimation.R")
 source("source/report.R")
 
-simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic", balanced = FALSE)
+simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic", balanced = FALSE)
 dt <- simdt$dt
 
 # event code ---------------------------------------------------------------------
