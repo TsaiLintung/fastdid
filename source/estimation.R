@@ -8,7 +8,8 @@ event_ATTs_dynamic<-function(eventdata,
                              keep_trends=TRUE,
                              se="cluster",
                              lean=TRUE,
-                             ssc=NULL){
+                             ssc=NULL,
+                             mem.clean = TRUE){
   
   #eventdata[,event_time_stratify:=as.factor(as.character(event_time_stratify))]
   #eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
@@ -24,7 +25,7 @@ event_ATTs_dynamic<-function(eventdata,
   results<-feols(as.formula(call),
                  data = eventdata,
                  weights= eventdata[,get(weights)],
-                 cluster=clustervar, lean = TRUE, mem.clean = TRUE)
+                 cluster=clustervar, lean = TRUE, mem.clean = mem.clean)
   
   return(list(dynamic = results))
   
@@ -215,7 +216,7 @@ event_ATTs<-function(eventdata,
 
 # get result -------------------
 
-get_result_dynamic<-function(eventdata_panel,variable,trends=TRUE){
+get_result_dynamic<-function(eventdata_panel,variable,trends=TRUE, mem.clean = TRUE){
   
   if(nrow(eventdata_panel)==0){
     dt<-data.table()
@@ -225,7 +226,7 @@ get_result_dynamic<-function(eventdata_panel,variable,trends=TRUE){
     return(dt)
   }else{
     
-    results<-event_ATTs_dynamic(eventdata_panel,outcomes = c(variable),keep_trends = trends)
+    results<-event_ATTs_dynamic(eventdata_panel,outcomes = c(variable),keep_trends = trends, mem.clean = mem.clean)
     dt<-data.table(variable = row.names(results$dynamic$coeftable),model=i,results$dynamic$coeftable,obs=results$dynamic$nobs)
     dt<-dt[,result:="dynamic"]
     rm(eventdata_panel)

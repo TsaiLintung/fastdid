@@ -91,6 +91,32 @@ create_event_data<-function(maindata,
    #can't just check count = period because one may be missing in one period and observed multiple time in another
     
   }
+  
+  # covariate to factor -----------------------------------------------------------
+  
+  #turn covariates to factor
+  covariates <- c(covariate_base_stratify, covariate_base_balance, covariate_base_support)
+  covariates <- covariates[covariates %!=% 1]
+  for(out in covariates){
+    maindata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
+    maindata[get(out) >= 9e9,eval(out) := NA, ]
+    maindata[,eval(out) := qF(get(out))]
+  }
+  
+  #turn covariates interaction to factors
+  for(covariate_type in c("stratify", "balancevars", "balancevars_linear_subset", "supportvars")){
+    
+    cov_vars <- switch(covariate_type, 
+                       stratify = ifelse(stratify_by_cohort, c(covariate_base_stratify, "cohort"), covariate_base_stratify),
+                       balancevars = covariate_base_balance,
+                       balancevars_linear_subset = covariate_base_balance_linear_subset,
+                       supportvars = covariate_base_support)
+    if(is.character(cov_vars)){
+      maindata[,(covariate_type) :=  do.call(finteraction, treatdata[, cov_vars, with = FALSE])]
+    } else {
+      maindata[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
+    }
+  }
 
   # stacking for cohort -----------------------------------------------------------------
   
@@ -99,7 +125,6 @@ create_event_data<-function(maindata,
   treatdata[,event_time:=time-cohort]
   treatdata<-treatdata[event_time >= lower_event_time & event_time <= upper_event_time,]
   treatdata[,treatgroup:="treated"]
-  
   
   #stacking control cohorts.
   #I assume people who never suffer the event have a value cohort = Inf
@@ -180,44 +205,16 @@ create_event_data<-function(maindata,
   treatdata[,base_time := NULL]
   controldata[,base_time := NULL]
 
-  #turn covariates to factor
-  covariates <- c(covariate_base_stratify, covariate_base_balance, covariate_base_support)
-  covariates <- covariates[covariates %!=% 1]
-  for(out in covariates){
-    controldata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
-    controldata[get(out) >= 9e9,eval(out) := NA, ]
-    controldata[,eval(out) := qF(get(out))]
-    treatdata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
-    treatdata[get(out) >= 9e9,eval(out) := NA, ]
-    treatdata[,eval(out) := qF(get(out))]
-  }
-
+  
   #dealing with base-restrict
-  controldata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
-  controldata <- controldata[base_restrict == 1,]
-  treatdata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
-  treatdata <- treatdata[base_restrict == 1,]
-  treatdata[,base_restrict_treated := max(base_restrict_treated * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
-  treatdata <- treatdata[base_restrict_treated == 1,]
-  controldata <- controldata[, base_restrict_treated := 1]
-  
-  #turn covariates interaction to factors
-  for(covariate_type in c("stratify", "balancevars", "balancevars_linear_subset", "supportvars")){
-    
-    cov_vars <- switch(covariate_type, 
-                       stratify = ifelse(stratify_by_cohort, c(covariate_base_stratify, "cohort"), covariate_base_stratify),
-                       balancevars = covariate_base_balance,
-                       balancevars_linear_subset = covariate_base_balance_linear_subset,
-                       supportvars = covariate_base_support)
-    
-    if(is.character(cov_vars)){
-      treatdata[,(covariate_type) :=  do.call(finteraction, treatdata[, cov_vars, with = FALSE])]
-      controldata[,(covariate_type) := do.call(finteraction, controldata[, cov_vars, with = FALSE])]
-    } else {
-      treatdata[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
-      controldata[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
-    }
-  
+  if(base_restrict != 1){
+    controldata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
+    controldata <- controldata[base_restrict == 1,]
+    treatdata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
+    treatdata <- treatdata[base_restrict == 1,]
+    treatdata[,base_restrict_treated := max(base_restrict_treated * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
+    treatdata <- treatdata[base_restrict_treated == 1,]
+    controldata <- controldata[base_restrict_treated == 1]
   }
   
   #check common support
@@ -277,7 +274,7 @@ create_event_data<-function(maindata,
 
   # estimating ipw ----------------------------------------------------------------------------------
   
-  if(is.null(eventdata)==T){stop("eventdata is empty!!!")}
+  if(is.null(eventdata)) {stop("eventdata is empty!!!")}
 
   #eventdata[,obst:=NULL]
   #eventdata[,obsbase:=NULL]
