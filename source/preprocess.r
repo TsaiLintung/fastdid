@@ -173,9 +173,12 @@ create_event_data<-function(maindata,
   #If base_time varies across units, reassigning it to a common reference value:
   #This is relevant, for instance, with a dataset that moves from annual to bi-annual
   treatdata[event_time == base_time,event_time :=max(base_time)]
-  treatdata[,base_time :=max(base_time)]
   controldata[event_time == base_time,event_time :=max(base_time)]
-  controldata[,base_time :=max(base_time)]
+  
+  base_time <- max(treatdata[, max(base_time)], controldata[, max(base_time)])
+  
+  treatdata[,base_time := NULL]
+  controldata[,base_time := NULL]
 
   #turn covariates to factor
   covariates <- c(covariate_base_stratify, covariate_base_balance, covariate_base_support)
@@ -240,7 +243,6 @@ create_event_data<-function(maindata,
 
   event_times<-treatdata[,funique(event_time)]
 
-  base_time_glob <- base_time
   #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
   # TODO: make sure the estimates is valid if there are missing value within the min max (FEOLS)
   
@@ -252,13 +254,14 @@ create_event_data<-function(maindata,
   data_list <- list()
   for(t in event_times){
     
-    pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time & (event_time == t | event_time == base_time_glob)]
-    pair_control_data <- controldata[t >= min_event_time & t <= max_event_time & (event_time == t | event_time == base_time_glob)]
+    pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time & (event_time == t | event_time == base_time)]
+    pair_control_data <- controldata[t >= min_event_time & t <= max_event_time & (event_time == t | event_time == base_time)]
     
     pair_treat_data[,time_pair := t]
     pair_control_data[,time_pair := t]
     
     data_list<-c(data_list, list(pair_treat_data), list(pair_control_data))
+    
   }
 
   #for(t in event_times){
@@ -330,44 +333,32 @@ create_event_data<-function(maindata,
   
   eventdata[,treated:=qF(treated)]
   
-  return(eventdata)
-
-}
-
-
-construct_event_variables<-function(eventdata,saturate=FALSE,IV=FALSE,response=NULL){
-  #These regressions should work identically if the fixed effects (after the "|") were replaced with:
-  # interaction(time_pair,id,cohort)
-
-  #eventdata[,treated_event_time := event_time]
-  #eventdata[treated==0,treated_event_time := 1] #1 is the base level
+  # construct_event_variables --------------------------------------------
   
-  if(IV==FALSE) eventdata[,unitfe := finteraction(time_pair,treated,stratify)]
+  if(is.na(instrument)) eventdata[,unitfe := finteraction(time_pair,treated,stratify)]
   else eventdata[,unitfe := finteraction(time_pair,id,treated,cohort,stratify)]
   
-  base_event_stratify <- paste0(c(max(eventdata$base_time),1),collapse=".")
+  base_event_stratify <- paste0(c(base_time,1),collapse=".")
   
   eventdata[,event_time_stratify:= finteraction(event_time_fact,stratify)]
   eventdata[,treated_event_time_stratify := event_time_stratify]
   
   #Omitting base year for all levels of --stratify--:
-
-  
-  eventdata[event_time==base_time,event_time_stratify := base_event_stratify]
+  eventdata[event_time==base_time, event_time_stratify := base_event_stratify]
   eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = base_event_stratify)]
-
   
   #Omitting base year for all levels of --stratify--, for treated people
   eventdata[event_time==base_time | treated == 0 ,treated_event_time_stratify := base_event_stratify]
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_event_stratify)]
-
-  if(IV==TRUE){
-    eventdata <- construct_event_variables_iv(eventdata,saturate,IV,response)
+  
+  if(!is.na(instrument)){
+    eventdata <- construct_event_variables_iv(eventdata)
   }
   
   return(eventdata)
-  
+
 }
+
 
 
 construct_event_variables_iv <- function(eventdata,saturate=FALSE,response=NULL){

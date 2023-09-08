@@ -40,9 +40,7 @@ profvis({
                                                    covariate_base_balance = balance_covariate,
                                                    balanced_panel = TRUE,
                                                    never_treat_action = "both")
-  
-  event_panel <- construct_event_variables(event_panel)
-  
+
   event_est <- get_result_dynamic(event_panel, variable = y_name, trends = FALSE)
   
 })
