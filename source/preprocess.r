@@ -244,16 +244,16 @@ create_event_data<-function(maindata,
   #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
   # TODO: make sure the estimates is valid if there are missing value within the min max (FEOLS)
   
-  controldata[, `:=`(min_event_time = fmin(event_time),
-                     max_event_time = fmax(event_time)), by = .(id, cohort)]
-  treatdata[, `:=`(min_event_time = fmin(event_time),
-                   max_event_time = fmax(event_time)), by = .(id, cohort)]
+  controldata[, `:=`(min_event_time = min(event_time),
+                     max_event_time = max(event_time)), by = .(id, cohort)]
+  treatdata[, `:=`(min_event_time = min(event_time),
+                   max_event_time = max(event_time)), by = .(id, cohort)]
   
   data_list <- list()
   for(t in event_times){
     
-    pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time][(event_time == t | event_time == base_time_glob),]
-    pair_control_data <- controldata[t >= min_event_time & t <= max_event_time][(event_time == t | event_time == base_time_glob),]
+    pair_treat_data <- treatdata[t >= min_event_time & t <= max_event_time & (event_time == t | event_time == base_time_glob)]
+    pair_control_data <- controldata[t >= min_event_time & t <= max_event_time & (event_time == t | event_time == base_time_glob)]
     
     pair_treat_data[,time_pair := t]
     pair_control_data[,time_pair := t]
@@ -352,19 +352,15 @@ construct_event_variables<-function(eventdata,saturate=FALSE,IV=FALSE,response=N
   
   #Omitting base year for all levels of --stratify--:
 
-  gc()
   
   eventdata[event_time==base_time,event_time_stratify := base_event_stratify]
   eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = base_event_stratify)]
-  
-  gc()
+
   
   #Omitting base year for all levels of --stratify--, for treated people
   eventdata[event_time==base_time | treated == 0 ,treated_event_time_stratify := base_event_stratify]
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_event_stratify)]
-  
-  gc()
-  
+
   if(IV==TRUE){
     eventdata <- construct_event_variables_iv(eventdata,saturate,IV,response)
   }
