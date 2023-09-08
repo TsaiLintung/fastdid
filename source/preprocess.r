@@ -91,32 +91,6 @@ create_event_data<-function(maindata,
    #can't just check count = period because one may be missing in one period and observed multiple time in another
     
   }
-  
-  # covariate to factor -----------------------------------------------------------
-  
-  #turn covariates to factor
-  covariates <- c(covariate_base_stratify, covariate_base_balance, covariate_base_support)
-  covariates <- covariates[covariates %!=% 1]
-  for(out in covariates){
-    maindata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
-    maindata[get(out) >= 9e9,eval(out) := NA, ]
-    maindata[,eval(out) := qF(get(out))]
-  }
-  
-  #turn covariates interaction to factors
-  for(covariate_type in c("stratify", "balancevars", "balancevars_linear_subset", "supportvars")){
-    
-    cov_vars <- switch(covariate_type, 
-                       stratify = ifelse(stratify_by_cohort, c(covariate_base_stratify, "cohort"), covariate_base_stratify),
-                       balancevars = covariate_base_balance,
-                       balancevars_linear_subset = covariate_base_balance_linear_subset,
-                       supportvars = covariate_base_support)
-    if(is.character(cov_vars)){
-      maindata[,(covariate_type) :=  do.call(finteraction, treatdata[, cov_vars, with = FALSE])]
-    } else {
-      maindata[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
-    }
-  }
 
   # stacking for cohort -----------------------------------------------------------------
   
@@ -171,30 +145,39 @@ create_event_data<-function(maindata,
   controldata[,treated:=0]
   controldata<-controldata[event_time >= lower_event_time & event_time <= upper_event_time,]
   
+  # covariate to factor -----------------------------------------------------------
+  
+  #turn covariates to factor
+  covariates <- c(covariate_base_stratify, covariate_base_balance, covariate_base_support)
+  covariates <- covariates[covariates %!=% 1]
+  for(out in covariates){
+    treatdata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
+    treatdata[get(out) >= 9e9,eval(out) := NA, ]
+    treatdata[,eval(out) := qF(get(out))]
+    controldata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
+    controldata[get(out) >= 9e9,eval(out) := NA, ]
+    controldata[,eval(out) := qF(get(out))]
+  }
+  
+  #turn covariates interaction to factors
+  for(covariate_type in c("stratify", "balancevars", "balancevars_linear_subset", "supportvars")){
+    
+    cov_vars <- switch(covariate_type, 
+                       stratify = ifelse(stratify_by_cohort, c(covariate_base_stratify, "cohort"), covariate_base_stratify),
+                       balancevars = covariate_base_balance,
+                       balancevars_linear_subset = covariate_base_balance_linear_subset,
+                       supportvars = covariate_base_support)
+    if(is.character(cov_vars)){
+      treatdata[,(covariate_type) :=  do.call(finteraction, treatdata[, cov_vars, with = FALSE])]
+      controldata[,(covariate_type) :=  do.call(finteraction, controldata[, cov_vars, with = FALSE])]
+    } else {
+      treatdata[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
+      controldata[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
+    }
+  }
+  
   # checking observation -----------------------------------------------------------------
 
-  if(!balanced_panel){
-    
-    #check if any unit is observed more then once in the base period
-    #only needed when panel is not already balanced
-    
-    treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-    controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-    if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
-    if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
-    treatdata <- treatdata[obsbase==1,]
-    controldata <- controldata[obsbase==1,]
-  }
-
-
-  #not really used anywhere
-  #treatdata[,obscount:=1]
-  #controldata[,obscount:=1]
-  #reatdata[,obscount:=sum(obscount),by=.(id,cohort)]
-  #controldata[,obscount:=sum(obscount),by=.(id,cohort)]
-  
-  gc()
-  
   #If base_time varies across units, reassigning it to a common reference value:
   #This is relevant, for instance, with a dataset that moves from annual to bi-annual
   treatdata[event_time == base_time,event_time :=max(base_time)]
@@ -204,9 +187,22 @@ create_event_data<-function(maindata,
   
   treatdata[,base_time := NULL]
   controldata[,base_time := NULL]
-
   
-  #dealing with base-restrict
+  #check if any unit is observed more then once in the base period
+  if(!balanced_panel){
+    
+    #only needed when panel is not already balanced
+    treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
+    controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
+    if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
+    if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
+    treatdata <- treatdata[obsbase==1,]
+    controldata <- controldata[obsbase==1,]
+    treatdata[,obsbase := NULL]
+    controldata[,obsbase := NULL]
+  }
+  
+  #check base-restrict
   if(base_restrict != 1){
     controldata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
     controldata <- controldata[base_restrict == 1,]
@@ -236,9 +232,7 @@ create_event_data<-function(maindata,
     
   }
   
-  # stacking for event_time -----------------------------------------------------------------
-
-  event_times<-treatdata[,funique(event_time)]
+  # stacking for event_time ----------------------------------------------------------------
 
   #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
   # TODO: make sure the estimates is valid if there are missing value within the min max (FEOLS)
@@ -248,6 +242,7 @@ create_event_data<-function(maindata,
   treatdata[, `:=`(min_event_time = min(event_time),
                    max_event_time = max(event_time)), by = .(id, cohort)]
   
+  event_times<-treatdata[,funique(event_time)]
   data_list <- list()
   for(t in event_times){
     
@@ -260,6 +255,7 @@ create_event_data<-function(maindata,
     data_list<-c(data_list, list(pair_treat_data), list(pair_control_data))
     
   }
+  eventdata <- rbindlist(data_list,use.names=TRUE)
 
   #for(t in event_times){
   #  treatdata[,obst:=sum(event_time==t),by=.(id,cohort)]
@@ -269,8 +265,6 @@ create_event_data<-function(maindata,
   #  pairdata[,time_pair:= t]
   #  data_list<-c(data_list, list(pair_data))
   #}
-
-  eventdata <- rbindlist(data_list,use.names=TRUE)
 
   # estimating ipw ----------------------------------------------------------------------------------
   
@@ -291,19 +285,10 @@ create_event_data<-function(maindata,
   for(col in factor_cols){
     eventdata[, (col) := qF(get(col))]
   }
-
   #keep a numeric version for later comparisons
   eventdata[, event_time_fact := qF(event_time)]
-  
 
-  #basefactor<-funique(eventdata[event_time==base_time,event_time])
-  #basefactor<-basefactor[length(basefactor)]
-  #eventdata[,event_time:=relevel(event_time,ref=as.character(basefactor))]
-  
-  #calculating weights so that controls match treated households on characteristics
-  #Note: this may have a lot of fixed effects, and may need to be broken down into 
-  #multiple smaller regressions:
-  
+  #construct the call  
   if(!is.character(covariate_base_balance_linear)){
     call <- "treated ~ 1 | finteraction(cohort,event_time_fact,time_pair,stratify,balancevars)"
   } else {
@@ -312,8 +297,10 @@ create_event_data<-function(maindata,
                    "| finteraction(cohort,event_time_fact,time_pair,stratify,balancevars)")
   }
   
+  #estimate ipw
   eventdata[,pval:= feols(as.formula(call), data = eventdata, lean = FALSE)$fitted.values]
 
+  #only keep propensity score between 0,1 is equivalent to checking common support
   eventdata <- eventdata[pval < 1 & pval > 0]
   eventdata[,pweight := ifelse(treated == 1, 1, pval/(1-pval))]
   eventdata[,pval:=NULL]
