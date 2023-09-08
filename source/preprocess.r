@@ -287,26 +287,29 @@ create_event_data<-function(maindata,
   eventdata[,post:=event_time >= 0]
   
   #turn the cols into factors
-  factor_cols <- c("id", "treatgroup", "cohort", "event_time", "time_pair", "time")
+  factor_cols <- c("id", "treatgroup", "cohort", "time_pair", "time")
   for(col in factor_cols){
-    eventdata[, (col) := qF(.SD), .SDcols = col]
+    eventdata[, (col) := qF(get(col))]
   }
 
+  #keep a numeric version for later comparisons
+  eventdata[, event_time_fact := qF(event_time)]
+  
 
-  basefactor<-unique(eventdata[event_time==base_time,event_time])
-  basefactor<-basefactor[length(basefactor)]
-  eventdata[,event_time:=relevel(event_time,ref=as.character(basefactor))]
+  #basefactor<-funique(eventdata[event_time==base_time,event_time])
+  #basefactor<-basefactor[length(basefactor)]
+  #eventdata[,event_time:=relevel(event_time,ref=as.character(basefactor))]
   
   #calculating weights so that controls match treated households on characteristics
   #Note: this may have a lot of fixed effects, and may need to be broken down into 
   #multiple smaller regressions:
   
   if(!is.character(covariate_base_balance_linear)){
-    call <- "treated ~ 1 | finteraction(cohort,event_time,time_pair,stratify,balancevars)"
+    call <- "treated ~ 1 | finteraction(cohort,event_time_fact,time_pair,stratify,balancevars)"
   } else {
     call <- paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
-                                      sep="finteraction(cohort,event_time,time_pair,stratify,balancevars_linear_subset,)"),
-                   "| finteraction(cohort,event_time,time_pair,stratify,balancevars)")
+                                      sep="finteraction(cohort,event_time_fact,time_pair,stratify,balancevars_linear_subset,)"),
+                   "| finteraction(cohort,event_time_fact,time_pair,stratify,balancevars)")
   }
   
   eventdata[,pval:= feols(as.formula(call), data = eventdata, lean = FALSE)$fitted.values]
@@ -335,38 +338,32 @@ create_event_data<-function(maindata,
 construct_event_variables<-function(eventdata,saturate=FALSE,IV=FALSE,response=NULL){
   #These regressions should work identically if the fixed effects (after the "|") were replaced with:
   # interaction(time_pair,id,cohort)
-  eventdata[,treated_post := qF((treated == 1) * (post == 1))]
-  eventdata[,treated_pre := qF((treated == 1) * (post == 0))]
-  eventdata[,treated_event_time := event_time]
-  eventdata[treated==0,treated_event_time := 1] #1 is the base level
-  
-  eventdata[,event_time_stratify:= finteraction(event_time,stratify)]
-  eventdata[,treated_post_stratify := finteraction(treated_post,stratify)]
-  
-  eventdata[,treated_pre_stratify := finteraction(treated_pre,stratify)]
-  eventdata[treated_pre==0,treated_pre_stratify := 1]
-  eventdata[event_time==base_time,treated_pre_stratify := 1]
+
+  #eventdata[,treated_event_time := event_time]
+  #eventdata[treated==0,treated_event_time := 1] #1 is the base level
   
   if(IV==FALSE) eventdata[,unitfe := finteraction(time_pair,treated,stratify)]
   else eventdata[,unitfe := finteraction(time_pair,id,treated,cohort,stratify)]
   
-  eventdata[,treated_event_time_stratify := finteraction(event_time,stratify)]
-
-  #Omitting base year for all levels of --stratify--:
-  
   base_event_stratify <- paste0(c(max(eventdata$base_time),1),collapse=".")
+  
+  eventdata[,event_time_stratify:= finteraction(event_time_fact,stratify)]
+  eventdata[,treated_event_time_stratify := event_time_stratify]
+  
+  #Omitting base year for all levels of --stratify--:
+
+  gc()
   
   eventdata[event_time==base_time,event_time_stratify := base_event_stratify]
   eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = base_event_stratify)]
   
+  gc()
+  
   #Omitting base year for all levels of --stratify--, for treated people
-  eventdata[treated == 0 ,treated_event_time_stratify := base_event_stratify]
-  eventdata[event_time==base_time,treated_event_time_stratify := base_event_stratify]
+  eventdata[event_time==base_time | treated == 0 ,treated_event_time_stratify := base_event_stratify]
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_event_stratify)]
-
-  #Omitting effect for untreated people or observations in pre-period:
-  eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
-  eventdata[,treated_post_stratify:=relevel(treated_post_stratify,ref = paste0(c(0,1),collapse="."))]
+  
+  gc()
   
   if(IV==TRUE){
     eventdata <- construct_event_variables_iv(eventdata,saturate,IV,response)

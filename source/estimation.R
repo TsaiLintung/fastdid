@@ -63,6 +63,19 @@ event_ATTs_pooled<-function(eventdata,
                             lean=TRUE,
                             ssc=NULL){
   
+  eventdata[,treated_post := qF((treated == 1) * (post == 1))]
+  eventdata[,treated_pre := qF((treated == 1) * (post == 0))]
+  
+  eventdata[,treated_post_stratify := finteraction(treated_post,stratify)]
+  
+  eventdata[,treated_pre_stratify := finteraction(treated_pre,stratify)]
+  eventdata[treated_pre==0,treated_pre_stratify := 1]
+  eventdata[event_time==base_time,treated_pre_stratify := 1]
+  
+  #Omitting effect for untreated people or observations in pre-period:
+  eventdata[treated_post == 0 ,treated_post_stratify := paste0(c(0,1),collapse=".")]
+  eventdata[,treated_post_stratify:=relevel(treated_post_stratify,ref = paste0(c(0,1),collapse="."))]
+  
   eventdata[,event_time_stratify:=as.factor(as.character(event_time_stratify))]
   eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
   eventdata[,treated_event_time_stratify:=as.factor(as.character(treated_event_time_stratify))]

@@ -48,14 +48,6 @@ profvis({
 })
 
 
-profvis({
-
-  event_est <- get_result_dynamic(event_panel, variable = y_name)
-  
-})
-
-
-
 att_comp <- validate_att_est(simdt$att, event_code_est$att, event_code_est$se, type = "dynamic")
 
 plot_event_study(event_code_est)
