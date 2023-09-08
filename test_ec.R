@@ -18,7 +18,7 @@ source("source/preprocess.R")
 source("source/estimation.R")
 source("source/report.R")
 
-simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic", balanced = FALSE)
+simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic", balanced = FALSE, second_outcome = TRUE)
 dt <- simdt$dt
 
 # event code ---------------------------------------------------------------------
@@ -29,7 +29,7 @@ profvis({
   
   min_time <- -Inf
   max_time <- Inf
-  y_name <- "y"
+  y_name <- c("y", "y2")
   t_name <- "time"
   unit_name <- "unit"
   cohort_name <- "G"
@@ -46,7 +46,7 @@ profvis({
 })
 
 
-att_comp <- validate_att_est(simdt$att, event_code_est$att, event_code_est$se, type = "dynamic")
+att_comp <- validate_att_est(simdt$att, event_est)
 
 plot_event_study(event_code_est)
 

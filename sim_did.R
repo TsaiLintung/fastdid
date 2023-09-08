@@ -4,7 +4,7 @@ library(data.table)
 library(did)
 
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", hetero = "dynamic",
-                    second_outcome = TRUE, na = "none", balanced = TRUE){
+                    second_outcome = FALSE, na = "none", balanced = TRUE){
   
   #unit  -------------
   dt_i <- data.table(unit = 1:sample_size)
@@ -38,6 +38,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   dt_i[, unit_fe := rnorm(sample_size)]
   
   #time ------------------
+  
   dt_t <- data.table(time = 1:time_period)
   dt_t[, time_fe := rnorm(time_period)]
   dt_t[, x_trend := rnorm(time_period)]
@@ -93,7 +94,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   
 }
 
-validate_att_est <- function(true_att, att_hat, att_se_hat, type = "all"){
+validate_att_est <- function(true_att, event_est, type = "dynamic"){
   
   
   if(type == "all"){

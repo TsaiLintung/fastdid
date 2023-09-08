@@ -218,22 +218,40 @@ event_ATTs<-function(eventdata,
 
 get_result_dynamic<-function(eventdata_panel,variable,trends=TRUE, mem.clean = TRUE){
   
-  if(nrow(eventdata_panel)==0){
-    dt<-data.table()
-    return(dt)
-  }else if ((eventdata_panel[,var(get(variable))]==0)==T){
-    dt<-data.table()
-    return(dt)
-  }else{
-    
-    results<-event_ATTs_dynamic(eventdata_panel,outcomes = c(variable),keep_trends = trends, mem.clean = mem.clean)
-    dt<-data.table(variable = row.names(results$dynamic$coeftable),model=i,results$dynamic$coeftable,obs=results$dynamic$nobs)
-    dt<-dt[,result:="dynamic"]
-    rm(eventdata_panel)
-    rm(results)
-    gc()
-    return(dt)
+  if(nrow(eventdata_panel)==0){ 
+    warning("event panel is empty, returning empty data.table")
+    return(data.table())
   }
+  
+  if(any(eventdata_panel[,lapply(.SD, stats::var), .SDcols = variable] == 0)){
+    warning("some outcome have no variation, returning empty data.table")
+    return(data.table())
+  }
+    
+  results<-event_ATTs_dynamic(eventdata_panel,outcomes = c(variable),keep_trends = trends, mem.clean = mem.clean)
+  
+  if(length(variable) > 1){
+    dt <- data.table()
+    for(i in 1:length(variable)){
+      
+      result <- results$dynamic[[1]]
+      dt <- rbind(dt, data.table(variable = row.names(result$coeftable),result$coeftable,obs=result$nobs,outcome = variable[i]))
+      
+    }
+  } else {dt<-data.table(variable = row.names(results$dynamic$coeftable),results$dynamic$coeftable,obs=results$dynamic$nobs)}
+
+  dt[,result:="dynamic"]
+  
+  get_event_time <- function(x){
+    start <- str_locate(x, "stratify")[2]
+    end <- str_locate(x, "\\.")[1]
+    return(as.numeric(str_sub(x, start + 1, end - 1)))
+  }
+  
+  dt[,event_time:= lapply(variable, get_event_time)]
+
+  return(dt)
+  
 }
 
 get_result_pooled<-function(eventdata_panel,variable,trends=TRUE){
