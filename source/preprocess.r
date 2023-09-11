@@ -104,6 +104,8 @@ create_event_data<-function(maindata,
   #I assume people who never suffer the event have a value cohort = Inf
   control_list <- list()
   for(o in unique(treatdata$cohort)){
+    
+    #find the relevant control group
     if(never_treat_action=="both") {
       controlcohort <- maindata[(anycohort > o | is.infinite(anycohort)) ,]
       controlcohort[is.infinite(anycohort),treatgroup:="never-treated"]
@@ -120,6 +122,7 @@ create_event_data<-function(maindata,
     
     if (!is.infinite(max_control_gap)) controlcohort <- controlcohort[anycohort - o <=  max_control_gap,]
     if (min_control_gap != 1)  controlcohort <- controlcohort[anycohort - o >=  min_control_gap,]
+    
     controlcohort[,cohort := o]
     controlcohort[,event_time := time - cohort]
     
@@ -312,7 +315,7 @@ create_event_data<-function(maindata,
   }
   
   if(!is.na(stratify_balance_val)){
-    eventdata <- eventdata |> process_stratify()
+    eventdata <- eventdata |> process_stratify(stratify_balance_val)
   }
   
   eventdata[,treated:=qF(treated)]
@@ -335,6 +338,8 @@ create_event_data<-function(maindata,
   eventdata[event_time==base_time | treated == 0 ,treated_event_time_stratify := base_event_stratify]
   eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_event_stratify)]
   
+  eventdata[, base_time := base_time]
+  
   if(!is.na(instrument)){
     eventdata <- construct_event_variables_iv(eventdata)
   }
@@ -343,77 +348,6 @@ create_event_data<-function(maindata,
 
 }
 
-process_stratify <- function(eventdata){
-  if(stratify_balance_val != "mean"){
-    eventdata[,treated_base := treated == 1 & stratify == stratify_balance_val]
-    
-    stratvals<-unique(eventdata$stratify)
-    for(strat in stratvals){
-      if(strat != stratify_balance_val){
-        stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
-                               data = eventdata[(treated == 1 & stratify == stratify_balance_val) | 
-                                                  (treated == 1 & stratify == strat),], lean = TRUE, mem.clean=TRUE)
-        eventdata[, eval(paste0("pval_1",strat)) := predict(stratbalmodel,
-                                                            eventdata)]
-        
-        eventdata[treated == 1 & stratify == strat, pweight_stratbal := get(paste0("pval_1",strat))/(1-get(paste0("pval_1",strat)))]
-      }
-      else    eventdata[treated == 1 & stratify == strat, pweight_stratbal := 1]
-      
-      stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
-                             data = eventdata[(treated == 1 & stratify == stratify_balance_val) | 
-                                                (treated == 0 & stratify == strat),], lean = TRUE, mem.clean=TRUE)
-      
-      eventdata[, eval(paste0("pval_0",strat)) := predict(stratbalmodel,
-                                                          eventdata)]
-      eventdata[treated == 0 & stratify == strat, pweight_stratbal := get(paste0("pval_0",strat))/(1-get(paste0("pval_0",strat)))]
-      
-      
-    }
-    
-    checkvars <- names(eventdata)[grepl("pval_",names(eventdata))]
-    for(var in checkvars){
-      eventdata[get(var) == 1 | get(var) == 0 | is.na(get(var)),  pweight_stratbal := NA ]
-    }
-  }
-  if(stratify_balance_val == "mean"){
-    
-    stratvals<-unique(eventdata$stratify)
-    for(strat in stratvals){
-      eventdata[,treated_base := treated == 1 & stratify == strat]
-      stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
-                             data = eventdata, lean = TRUE, mem.clean=TRUE)
-      eventdata[, eval(paste0("pval_1",strat)) := predict(stratbalmodel,
-                                                          eventdata)]
-      
-      eventdata[treated == 1 & stratify == strat, pweight_stratbal :=1/(get(paste0("pval_1",strat)))]
-      
-      eventdata[,treated_base := treated == 0 & stratify == strat]
-      stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
-                             data = eventdata, lean = TRUE, mem.clean=TRUE)
-      
-      eventdata[, eval(paste0("pval_0",strat)) := predict(stratbalmodel,
-                                                          eventdata)]
-      eventdata[treated == 0 & stratify == strat, pweight_stratbal := 1/(get(paste0("pval_0",strat)))]
-      
-      
-      
-    }
-    #Need to rebalance everyone to look like distribution of TREATED guys:
-    stratbalmodel <- feols(treated ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
-                           data = eventdata, lean = TRUE, mem.clean=TRUE)
-    eventdata[, pval_treat := predict(stratbalmodel,
-                                      eventdata)]
-    eventdata[,pweight_stratbal:=pweight_stratbal*pval_treat]
-    
-    
-    checkvars <- names(eventdata)[grepl("pval_",names(eventdata))]
-    for(var in checkvars){
-      eventdata[get(var) == 1 | get(var) == 0 | is.na(get(var)),  pweight_stratbal := NA ]
-    }
-  }
-  return(eventdata)
-}
 
 
 

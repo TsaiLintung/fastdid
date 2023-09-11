@@ -1,5 +1,79 @@
 # pre-process ------------------------------------------
 
+process_stratify_ipw <- function(eventdata, stratify_balance_val){
+  
+  if(!is.na(stratify_balance_val) & stratify_balance_val != "mean"){
+    eventdata[,treated_base := treated == 1 & stratify == stratify_balance_val]
+    
+    stratvals<-unique(eventdata$stratify)
+    for(strat in stratvals){
+      if(strat != stratify_balance_val){
+        stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
+                               data = eventdata[(treated == 1 & stratify == stratify_balance_val) | 
+                                                  (treated == 1 & stratify == strat),], lean = TRUE, mem.clean=TRUE)
+        eventdata[, eval(paste0("pval_1",strat)) := predict(stratbalmodel,
+                                                            eventdata)]
+        
+        eventdata[treated == 1 & stratify == strat, pweight_stratbal := get(paste0("pval_1",strat))/(1-get(paste0("pval_1",strat)))]
+      }
+      else    eventdata[treated == 1 & stratify == strat, pweight_stratbal := 1]
+      
+      stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
+                             data = eventdata[(treated == 1 & stratify == stratify_balance_val) | 
+                                                (treated == 0 & stratify == strat),], lean = TRUE, mem.clean=TRUE)
+      
+      eventdata[, eval(paste0("pval_0",strat)) := predict(stratbalmodel,
+                                                          eventdata)]
+      eventdata[treated == 0 & stratify == strat, pweight_stratbal := get(paste0("pval_0",strat))/(1-get(paste0("pval_0",strat)))]
+      
+      
+    }
+    
+    checkvars <- names(eventdata)[grepl("pval_",names(eventdata))]
+    for(var in checkvars){
+      eventdata[get(var) == 1 | get(var) == 0 | is.na(get(var)),  pweight_stratbal := NA ]
+    }
+  }
+  if(!is.na(stratify_balance_val) & stratify_balance_val == "mean"){
+    
+    stratvals<-unique(eventdata$stratify)
+    for(strat in stratvals){
+      eventdata[,treated_base := treated == 1 & stratify == strat]
+      stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
+                             data = eventdata, lean = TRUE, mem.clean=TRUE)
+      eventdata[, eval(paste0("pval_1",strat)) := predict(stratbalmodel,
+                                                          eventdata)]
+      
+      eventdata[treated == 1 & stratify == strat, pweight_stratbal :=1/(get(paste0("pval_1",strat)))]
+      
+      eventdata[,treated_base := treated == 0 & stratify == strat]
+      stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
+                             data = eventdata, lean = TRUE, mem.clean=TRUE)
+      
+      eventdata[, eval(paste0("pval_0",strat)) := predict(stratbalmodel,
+                                                          eventdata)]
+      eventdata[treated == 0 & stratify == strat, pweight_stratbal := 1/(get(paste0("pval_0",strat)))]
+      
+      
+      
+    }
+    #Need to rebalance everyone to look like distribution of TREATED guys:
+    stratbalmodel <- feols(treated ~ 1 | interaction(cohort,event_time,time_pair,balancevars, drop = TRUE),
+                           data = eventdata, lean = TRUE, mem.clean=TRUE)
+    eventdata[, pval_treat := predict(stratbalmodel,
+                                      eventdata)]
+    eventdata[,pweight_stratbal:=pweight_stratbal*pval_treat]
+    
+    
+    checkvars <- names(eventdata)[grepl("pval_",names(eventdata))]
+    for(var in checkvars){
+      eventdata[get(var) == 1 | get(var) == 0 | is.na(get(var)),  pweight_stratbal := NA ]
+    }
+  }
+  
+  return(eventdata)
+}
+
 
 process_iv <- function(eventdata, instrument, instrument_exposure, covs_instrument_base_balance, saturate){
   eventdata[,instrument_group_now:=max(get(instrument) == 1 & as.numeric(as.character(time_pair)) == as.numeric(as.character(event_time))),by=.(id,cohort,time_pair)]

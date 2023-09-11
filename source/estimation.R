@@ -76,7 +76,7 @@ event_ATTs_pooled<-function(eventdata,
   
   outcomes_call <- paste0("c(", paste0(outcomes,collapse=","), ")")
   event_stratify_call <- ifelse(keep_trends, "~ event_time_stratify + treated_pre_stratify + treated_post_stratify |", 
-                                "~ treated_event_time_stratify | event_time_stratify +")
+                                "~ treated_pre_stratify + treated_post_stratify | event_time_stratify +")
   call <- paste0(outcomes_call, event_stratify_call, " unitfe" )
   
   results_pooled <-feols(as.formula(call),
@@ -164,7 +164,8 @@ get_result_dynamic<-function(eventdata_panel,variable,trends=TRUE, mem.clean = T
   
 }
 
-get_result_pooled<-function(eventdata_panel,variable,trends=TRUE){
+get_result_pooled<-function(eventdata_panel,variable,trends=TRUE,
+                            mem.clean = TRUE){
   
   validate_eventdata(eventdata_panel, variable)
   
@@ -174,11 +175,12 @@ get_result_pooled<-function(eventdata_panel,variable,trends=TRUE){
  
 }
 
-get_result_means<-function(eventdata_panel,variable,trends=TRUE){
+get_result_means<-function(eventdata_panel,variable,trends=TRUE,
+                           mem.clean = TRUE){
   
   validate_eventdata(eventdata_panel, variable)
   
-  results<-event_ATTs_means(eventdata_panel,outcomes = c(variable),keep_trends = trends)
+  results<-event_ATTs_means(eventdata_panel,outcomes = c(variable),keep_trends = trends, mem.clean = mem.clean)
   
   dt <- parse_event_ATTs(results, variable, "means")
   
@@ -186,7 +188,8 @@ get_result_means<-function(eventdata_panel,variable,trends=TRUE){
   
 }
 
-get_result_covariates<-function(eventdata_panel,covariate,variable=NULL,trends=TRUE){
+get_result_covariates<-function(eventdata_panel,covariate,variable=NULL,trends=TRUE,
+                                mem.clean = TRUE){
   
   validate_eventdata(eventdata_panel, variable)
   
@@ -235,6 +238,7 @@ parse_event_ATTs <- function(results, variable, result_type){
   }
   
   dt[,event_time:= lapply(variable, get_event_time)]
+  dt[,event_time := unlist(event_time)]
 }
 
 

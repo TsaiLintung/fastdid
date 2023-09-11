@@ -1,10 +1,7 @@
-
-
-library(data.table)
-library(did)
-
-sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", hetero = "dynamic",
-                    second_outcome = FALSE, na = "none", balanced = TRUE){
+sim_did <- function(sample_size, time_period, untreated_prop = 0.3, 
+                    cov = "no", hetero = "dynamic", second_outcome = FALSE, na = "none", balanced = TRUE, seed = NA, stratify = TRUE){
+  
+  if(!is.na(seed)){set.seed(seed)}
   
   #unit  -------------
   dt_i <- data.table(unit = 1:sample_size)
@@ -15,6 +12,10 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   } else if (cov == "cont"){
     dt_i[, x := rnorm(sample_size)]
   }
+  
+  if(stratify){
+    dt_i[, s := fifelse(rnorm(sample_size) > 0, 1, 2)]
+  } else {d_i[, s := 1]}
 
   dt_i[, treat_latent := x*0.2 + rnorm(sample_size)]
   
@@ -66,12 +67,12 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, cov = "no", 
   
   dt <- dt |> merge(att, by = c("time", "G"), all.x = TRUE, all.y = FALSE)
   dt[is.na(attgt), attgt := 0]
-  dt[, tau := attgt + rnorm(n = sample_size*time_period, sd = 0.1)]
+  dt[, tau := (attgt + rnorm(n = sample_size*time_period, sd = 0.1))*s]
   
   #potential outcome
   dt[, y1 := y0 + tau]
   dt[, y := y1*D + y0*(1-D)]
-  dt <- dt[, .(time, G, unit, x, y)]
+  dt <- dt[, .SD, .SDcols = c("time", "G", "unit", "x", "y", "s")]
   
   #additional -----------------
   
