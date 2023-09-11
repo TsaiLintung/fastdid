@@ -14,7 +14,7 @@ source("source/setup.R")
 # simulation ---------------------------------------------------------------------
 
 #test with did
-simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic", balanced = FALSE, second_outcome = FALSE)
+simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic", balanced = FALSE, second_outcome = FALSE)
 dt <- simdt$dt
 
 # new event code ---------------------------------------------------------------------

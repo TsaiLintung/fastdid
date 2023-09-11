@@ -343,61 +343,6 @@ create_event_data<-function(maindata,
 
 }
 
-
-
-construct_event_variables_iv <- function(eventdata,saturate=FALSE,response=NULL){
-  eventdata[,Z:=instrument_group[event_time != base_time],by=.(unitfe)]
-  eventdata[,R:=get(response)[event_time != base_time],by=.(unitfe)]
-  eventdata[,response_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
-  eventdata[,instrument_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
-  #Omitting base year for all levels of --stratify--, for response interaction
-  eventdata[R == 0 ,response_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[event_time==base_time,response_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,response_event_time_stratify:=relevel(response_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
-  #Omitting base year for all levels of --stratify--, for instrument interaction
-  eventdata[Z == 0 ,instrument_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[event_time==base_time,instrument_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  eventdata[,instrument_event_time_stratify:=relevel(instrument_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1),collapse="."))]
-  #Defining response-event-time interactions, setting to omitted value if response == 0:
-  eventdata[,treated_response_event_time_stratify := treated_event_time_stratify]
-  eventdata[R==0,treated_response_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  
-  #Defining pooled response interactions, setting to omitted value if response == 0:
-  eventdata[,treated_response_post_stratify := treated_post_stratify]
-  eventdata[R==0,treated_response_post_stratify := paste0(c(0,1),collapse=".")]
-  eventdata[,treated_response_pre_stratify := treated_pre_stratify]
-  eventdata[R==0,treated_response_pre_stratify := 1]
-  
-  #Defining instrument-event-time interactions, setting to omitted value if instrument == 0:
-  eventdata[,treated_instrument_event_time_stratify := treated_event_time_stratify]
-  eventdata[Z==0,treated_instrument_event_time_stratify := paste0(c(max(eventdata$base_time),1),collapse=".")]
-  
-  
-  #Defining pooled instrument interactions, setting to omitted value if instrument == 0:
-  eventdata[,treated_instrument_post_stratify := treated_post_stratify]
-  eventdata[Z==0,treated_instrument_post_stratify := paste0(c(0,1),collapse=".")]
-  eventdata[,treated_instrument_pre_stratify := treated_pre_stratify]
-  eventdata[Z==0,treated_instrument_pre_stratify := 1]
-  
-  if(saturate==TRUE) {
-    eventdata[,event_time_stratify:=interaction(event_time_stratify,balancevars, drop=TRUE)]
-    eventdata[,instrument_event_time_stratify:=interaction(instrument_event_time_stratify,balancevars, drop=TRUE)]
-    eventdata[,treated_event_time_stratify:=interaction(treated_event_time_stratify,balancevars, drop=TRUE)]
-    eventdata[,treated_pre_stratify:=interaction(treated_pre_stratify,balancevars, drop=TRUE)]
-    eventdata[,treated_post_stratify:=interaction(treated_post_stratify,balancevars, drop=TRUE)]
-    # if(fullsaturate==TRUE){
-    # eventdata[,treated_instrument_event_time_stratify:=interaction(treated_instrument_event_time_stratify,balancevars, drop=TRUE)]
-    # eventdata[,treated_instrument_event_time_stratify:=relevel(treated_instrument_event_time_stratify,ref = paste0(c(max(eventdata$base_time),1,0),collapse="."))]
-    # eventdata[event_time==base_time | Z == 0 | treated==0,treated_instrument_event_time_stratify:=levels(treated_instrument_event_time_stratify)[1]]
-    # eventdata[,treated_instrument_post_stratify:=interaction(treated_instrument_post_stratify,balancevars, drop=TRUE)]
-    # eventdata[,treated_instrument_pre_stratify:=interaction(treated_instrument_pre_stratify,balancevars, drop=TRUE)]
-    # }
-  }
-  
-  return(eventdata)
-  
-}
-
 process_stratify <- function(eventdata){
   if(stratify_balance_val != "mean"){
     eventdata[,treated_base := treated == 1 & stratify == stratify_balance_val]
@@ -470,72 +415,6 @@ process_stratify <- function(eventdata){
   return(eventdata)
 }
 
-process_iv <- function(eventdata, instrument, instrument_exposure, covs_instrument_base_balance, saturate){
-  eventdata[,instrument_group_now:=max(get(instrument) == 1 & as.numeric(as.character(time_pair)) == as.numeric(as.character(event_time))),by=.(id,cohort,time_pair)]
-  eventdata[,instrument_group_base:=max(get(instrument) == 1 & as.numeric(as.character(base_time)) == as.numeric(as.character(event_time))),by=.(id,cohort,time_pair)]
-  if(instrument_exposure=="full") eventdata <- eventdata[instrument_group_now == instrument_group_base,]
-  if(instrument_exposure=="partial") eventdata <- eventdata[(instrument_group_now == 0 & instrument_group_base == 0) | (instrument_group_base == 0 & instrument_group_now == 1),]
-  if(instrument_exposure=="all") {
-    eventdata <- eventdata[!is.na(instrument_group_now) & !is.na(instrument_group_base),]
-    eventdata[,instrument_group_now := pmax(instrument_group_now,instrument_group_base)]
-  }
-  if(instrument_exposure=="base") {
-    eventdata <- eventdata[!is.na(instrument_group_base),]
-    eventdata[,instrument_group_now := instrument_group_base]
-  }
-  #After restricting on instrument status, need to re-impose balance:
-  eventdata[,obscount:=1]
-  eventdata[,obscount:=sum(ifelse(event_time==base_time,0,obscount)),by=.(id,cohort)]
-  if(balanced_panel==TRUE) {
-    eventdata <- eventdata[obscount==numperiods-1,]
-  }
-  
-  eventdata[,instrument_group:=instrument_group_now]
-  eventdata[,instrument_group_now:=NULL]
-  eventdata[,instrument_group_base:=NULL]
-  if(length(unique(eventdata$instrument_group)) == 1) 
-    stop("No variation in instrument left in the panel. Maybe because you're trying to impose panel balance?")
-  
-  
-  if(!is.na(covs_instrument_base_balance)) eventdata[,instrument_balancevars:=interaction(eventdata[,covs_instrument_base_balance,with=FALSE], drop=TRUE)]
-  else eventdata[,instrument_balancevars:=factor(1,levels=c(1,"OMIT"))]
-  
-  eventdata[,ivgroup:=interaction(treated,instrument_group)]
-  ivlevels<-unique(eventdata$ivgroup)
-  for(strat in ivlevels){
-    eventdata[,treated_base := ivgroup == strat]
-    stratbalmodel <- feols(treated_base ~ 1 | interaction(cohort,event_time,time_pair,instrument_balancevars, drop = TRUE),
-                           data = eventdata, lean = TRUE, mem.clean=TRUE,
-                           weights = eventdata$pweight)
-    eventdata[, eval(paste0("pval_",strat)) := predict(stratbalmodel,
-                                                       eventdata)]
-    
-    eventdata[ivgroup == strat, pweight_new :=pweight/(get(paste0("pval_",strat)))]
-    
-  }
-  #Need to rebalance everyone to look like distribution of TREATED guys:
-  stratbalmodel <- feols(treated ~ 1 | interaction(cohort,event_time,time_pair,instrument_balancevars, drop = TRUE),
-                         data = eventdata, lean = TRUE, mem.clean=TRUE,
-                         weights = eventdata$pweight)
-  eventdata[, pval_treat := predict(stratbalmodel,
-                                    eventdata)]
-  
-  eventdata[,pweight_new:=pweight_new*pval_treat]
-  eventdata[,pval_treat:=NULL]
-  eventdata[,pweight:=pweight_new]
-  eventdata[,pweight_new:=NULL]
-  
-  checkvars <- names(eventdata)[grepl("pval_",names(eventdata))]
-  for(var in checkvars){
-    eventdata[get(var) == 1 | get(var) == 0 | is.na(get(var)),  pweight := NA ]
-    eventdata[,eval(var):=NULL]
-  }
-  eventdata<-eventdata[!is.na(pweight),]
-  if(length(unique(eventdata$instrument_group)) == 1) stop("No variation in instrument left in the panel after imposing common support on observables
-                                                             across instrument X treatment cells.")
-  return(eventdata)
-  
-}
 
 
 
