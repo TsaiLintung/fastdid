@@ -64,7 +64,7 @@ create_event_data<-function(maindata,
   
   # validation -----------------------------------
   
-  if(balanced_panel==TRUE & !is.na(instrument) & !instrument_exposure%in%c("full","base")) stop("If imposing a balanced panel in an IV design, set instrument_exposure to full or base.")
+  #if(balanced_panel==TRUE & !is.na(instrument) & !instrument_exposure%in%c("full","base")) stop("If imposing a balanced panel in an IV design, set instrument_exposure to full or base.")
   if(lower_event_time > base_time) stop("lower_event_time must lie below base_time")
   if(!is.data.table(maindata)) stop("rawdata must be a data.table")
   if(!all(is.na(stratify_balance_val)) & all(covariate_base_stratify == 1)) stop("It makes no sense to specify stratify_balance_val without specifying covariate_base_stratify")
@@ -203,7 +203,8 @@ create_event_data<-function(maindata,
     controldata <- controldata[obsbase==1,]
     treatdata[,obsbase := NULL]
     controldata[,obsbase := NULL]
-  }
+  
+    }
   
   #check base-restrict
   if(base_restrict != 1){
@@ -259,22 +260,11 @@ create_event_data<-function(maindata,
     
   }
   eventdata <- rbindlist(data_list,use.names=TRUE)
-
-  #for(t in event_times){
-  #  treatdata[,obst:=sum(event_time==t),by=.(id,cohort)]
-  #  controldata[,obst:=sum(event_time==t),by=.(id,cohort)]
-  #  pairdata<-rbind(treatdata[obst==1 & base_time != t & (event_time == t | event_time == base_time),],
-  #                 controldata[obst==1 & base_time != t & (event_time == t | event_time == base_time),])
-  #  pairdata[,time_pair:= t]
-  #  data_list<-c(data_list, list(pair_data))
-  #}
-
+  
   # estimating ipw ----------------------------------------------------------------------------------
   
-  if(is.null(eventdata)) {stop("eventdata is empty!!!")}
+  if(is.null(eventdata)) {stop("eventdata is empty!")}
 
-  #eventdata[,obst:=NULL]
-  #eventdata[,obsbase:=NULL]
   eventdata[,anycohort:=NULL]
   
   rm(treatdata)
@@ -322,7 +312,7 @@ create_event_data<-function(maindata,
   
   # construct_event_variables --------------------------------------------
   
-  if(is.na(instrument)) eventdata[,unitfe := finteraction(time_pair,treated,stratify)]
+  if(is.na(instrument)) eventdata[,unitfe := finteraction(time_pair,treated,id)]
   else eventdata[,unitfe := finteraction(time_pair,id,treated,cohort,stratify)]
   
   base_event_stratify <- paste0(c(base_time,1),collapse=".")

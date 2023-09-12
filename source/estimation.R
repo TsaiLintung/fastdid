@@ -1,6 +1,50 @@
 
 # estimation ---------------------------------------
 
+event_ATTs_cohort_event_time <-function(eventdata,
+                                  outcomes, #vector of variable names
+                                  clustervar="id", 
+                                  weights="pweight",
+                                  keep_trends=TRUE,
+                                  se="cluster",
+                                  lean=TRUE,
+                                  ssc=NULL,
+                                  mem.clean = TRUE){
+  
+
+  base_event_stratify <- paste0(c(eventdata[, max(base_time)],1),collapse=".")
+
+  eventdata[,unitfe := finteraction(cohort,time_pair,treated,id)]
+  
+  eventdata[,cohort_event_time_event_time_stratify:= finteraction(event_time_fact,cohort,stratify)]
+  eventdata[,treated_cohort_event_time_event_time_stratify := cohort_event_time_event_time_stratify]
+  
+  #Omitting base year for all levels of --stratify--:
+  eventdata[event_time==base_time, event_time_stratify := base_event_stratify]
+  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = base_event_stratify)]
+  
+  #Omitting base year for all levels of --stratify--, for treated people
+  eventdata[event_time==base_time | treated == 0 ,treated_cohort_event_time_event_time_stratify := base_event_stratify]
+  eventdata[,treated_cohort_event_time_event_time_stratify:=relevel(treated_cohort_event_time_event_time_stratify,ref = base_event_stratify)]
+  
+  #construct the call
+  outcomes_call <- paste0("c(", paste0(outcomes,collapse=","), ")")
+  event_stratify_call <- ifelse(keep_trends, "~ cohort_event_time_event_time_stratify + treated_cohort_event_time_event_time_stratify |", 
+                                "~ treated_cohort_event_time_event_time_stratify | cohort_event_time_event_time_stratify +")
+  call <- paste0(outcomes_call, event_stratify_call, " unitfe" )
+  
+  results<-feols(as.formula(call),
+                 data = eventdata,
+                 weights= eventdata[,get(weights)],
+                 #split = "cohort",
+                 cluster=clustervar, lean = TRUE, mem.clean = mem.clean)
+  
+  return(list(cohort_event_time = results))
+  
+}
+
+
+
 event_ATTs_dynamic<-function(eventdata,
                              outcomes,#vector of variable names
                              clustervar="id", 
@@ -151,6 +195,18 @@ event_ATTs<-function(eventdata,
 }
 
 # get result -------------------
+
+get_result_cohort_event_time<-function(eventdata_panel,variable,trends=TRUE,mem.clean = TRUE){
+  
+  validate_eventdata(eventdata_panel, variable)
+  
+  results<-event_ATTs_cohort_event_time(eventdata_panel,outcomes = c(variable),keep_trends = trends, mem.clean = mem.clean)
+  
+  dt <- parse_event_ATTs(results, variable, "cohort_event_time")
+  
+  return(dt)
+  
+}
 
 get_result_dynamic<-function(eventdata_panel,variable,trends=TRUE, mem.clean = TRUE){
   

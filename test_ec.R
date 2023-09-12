@@ -16,6 +16,7 @@ source("source/setup.R")
 source("source/preprocess.R")
 source("source/estimation.R")
 source("source/report.R")
+source("source/test.R")
 
 # simulation ---------------------------------------------------------------------
 
@@ -48,58 +49,27 @@ event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = uni
 
 dynamic_est <- get_result_dynamic(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE)
 
+ce <- get_result_cohort_event_time(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE)
+
+
 pooled_est <- get_result_pooled(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE)
 means_est <- get_result_means(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE)
-event_est <- get_result_covariates(event_panel, covariate = stratify_name, variable = y_name, trends = FALSE, mem.clean = FALSE)
+#event_est <- get_result_covariates(event_panel, covariate = stratify_name, variable = y_name, trends = FALSE, mem.clean = FALSE)
 
-#half way
-att[, event_time := time-G]
-att_dynamic <- att[!event_time %in% c(-1,time_period-1), .(attgt = mean(attgt)), by = "event_time"]
-event_validate <- merge(dynamic_est, att_dynamic, by = "event_time")
+#test for dynamic estimate
 
+test_dynamic_est <- function(dynamic_est, att){
+  att[, event_time := time-G]
+  att_dynamic <- att[!event_time %in% c(-1,time_period-1), .(attgt = mean(attgt)), by = "event_time"]
+  event_validate <- merge(dynamic_est, att_dynamic, by = "event_time")
+  event_validate[, ci_ub := Estimate+`Std. Error`*1.96]
+  event_validate[, ci_lb := Estimate-`Std. Error`*1.96]
+  event_validate[, s :=  (function(x){str_sub(str_trim(x), str_length(str_trim(x)), str_length(str_trim(x)))})(variable)]
+  event_validate[, attgt := attgt*as.numeric(s)]
+  event_validate[, par_in_ci := (attgt <= ci_ub & attgt >= ci_lb)]
+  expect_gt(event_validate[, mean(par_in_ci)], 0.95)
+}
 
-
-att_comp <- validate_att_est(simdt$att, event_est)
-
-plot_event_study(event_code_est)
-
-
-# event code iV ----------------------------------------------------------------------------------
- 
-source("source_raw/eventcode_IV.R")
-
-profvis({
-  
-  event_panel <- copy(dt) #copying so that the original does not change
-  
-  min_time <- -Inf
-  max_time <- Inf
-  y_name <- c("y")
-  t_name <- "time"
-  unit_name <- "unit"
-  cohort_name <- "G"
-  balance_covariate <- "x"
-  
-  event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
-                                                   cohortvar = cohort_name,
-                                                   covariate_base_balance = balance_covariate,
-                                                   never_treat_action = "both")
-  
-  event_panel <- event_panel %>% construct_event_variables(event_panel)
-  
-  event_est <- get_result_dynamic(event_panel, variable = y_name, trends = FALSE)
-  
-})
-
-
-#did -------------------------------------------------------------------------------
-
-est <- att_gt(yname = "y",
-              tname = "time",
-              idname = "unit",
-              gname = "G",
-              xformla = ~x,
-              data = dt)
-
-ratio <- validate_att_est(simdt$att, est$att, est$se)
+test_that("dynamic estimate",
+          {test_dynamic_est(dynamic_est, att)})
 
