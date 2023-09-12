@@ -39,6 +39,8 @@ create_event_data<-function(maindata,
                             ) 
 {
   
+  maindata <- copy(maindata)
+  
   # name change ----------------------------------
   
   if(is.null(anycohortvar)) {
@@ -311,24 +313,6 @@ create_event_data<-function(maindata,
   eventdata[,treated:=qF(treated)]
   
   # construct_event_variables --------------------------------------------
-  
-  if(is.na(instrument)) eventdata[,unitfe := finteraction(time_pair,treated,id)]
-  else eventdata[,unitfe := finteraction(time_pair,id,treated,cohort,stratify)]
-  
-  base_event_stratify <- paste0(c(base_time,1),collapse=".")
-  
-  eventdata[,event_time_stratify:= finteraction(event_time_fact,stratify)]
-  eventdata[,treated_event_time_stratify := event_time_stratify]
-  
-  #Omitting base year for all levels of --stratify--:
-  eventdata[event_time==base_time, event_time_stratify := base_event_stratify]
-  eventdata[,event_time_stratify:=relevel(event_time_stratify,ref = base_event_stratify)]
-  
-  #Omitting base year for all levels of --stratify--, for treated people
-  eventdata[event_time==base_time | treated == 0 ,treated_event_time_stratify := base_event_stratify]
-  eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_event_stratify)]
-  
-  eventdata[, base_time := base_time]
   
   if(!is.na(instrument)){
     eventdata <- construct_event_variables_iv(eventdata)

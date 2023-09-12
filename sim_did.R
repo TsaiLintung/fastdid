@@ -57,7 +57,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3,
   #generate gtatt
   att <- CJ(G = 1:time_period, time = 1:time_period)
   if(hetero == "all"){
-    att[, attgt := rnorm((time_period-1)*(time_period-1), mean = 2, sd = 0.5)]
+    att[, attgt := rnorm(time_period*time_period, mean = 2, sd = 0.5)]
   } else if (hetero == "dynamic"){
     for(event_t in 0:max(att[,time-G])){
       att[time - G == event_t, attgt := rnorm(1, mean = 2, sd = 0.5)]

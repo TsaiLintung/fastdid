@@ -13,8 +13,8 @@ setwd("~/GitHub/EventStudyCode")
 source("sim_did.R")
 
 source("source/setup.R")
-source("source/preprocess.R")
-source("source/estimation.R")
+source("source/create_event_data.R")
+source("source/get_event_result.R")
 source("source/report.R")
 source("source/test.R")
 
@@ -28,7 +28,6 @@ simdt <- sim_did(sample_size, time_period, cov = "int", hetero = "dynamic", bala
 dt <- simdt$dt
 att <- simdt$att
 
-  
 event_panel <- copy(dt) #copying so that the original does not change
 
 min_time <- -Inf
@@ -47,7 +46,14 @@ event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = uni
                                                  balanced_panel = TRUE,
                                                  never_treat_action = "both")
 
-dynamic_est <- get_result_dynamic(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE)
+dynamic_est <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
+
+
+
+
+
+
+
 
 ce <- get_result_cohort_event_time(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE)
 

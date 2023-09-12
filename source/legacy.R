@@ -1,3 +1,35 @@
+# estimation --------------------------------------------
+
+event_ATTs<-function(eventdata,
+                     outcomes,#vector of variable names
+                     covariates=NULL, #vector of covariates on which to check balance
+                     clustervar="id", 
+                     weights="pweight",
+                     keep_trends=TRUE,
+                     se="cluster",
+                     lean=TRUE,
+                     ssc=NULL){
+  
+  #These regressions should work identically if the fixed effects (after the "|") were replaced with:
+  # interaction(time_pair,id,cohort)
+  if(se != "cluster") clustervar<-NULL
+  if(is.null(ssc)) ssc<-ssc()
+  
+  construct_event_variables(eventdata)
+  eventdata$stratify <- factor(eventdata$stratify, levels = c(levels(eventdata$stratify), "empty"))
+  
+  results_dynamic <- event_ATTs_dynamic(eventdata_panel,outcomes = c(variable),keep_trends = trends, mem.clean = mem.clean)
+  results_pooled <- event_ATTspooled(eventdata_panel,outcomes = c(variable),keep_trends = trends, mem.clean = mem.clean)
+  results_means <- event_ATTs_means(eventdata_panel,outcomes = c(variable),keep_trends = trends, mem.clean = mem.clean)
+  results_covariates <- event_ATTs_covariates(eventdata_panel,outcomes = c(variable),keep_trends = trends, mem.clean = mem.clean)
+  
+  return(list(pooled = results_pooled,
+              dynamic = results,
+              means = results_means,
+              covariates = results_covariates))
+}
+
+
 # pre-process ------------------------------------------
 
 process_stratify_ipw <- function(eventdata, stratify_balance_val){
@@ -143,6 +175,9 @@ process_iv <- function(eventdata, instrument, instrument_exposure, covs_instrume
 }
 
 construct_event_variables_iv <- function(eventdata,saturate=FALSE,response=NULL){
+  
+  eventdata[,unitfe := finteraction(time_pair,id,treated,cohort,stratify)]
+  
   eventdata[,Z:=instrument_group[event_time != base_time],by=.(unitfe)]
   eventdata[,R:=get(response)[event_time != base_time],by=.(unitfe)]
   eventdata[,response_event_time_stratify := interaction(event_time,stratify, drop = TRUE)]
