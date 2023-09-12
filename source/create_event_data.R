@@ -38,9 +38,7 @@ create_event_data<-function(maindata,
                             check_not_treated = FALSE #If TRUE, only allows controls to be used for cohort o if they are observed in the dataset to be untreated in year o.
                             ) 
 {
-  
-  maindata <- copy(maindata)
-  
+
   # name change ----------------------------------
   
   if(is.null(anycohortvar)) {
@@ -75,15 +73,17 @@ create_event_data<-function(maindata,
   if(balanced_panel){
     
     #check if any is dup
-    if(any_duplicated(dt[, .(unit, time)])){
-      dup_id <- maindata[fduplicated(maindata[, .(id, time)])]
+      
+    
+    if(anyDuplicated(maindata[, .(id, time)])){
+      dup <- duplicated(maindata[,.(id, time)])
       warning(nrow(dup_id), " units is observed more than once in some periods, enforcing balanced panel by dropping them")
-      maindata <- maindata[!id %fin% dup_id$id]
+      maindata <- maindata[!id %fin% dup]
     }
     
     #check if any is missing
     id_count <- maindata[, .(count = .N), by = id]
-    time_period <- fnunique(maindata[, time])
+    time_period <- maindata[, uniqueN(time)]
     if(any(id_count[, count < time_period])){
       mis_id <- id_count[count < time_period]
       warning(nrow(mis_id), " units is missing in some periods, enforcing balanced panel by dropping them")

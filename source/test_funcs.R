@@ -1,14 +1,18 @@
 
-test_event_data <- function(){
+test_create_event_data <- function(){
   
   dt <- generate_sim_dt()[["dt"]]
   
-  event_panel <- dt %>% create_event_data(timevar = "time", unitvar = "unit", 
+  event_panel <- create_event_data(dt, timevar = "time", unitvar = "unit", 
                                           cohortvar = "G",
                                           covariate_base_balance = "x",
                                           covariate_base_stratify = "s",
                                           balanced_panel = TRUE,
                                           never_treat_action = "both")
+  
+  expect_equal(nrow(event_panel), 5472,
+               info = "nrow after create_event_panel")
+  
 }
 
 test_dynamic <- function(p){
@@ -42,7 +46,7 @@ test_cohort_event_time <- function(p){
   
   #process att
   att[, event_time := time-G]
-  cohort_time_att <- att[!event_time %in% c(-1,time_period-1),]
+  cohort_time_att <- att[!event_time %in% c(-1,p$time_period-1),]
   
   #process est
   get_cohort <- function(x){
@@ -74,14 +78,16 @@ generate_sim_dt <- function(p = list(sample_size = 100, time_period = 10),type =
 
 generate_est <- function(dt, p,type){
   
-  event_panel <- dt %>% create_event_data(timevar = p$t_name, unitvar = p$unit_name, 
+  event_panel <- suppressWarnings(create_event_data(dt, timevar = p$t_name, unitvar = p$unit_name, 
                                           cohortvar = p$cohort_name,
                                           covariate_base_balance = p$balance_name,
                                           covariate_base_stratify = p$stratify_name,
                                           balanced_panel = TRUE,
-                                          never_treat_action = "both")
+                                          never_treat_action = "both"))
   
-  est <- get_event_result(event_panel, variable = p$y_name, trends = FALSE, mem.clean = FALSE, result_type = type)
+  est <- suppressMessages(suppressWarnings(
+    get_event_result(event_panel, variable = p$y_name, trends = FALSE, mem.clean = FALSE, result_type = type)
+    ))
   
   return(est)
   
@@ -116,11 +122,10 @@ temp <- function(){
                                                    covariate_base_stratify = stratify_name,
                                                    balanced_panel = TRUE,
                                                    never_treat_action = "both")
-  
-  ct <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "cohort_event_time")
-  
+
   means <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "means")
   pooled <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "pooled")
+  
 }
 
 

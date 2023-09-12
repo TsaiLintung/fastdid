@@ -9,7 +9,6 @@ setwd("~/GitHub/EventStudyCode")
 # load event code ---------------------------------------------------------------------
 
 source("sim_did.R")
-
 source("source/setup.R")
 source("source/get_event_result.R")
 source("source/create_event_data.R")
