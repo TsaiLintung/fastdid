@@ -1,27 +1,30 @@
+# test create event data -----------------------------------
 
 test_create_event_data <- function(){
   
-  dt <- generate_sim_dt()[["dt"]]
+  dt <-  sim_did(5, 5, seed = 1, treatment_assign = "uniform", stratify = FALSE)[["dt"]]
   
   event_panel <- create_event_data(dt, timevar = "time", unitvar = "unit", 
-                                          cohortvar = "G",
-                                          covariate_base_balance = "x",
-                                          covariate_base_stratify = "s",
-                                          balanced_panel = TRUE,
-                                          never_treat_action = "both")
+                                       cohortvar = "G",
+                                       covariate_base_balance = "x",
+                                       covariate_base_stratify = "s",
+                                       balanced_panel = TRUE,
+                                       control_group = "both")
   
-  expect_equal(nrow(event_panel), 5472,
+  expect_equal(nrow(event_panel), 94,
                info = "nrow after create_event_panel")
   
 }
 
-test_dynamic <- function(p){
+# test get result -------------------------------------
+
+test_get_result_dynamic <- function(p){
   
   #generate estimation and att
   sim_dt <- generate_sim_dt(p, "dynamic")
   att <- sim_dt$att
   dt <- sim_dt$dt
-  dynamic_est <- generate_est(dt, p, "dynamic")
+  dynamic_est <- generate_est(dt, "dynamic")
   
   #process att 
   att[, event_time := time-G]
@@ -36,13 +39,13 @@ test_dynamic <- function(p){
   
 }
 
-test_cohort_event_time <- function(p){
+test_get_result_cohort_event_time <- function(p){
   
   #generate estimation and att
   sim_dt <- generate_sim_dt(p, "cohort_event_time")
   att <- sim_dt$att
   dt <- sim_dt$dt
-  cohort_time_est <- generate_est(dt, p, "cohort_event_time")
+  cohort_time_est <- generate_est(dt, "cohort_event_time")
   
   #process att
   att[, event_time := time-G]
@@ -66,24 +69,38 @@ test_cohort_event_time <- function(p){
   
 }
 
+test_get_result_means <- function(){
+  
+  #generate estimation and att
+  sim_dt <- generate_sim_dt()
+  att <- sim_dt$att
+  dt <- sim_dt$dt
+  means_est <- generate_est(dt, "means")
+  
+  return(expect_equal(nrow(means_est), dt[, uniqueN(s)], info = "means nrow is stratify count"))
+  
+}
+
 # helper function --------------------
 
-generate_sim_dt <- function(p = list(sample_size = 100, time_period = 10),type = "dynamic"){
+generate_sim_dt <- function(p = list(sample_size = 100, time_period = 10),type = "dynamic", seed = 1){
   hetero_type <- ifelse(type == "cohort_event_time", "all", "dynamic")
-  simdt <- sim_did(p$sample_size, p$time_period, cov = "int", hetero = hetero_type, balanced = FALSE, second_outcome = FALSE, seed = 1)
+  simdt <- sim_did(p$sample_size, p$time_period, cov = "int", hetero = hetero_type, balanced = FALSE, second_outcome = FALSE, seed = seed)
   dt <- simdt$dt
   att <- simdt$att
   return(list(dt = dt, att = att))
 }
 
-generate_est <- function(dt, p,type){
+generate_est <- function(dt, type, p = list(t_name = "time", unit_name = "unit",
+                                            cohort_name = "G", balance_name = "x", stratify_name = "s",
+                                            y_name = "y")){
   
   event_panel <- suppressWarnings(create_event_data(dt, timevar = p$t_name, unitvar = p$unit_name, 
                                           cohortvar = p$cohort_name,
                                           covariate_base_balance = p$balance_name,
                                           covariate_base_stratify = p$stratify_name,
                                           balanced_panel = TRUE,
-                                          never_treat_action = "both"))
+                                          control_group = "both"))
   
   est <- suppressMessages(suppressWarnings(
     get_event_result(event_panel, variable = p$y_name, trends = FALSE, mem.clean = FALSE, result_type = type)
@@ -105,27 +122,4 @@ get_att_in_ci_ratio <- function(merged_att){
   return(ratio)
   
 }
-
-# test ctatt result -----------------------------------------------------------------------------------
-
-temp <- function(){
-  
-  simdt <- sim_did(sample_size, time_period, cov = "int", hetero = "all", balanced = FALSE, second_outcome = FALSE, seed = 1)
-  dt <- simdt$dt
-  att_ct <- simdt$att
-  
-  event_panel <- copy(dt) #copying so that the original does not change
-  
-  event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
-                                                   cohortvar = cohort_name,
-                                                   covariate_base_balance = balance_name,
-                                                   covariate_base_stratify = stratify_name,
-                                                   balanced_panel = TRUE,
-                                                   never_treat_action = "both")
-
-  means <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "means")
-  pooled <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "pooled")
-  
-}
-
 

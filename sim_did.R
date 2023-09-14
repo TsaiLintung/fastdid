@@ -1,12 +1,12 @@
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, 
-                    cov = "no", hetero = "dynamic", second_outcome = FALSE, na = "none", balanced = TRUE, seed = NA, stratify = TRUE){
+                    cov = "no", hetero = "dynamic", second_outcome = FALSE, na = "none", balanced = TRUE, seed = NA, stratify = TRUE, treatment_assign = "latent"){
   
   if(!is.na(seed)){set.seed(seed)}
   
   #unit  -------------
   dt_i <- data.table(unit = 1:sample_size)
   if(cov == "int"){
-    dt_i[, x := sample.int(5, sample_size, replace = TRUE)] #event code can't take double 
+    dt_i[, x := sample.int(5, sample_size, replace = TRUE)] 
   } else if (cov == "no"){
     dt_i[, x := 1] 
   } else if (cov == "cont"){
@@ -15,24 +15,34 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3,
   
   if(stratify){
     dt_i[, s := fifelse(rnorm(sample_size) > 0, 1, 2)]
-  } else {d_i[, s := 1]}
+  } else {
+    dt_i[, s := 1]
+  }
 
-  dt_i[, treat_latent := x*0.2 + rnorm(sample_size)]
-  
   #treatment assignment ---------------------
   
   #assign treated group based on a latent related to X
-  #unit with larger X tend to be treated and treated earlier
-  #unit start getting treated in t = 2
-  untreated_thres <- quantile(dt_i$treat_latent, untreated_prop)
-  dt_i[treat_latent <= untreated_thres, G := Inf]
-  cohort_prop <- (1-untreated_prop)/(time_period-1)
-  last_treat_thres <- untreated_thres
-  for(t in time_period:2){
-    treat_thres <- quantile(dt_i$treat_latent, untreated_prop + cohort_prop*(time_period - t + 1))
-    dt_i[treat_latent <= treat_thres & treat_latent > last_treat_thres, G := t]
-    last_treat_thres <- treat_thres
+  
+  if(treatment_assign == "latent"){
+    dt_i[, treat_latent := x*0.2 + rnorm(sample_size)] #unit with larger X tend to be treated and treated earlier
+    untreated_thres <- quantile(dt_i$treat_latent, untreated_prop)
+    dt_i[treat_latent <= untreated_thres, G := Inf] #unit with low latent is never treated
+    
+    cohort_prop <- (1-untreated_prop)/(time_period-1)
+    last_treat_thres <- untreated_thres
+    for(t in time_period:2){ #unit start getting treated in t = 2
+      treat_thres <- quantile(dt_i$treat_latent, untreated_prop + cohort_prop*(time_period - t + 1))
+      dt_i[treat_latent <= treat_thres & treat_latent > last_treat_thres, G := t]
+      last_treat_thres <- treat_thres
+    }
+    
+  } else if (treatment_assign == "uniform"){
+    message("when treatment is uniform, untreated prop is not used")
+    dt_i[,G := floor((unit-1)/(sample_size/time_period))]
+    dt_i[G < 2, G := Inf]
   }
+  
+
   rm(t)
   
   #assign unit FE

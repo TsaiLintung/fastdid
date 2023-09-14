@@ -34,7 +34,7 @@ event_ATTs<-function(eventdata,
 
 process_stratify_ipw <- function(eventdata, stratify_balance_val){
   
-  if(!is.na(stratify_balance_val) & stratify_balance_val != "mean"){
+  if(!is.na(stratify_balance_val) & stratify_balance_val != TRUE){
     eventdata[,treated_base := treated == 1 & stratify == stratify_balance_val]
     
     stratvals<-unique(eventdata$stratify)
@@ -66,7 +66,7 @@ process_stratify_ipw <- function(eventdata, stratify_balance_val){
       eventdata[get(var) == 1 | get(var) == 0 | is.na(get(var)),  pweight_stratbal := NA ]
     }
   }
-  if(!is.na(stratify_balance_val) & stratify_balance_val == "mean"){
+  if(!is.na(stratify_balance_val) & stratify_balance_val == TRUE){
     
     stratvals<-unique(eventdata$stratify)
     for(strat in stratvals){

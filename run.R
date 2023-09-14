@@ -2,7 +2,7 @@
 rm(list = ls())
 gc()
 
-library(tinytest)
+library(profvis)
 
 setwd("~/GitHub/EventStudyCode")
 
@@ -16,7 +16,7 @@ source("source/create_event_data.R")
 
 # test dynamic result ---------------------------------------------------------------------
 
-simdt <- sim_did(100, 10, cov = "int", hetero = "dynamic", balanced = FALSE, second_outcome = FALSE, seed = 1)
+simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic", balanced = FALSE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
 min_time <- -Inf
@@ -25,19 +25,49 @@ y_name <- c("y")
 t_name <- "time"
 unit_name <- "unit"
 cohort_name <- "G"
-stratify_name <- "s"
 balance_name <- "x"
 
 #event_panel <- copy(dt)
 event_panel <- dt
 
-event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
-                                        cohortvar = cohort_name,
-                                        covariate_base_balance = balance_name,
-                                        covariate_base_stratify = stratify_name,
-                                        balanced_panel = TRUE,
-                                        never_treat_action = "both")
+profvis({
+  event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
+                                                   cohortvar = cohort_name,
+                                                   covariate_base_balance = balance_name,
+                                                   balanced_panel = TRUE,
+                                                   control_group = "both")
+})
 
-dynamic_est <- get_result_dynamic(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE)
+profvis(
+  event_est <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
+)
 
-ce <- get_result_cohort_event_time(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE)
+# stratified var ---------------------------------------------------------------------------------
+
+simdt <- sim_did(100000, 10, cov = "int", hetero = "dynamic", balanced = FALSE, second_outcome = FALSE, seed = 1)
+dt <- simdt$dt
+
+min_time <- -Inf
+max_time <- Inf
+y_name <- c("y")
+t_name <- "time"
+unit_name <- "unit"
+cohort_name <- "G"
+balance_name <- "x"
+stratify_name <- "s"
+
+#event_panel <- copy(dt)
+event_panel <- dt
+
+profvis({
+  event_panel <- event_panel %>% create_event_data(timevar = t_name, unitvar = unit_name, 
+                                                   cohortvar = cohort_name,
+                                                   covariate_base_balance = balance_name,
+                                                   covariate_base_stratify = stratify_name,
+                                                   balanced_panel = TRUE,
+                                                   control_group = "both")
+})
+
+profvis(
+  event_est <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
+)

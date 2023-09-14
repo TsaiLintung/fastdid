@@ -20,10 +20,14 @@ source("source/test_funcs.R")
 
 # setup --------------------------------------------------------------------------
 
+
+
+# test  ---------------------------------------------------------------------
+
 p <- list()
 
 p$time_period <- 10
-p$sample_size <- 1000
+p$sample_size <- 100
 p$min_time <- -Inf
 p$max_time <- Inf
 p$y_name <- c("y")
@@ -33,8 +37,13 @@ p$cohort_name <- "G"
 p$stratify_name <- "s"
 p$balance_name <- "x"
 
-# simulation ---------------------------------------------------------------------
-
 test_create_event_data()
-test_dynamic(p)
-test_cohort_event_time(p)
+#test_get_result
+
+# test estimations
+
+p$sample_size <- 1000
+
+test_get_result_dynamic(p)
+test_get_result_cohort_event_time(p)
+test_get_result_means()

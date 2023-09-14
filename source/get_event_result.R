@@ -1,19 +1,16 @@
 
 # estimation ---------------------------------------
 
-get_event_result<-function(data,
+get_event_result<-function(eventdata,
                            variable,
                            result_type,
                            covariate = NULL,
                            clustervar="id", 
                            weights="pweight",
                            base_time = -1,
-                           trends=TRUE,
-                           mem.clean = TRUE,
-                           copy = TRUE){
-  
-  if(copy){eventdata <- copy(data)} else {eventdata <- data} #some have side effects, copy if don't want original to get modified, but use extra memory
-  
+                           trends=FALSE,
+                           mem.clean = TRUE)
+{
   
   if(is.null(covariate) & result_type == "covariates"){stop("please provide covariate when getting covariates result")}
   eventdata |> validate_eventdata(variable)
@@ -23,6 +20,8 @@ get_event_result<-function(data,
   eventdata <- eventdata |> construct_event_variable(result_type, variable, covariate, base_time)
   
   call <- get_estimate_call(result_type, variable, trends, covariate)
+  
+  as.formula(paste0("c(",paste0(variable,collapse=",") , ") ~ event_time_stratify + treated_event_time_stratify | unitfe"))
   
   results<-feols(as.formula(call),
                  data = eventdata,
@@ -39,10 +38,10 @@ construct_event_variable <- function(eventdata, result_type, variable, covariate
   
   base_event_stratify <- paste0(c(base_time,1),collapse=".")
   
-  eventdata[,unitfe := finteraction(cohort,time_pair,id)]
-
   if(result_type == "cohort_event_time"){
     
+    eventdata[,unitfe := finteraction(cohort, time_pair,treated,stratify)] #the level difference between treated and untreated units within each time_pair and stratify
+
     #cohort_event_time_stratify
     eventdata[,cohort_event_time_stratify:= finteraction(event_time_fact,cohort,stratify)]
     eventdata[event_time==base_time, cohort_event_time_stratify := base_event_stratify]
@@ -55,6 +54,8 @@ construct_event_variable <- function(eventdata, result_type, variable, covariate
     
   }else if(result_type == "dynamic"){
     
+    eventdata[,unitfe := finteraction(time_pair,treated,stratify)] #the level difference between treated and untreated units within each time_pair and stratify
+    
     #event_time_stratify
     eventdata[,event_time_stratify:= finteraction(event_time_fact,stratify)]
     eventdata[event_time==base_time, event_time_stratify := base_event_stratify]
@@ -65,15 +66,9 @@ construct_event_variable <- function(eventdata, result_type, variable, covariate
     eventdata[event_time==base_time | treated == 0 ,treated_event_time_stratify := base_event_stratify]
     eventdata[,treated_event_time_stratify:=relevel(treated_event_time_stratify,ref = base_event_stratify)]
     
-  }else if(result_type == "means"){
-    
-    #stratify
-    eventdata[, stratify:= factor(eventdata$stratify, levels = c(levels(eventdata$stratify), "empty"))]
-    
-    #subset
-    eventdata <- eventdata[treated == 1 & event_time == base_time,]
-    
   }else if(result_type == "pooled"){
+    
+    eventdata[,unitfe := finteraction(time_pair,treated,stratify)] #the level difference between treated and untreated units within each time_pair and stratify
     
     #event_time_stratify
     eventdata[,event_time_stratify:= finteraction(event_time_fact,stratify)]
@@ -90,6 +85,14 @@ construct_event_variable <- function(eventdata, result_type, variable, covariate
     eventdata[,treated_pre := qF((treated == 1) * (post == 0))]
     eventdata[,treated_pre_stratify := finteraction(treated_pre,stratify)]
     eventdata[treated_pre==0 | event_time==base_time,treated_pre_stratify := 1]
+    
+  }else if(result_type == "means"){
+    
+    #stratify
+    eventdata[, stratify:= factor(eventdata$stratify, levels = c(levels(eventdata$stratify), "empty"))]
+    
+    #subset
+    eventdata <- eventdata[treated == 1 & event_time == base_time,]
 
   }else if(result_type == "covariate"){
     

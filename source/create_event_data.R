@@ -1,80 +1,63 @@
-# eventcode
-
 #Treated households:
 create_event_data<-function(maindata,
-                            #if no covariates for balancing or stratification, just specify a constant (as follows):
-                            covariate_base_stratify=1, #vector of variable names, treatment effects are stratified by their joint unique values.
-                            covariate_base_balance=1, #vector of variable names to include in finding exact matches for treated units
-                            covariate_base_balance_linear=1, #vector of variable names to include linearly in propensity score estimator
-                            covariate_base_balance_linear_subset=1, #vector of variable names within which the linear propensity score regression will be estimated
-                            covariate_base_support=1, #vector of variable names on which to impose common support across treated and control units
-                            min_control_gap = 1, #controls must be treated at least this many years away from matched treated units
-                            max_control_gap = Inf, #controls must be treated no more than this many years away from matched treated units
-                            instrument=NA,
-                            covs_instrument_base_balance=NA, #Balance these characteristics jointly across BOTH treatment and instrument status.
-                            instrument_exposure="full",
-                            base_restrict = 1, #a single var, restricting to households for which var == 1 in base period,
-                            base_restrict_treated = 1, #a single var, restricting TREATED GUYS to households for which var == 1 in base period,
                             timevar,
                             unitvar,
                             cohortvar, #period when the particular event of interest arises
+                            control_group, #options: "both", "never", and "later"
+                            base_time = -1,
                             anycohortvar = NULL, #period when ANY kind of event arises, used to find control cohorts
-                            stratify_by_cohort=FALSE,
-                            #(for whom no event of any kind has yet to happen)
-                            #Only specify if it differs from cohortvar
-                            onset_agevar=NULL, #variable indicating age at which LTC needs arose, for person affected by them
-                            base_time = -1, #reference value for event time; the period from which differences over time are taken
-                            onset_minimum=-Inf, #Drop treated guys whose onset happens BEFORE this time period
-                            onset_maximum=Inf, #Drop treated guys whose onset happens AFTER this time period
-                            never_treat_action = "both", #options: "both", "only", and "exclude"
-                            #Both: include both never-treated and later-treated units as controls
-                            #Only: use only never-treated units as controls
-                            #Exclude: use only later-treated units as controls
+      
+                            #covaraites
+                            covariate_base_stratify=NULL, #vector of variable names, treatment effects are stratified by their joint unique values.
+                            covariate_base_balance=NULL, #vector of variable names to include in finding exact matches for treated units
+                            covariate_base_balance_linear=NULL, #vector of variable names to include linearly in propensity score estimator
+                            covariate_base_balance_linear_subset=NULL, #vector of variable names within which the linear propensity score regression will be estimated
+                            covariate_base_support=NULL, #vector of variable names on which to impose common support across treated and control units
+                            
+                            #checks and control
+                            balanced_panel = TRUE, #If TRUE, enforce the dataset into a balanced panel
                             lower_event_time = -Inf, #Earliest period (relative to treatment time) for which to estimate effects
                             upper_event_time = Inf, #Latest period (relative to treatment time) for which to estimate effects
-                            balanced_panel = FALSE, #If TRUE, keep only units observed over full interval [lower_event_time, upper_event_time]
-                            stratify_balance_val = NA, #Set to "mean" to balance each strata on covariates to look like the overall treated sample
-                            #Set to a value of "stratify" to balance all other strata to look like the given one.
-                            check_not_treated = FALSE #If TRUE, only allows controls to be used for cohort o if they are observed in the dataset to be untreated in year o.
-                            ) 
+                            min_control_gap = NULL, #controls must be treated at least this many years away from matched treated units
+                            max_control_gap = NULL, #controls must be treated no more than this many years away from matched treated units
+                            treat_criteria = NULL, #replacement of onsetagevar, provide a character col that must == TRUE for the treated
+                            base_restrict = NULL, #a single var, restricting to households for which var == 1 in base period,
+                            base_restrict_treated = NULL, #a single var, restricting TREATED GUYS to households for which var == 1 in base period,
+                            check_not_treated = FALSE, #If TRUE, only allows controls to be used for cohort o if they are observed in the dataset to be untreated in year o.                      
+                            stratify_by_cohort= FALSE,
+                            
+                            #legacy/advanced
+                            instrument=NA,
+                            covs_instrument_base_balance=NA, #Balance these characteristics jointly across BOTH treatment and instrument status.
+                            instrument_exposure="full",
+                            stratify_balance_val = NA #Set to TRUE to balance each strata on covariates to look like the overall treated sample, Set to a value of "stratify" to balance all other strata to look like the given one.
+) 
 {
 
   # name change ----------------------------------
-  
-  if(is.null(anycohortvar)) {
+
+  if(is.null(anycohortvar)){
     maindata[,anycohortvar:=get(cohortvar)]
     anycohortvar<-"anycohortvar"
   }
-  if(is.numeric(base_time)){
-    maindata[,base_time:=base_time]
-  } else {
-    setnames(maindata,base_time,"base_time")
-  }
-  if(!is.null(onset_agevar)) {
-    maindata[,onset_age_v:=get(onset_agevar)]
-  } else {
-    maindata[,onset_age_v:=Inf]
-  }
+
   setnames(maindata,c(timevar,unitvar,cohortvar,anycohortvar),c("time","id","cohort","anycohort"))
-  if(base_restrict != 1) setnames(maindata,base_restrict,"base_restrict")
-  if(base_restrict_treated != 1) setnames(maindata,base_restrict_treated,"base_restrict_treated")
+  if(!is.null(base_restrict)) setnames(maindata,base_restrict,"base_restrict")
+  if(!is.null(base_restrict_treated)) setnames(maindata,base_restrict_treated,"base_restrict_treated")
   if(any(is.na(maindata$cohort))) stop("cohort variable should not be missing (it can be infinite instead)")
   if(any(is.na(maindata$anycohort))) stop("anycohort variable should not be missing (it can be infinite instead)")
-  if(!is.character(covariate_base_balance_linear_subset)) covariate_base_balance_linear_subset <- covariate_base_balance
+  if(is.null(covariate_base_balance_linear_subset)) covariate_base_balance_linear_subset <- covariate_base_balance
   
   # validation -----------------------------------
   
-  #if(balanced_panel==TRUE & !is.na(instrument) & !instrument_exposure%in%c("full","base")) stop("If imposing a balanced panel in an IV design, set instrument_exposure to full or base.")
   if(lower_event_time > base_time) stop("lower_event_time must lie below base_time")
   if(!is.data.table(maindata)) stop("rawdata must be a data.table")
   if(!all(is.na(stratify_balance_val)) & all(covariate_base_stratify == 1)) stop("It makes no sense to specify stratify_balance_val without specifying covariate_base_stratify")
-  if(!instrument_exposure%in%c("full","partial","all","base")) stop("instrument_exposure, must be set to either full, partial, all, or base")
-
+  if(!instrument_exposure %in% c("full","partial","all","base")) stop("instrument_exposure, must be set to either full, partial, all, or base")
+  
   if(balanced_panel){
     
     #check if any is dup
-      
-    
     if(anyDuplicated(maindata[, .(id, time)])){
       dup <- duplicated(maindata[,.(id, time)])
       warning(nrow(dup_id), " units is observed more than once in some periods, enforcing balanced panel by dropping them")
@@ -96,7 +79,12 @@ create_event_data<-function(maindata,
 
   # stacking for cohort -----------------------------------------------------------------
   
-  treatdata<-copy(maindata[onset_age_v>=onset_minimum  & ! is.infinite(cohort) & !is.infinite(anycohort) ,])
+  treatdata<-copy(maindata[!is.infinite(cohort) & !is.infinite(anycohort) ,])
+  
+  if(!is.null(treat_criteria)){
+    treatdata <- treatdata[get(treat_criteria == TRUE)]
+  }
+  
   treatdata[,treated:=1]
   treatdata[,event_time:=time-cohort]
   treatdata<-treatdata[event_time >= lower_event_time & event_time <= upper_event_time,]
@@ -108,22 +96,22 @@ create_event_data<-function(maindata,
   for(o in unique(treatdata$cohort)){
     
     #find the relevant control group
-    if(never_treat_action=="both") {
+    if(control_group=="both") {
       controlcohort <- maindata[(anycohort > o | is.infinite(anycohort)) ,]
       controlcohort[is.infinite(anycohort),treatgroup:="never-treated"]
       controlcohort[!is.infinite(anycohort),treatgroup:="later-treated"]
     }
-    if(never_treat_action=="exclude"){
+    if(control_group=="later"){
       controlcohort <- maindata[(anycohort > o & !is.infinite(anycohort)) ,]
       controlcohort[,treatgroup:="later-treated"]
     }
-    if(never_treat_action=="only") {
+    if(control_group=="never") {
       controlcohort <- maindata[is.infinite(anycohort) ,]
       controlcohort[,treatgroup:="never-treated"]
     }
     
-    if (!is.infinite(max_control_gap)) controlcohort <- controlcohort[anycohort - o <=  max_control_gap,]
-    if (min_control_gap != 1)  controlcohort <- controlcohort[anycohort - o >=  min_control_gap,]
+    if (!is.null(max_control_gap)) controlcohort <- controlcohort[anycohort - o <=  max_control_gap,]
+    if (!is.null(min_control_gap))  controlcohort <- controlcohort[anycohort - o >=  min_control_gap,]
     
     controlcohort[,cohort := o]
     controlcohort[,event_time := time - cohort]
@@ -154,7 +142,6 @@ create_event_data<-function(maindata,
   
   #turn covariates to factor
   covariates <- c(covariate_base_stratify, covariate_base_balance, covariate_base_support)
-  covariates <- covariates[covariates %!=% 1]
   for(out in covariates){
     treatdata[,eval(out) := min(get(out) + 9e9 *(event_time != base_time)), by=.(id,cohort)]
     treatdata[get(out) >= 9e9,eval(out) := NA, ]
@@ -165,10 +152,14 @@ create_event_data<-function(maindata,
   }
   
   #turn covariates interaction to factors
+  if(!is.null(covariate_base_stratify)){
+    stratifyvars <- ifelse(stratify_by_cohort, c(covariate_base_stratify, "cohort"), covariate_base_stratify)
+  } else {stratifyvars <- covariate_base_stratify}
+  
   for(covariate_type in c("stratify", "balancevars", "balancevars_linear_subset", "supportvars")){
-    
+  
     cov_vars <- switch(covariate_type, 
-                       stratify = ifelse(stratify_by_cohort, c(covariate_base_stratify, "cohort"), covariate_base_stratify),
+                       stratify = stratifyvars,
                        balancevars = covariate_base_balance,
                        balancevars_linear_subset = covariate_base_balance_linear_subset,
                        supportvars = covariate_base_support)
@@ -183,16 +174,6 @@ create_event_data<-function(maindata,
   
   # checking observation -----------------------------------------------------------------
 
-  #If base_time varies across units, reassigning it to a common reference value:
-  #This is relevant, for instance, with a dataset that moves from annual to bi-annual
-  treatdata[event_time == base_time,event_time :=max(base_time)]
-  controldata[event_time == base_time,event_time :=max(base_time)]
-  
-  base_time <- max(treatdata[, max(base_time)], controldata[, max(base_time)])
-  
-  treatdata[,base_time := NULL]
-  controldata[,base_time := NULL]
-  
   #check if any unit is observed more then once in the base period
   if(!balanced_panel){
     
@@ -209,18 +190,19 @@ create_event_data<-function(maindata,
     }
   
   #check base-restrict
-  if(base_restrict != 1){
+  if(!is.null(base_restrict)){
     controldata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
     controldata <- controldata[base_restrict == 1,]
     treatdata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
     treatdata <- treatdata[base_restrict == 1,]
+  }
+  if(!is.null(base_restrict_treated)){
     treatdata[,base_restrict_treated := max(base_restrict_treated * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
     treatdata <- treatdata[base_restrict_treated == 1,]
-    controldata <- controldata[base_restrict_treated == 1]
   }
   
   #check common support
-  if(is.character(covariate_base_balance_linear)){
+  if(!is.null(covariate_base_balance_linear)){
     
     #common support checking is only needed when there is linear regression - interpolation and extrapolation
     #o.w. a propensity score within 0,1 means it has common support
@@ -241,8 +223,6 @@ create_event_data<-function(maindata,
   # stacking for event_time ----------------------------------------------------------------
 
   #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
-  # TODO: make sure the estimates is valid if there are missing value within the min max (FEOLS)
-  
   controldata[, `:=`(min_event_time = min(event_time),
                      max_event_time = max(event_time)), by = .(id, cohort)]
   treatdata[, `:=`(min_event_time = min(event_time),
@@ -282,24 +262,37 @@ create_event_data<-function(maindata,
   }
   #keep a numeric version for later comparisons
   eventdata[, event_time_fact := qF(event_time)]
+  
+  if(is.null(covariate_base_stratify)){
+    eventdata[, stratify := 1]
+  }
+  
+  if(is.null(covariate_base_balance)){
+    eventdata[, balancevars := 1]
+  }
 
   #construct the call  
-  if(!is.character(covariate_base_balance_linear)){
-    call <- "treated ~ 1 | finteraction(cohort,event_time_fact,time_pair,stratify,balancevars)"
+  if(is.null(covariate_base_balance_linear)){
+
+    call <- "treated ~ 1 | finteraction(cohort,time_pair,event_time_fact,stratify,balancevars)" 
+    
   } else {
     call <- paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
                                       sep="finteraction(cohort,event_time_fact,time_pair,stratify,balancevars_linear_subset,)"),
                    "| finteraction(cohort,event_time_fact,time_pair,stratify,balancevars)")
   }
   
-  #estimate ipw
+  #estimate propensity score
+  #in a specific cohort-time_pair estimation, propensity to get treated at event_time, given stratify and balance
   eventdata[,pval:= feols(as.formula(call), data = eventdata, lean = FALSE)$fitted.values]
 
   #only keep propensity score between 0,1 is equivalent to checking common support
   eventdata <- eventdata[pval < 1 & pval > 0]
   eventdata[,pweight := ifelse(treated == 1, 1, pval/(1-pval))]
   eventdata[,pval:=NULL]
-
+  
+  eventdata[, treated := qF(treated)] #can't do it before feols call
+  
   #  deal with extensions ----------------------------------------------
   
   if(!is.na(instrument)){
