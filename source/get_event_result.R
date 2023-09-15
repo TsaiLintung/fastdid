@@ -1,6 +1,3 @@
-
-# estimation ---------------------------------------
-
 get_event_result<-function(eventdata,
                            variable,
                            result_type,
@@ -12,9 +9,17 @@ get_event_result<-function(eventdata,
                            mem.clean = TRUE,
                            separate_stratify = TRUE)
 {
-  
+  dt_names <- names(eventdata)
+  check_arg(variable,"multi charin", .choices = dt_names)
+  check_arg(result_type,"charin", .choices = c("cohort_event_time", "dynamic", "pooled", "means", "covariate"))
+  check_arg(clustervar, weights,"charin", .choices = dt_names)
   if(is.null(covariate) & result_type == "covariates"){stop("please provide covariate when getting covariates result")}
-  eventdata |> validate_eventdata(variable)
+  if(nrow(eventdata)==0){ 
+    stop("event panel is empty")
+  }
+  if(any(eventdata[,lapply(.SD, stats::var), .SDcols = variable] == 0)){
+    stop(variable[eventdata[,lapply(.SD, stats::var), .SDcols = variable] == 0], " have no variation")
+  }
   
   eventdata <- eventdata[!is.na(get(weights))]
   
@@ -25,6 +30,7 @@ get_event_result<-function(eventdata,
   if(eventdata[, uniqueN(stratify)] > 1 & separate_stratify){
     
     dt <- data.table()
+
     for(stratify_type in eventdata[, unique(stratify)]){
       
       strat_eventdata <- eventdata[stratify == stratify_type]
@@ -32,19 +38,20 @@ get_event_result<-function(eventdata,
       strat_results<-feols(as.formula(call),
                      data = strat_eventdata,
                      weights= strat_eventdata[,get(weights)],
-                     cluster=clustervar, lean = TRUE, mem.clean = mem.clean)
+                     cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
       
       strat_dt <- parse_event_result(strat_results, variable, result_type)
       strat_dt[, stratify := stratify_type]
       dt <- rbind(dt, strat_dt)
     }
+
     
   } else {
     
     results<-feols(as.formula(call),
                    data = eventdata,
                    weights= eventdata[,get(weights)],
-                   cluster=clustervar, lean = TRUE, mem.clean = mem.clean)
+                   cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
     dt <- parse_event_result(results, variable, result_type)
     
   }
@@ -156,20 +163,16 @@ get_estimate_call <- function(result_type, variable, trends, covariate = NULL){
   
 }
 
-validate_eventdata <- function(eventdata_panel, variable){
-  if(nrow(eventdata_panel)==0){ 
-    stop("event panel is empty, returning empty data.table")
-  }
-  
-  if(any(eventdata_panel[,lapply(.SD, stats::var), .SDcols = variable] == 0)){
-    stop("some outcome have no variation, returning empty data.table")
-  }
-}
-
 get_event_time <- function(x){
   start <- str_locate(x, "stratify")[2]
   end <- str_locate(x, "\\.")[1]
   return(as.numeric(str_sub(x, start + 1, end - 1)))
+}
+
+get_stratify <- function(x){
+  start <- str_locate(x, "\\.")[1]
+  end <-str_length(x)
+  return(str_sub(x, start + 1, end - 1))
 }
 
 parse_event_result <- function(results, variable, result_type){
@@ -190,8 +193,15 @@ parse_event_result <- function(results, variable, result_type){
   }
   
   dt[,result:=result_type]
-  dt[,event_time:= lapply(variable, get_event_time)]
-  dt[,event_time := unlist(event_time)]
+  
+  if(result_type %in% c("dynamic", "cohort_event_time")){
+    dt[,event_time:= lapply(variable, get_event_time)]
+    dt[,event_time := unlist(event_time)]
+  }
+
+  dt[,stratify:= lapply(variable, get_stratify)]
+  dt[,stratify := unlist(stratify)]
+  if(all(dt[, stratify] == 1)){dt[, stratify := NULL]}
   
   return(dt)
   
