@@ -172,7 +172,7 @@ get_event_time <- function(x){
 get_stratify <- function(x){
   start <- str_locate(x, "\\.")[1]
   end <-str_length(x)
-  return(str_sub(x, start + 1, end - 1))
+  return(str_sub(x, start + 1, end))
 }
 
 parse_event_result <- function(results, variable, result_type){
@@ -201,7 +201,7 @@ parse_event_result <- function(results, variable, result_type){
 
   dt[,stratify:= lapply(variable, get_stratify)]
   dt[,stratify := unlist(stratify)]
-  if(all(dt[, stratify] == 1)){dt[, stratify := NULL]}
+  if(all(dt[, stratify == 1])){dt[, stratify := NULL]}
   
   return(dt)
   
