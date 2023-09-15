@@ -76,8 +76,21 @@ add_base_row <- function(dt, base_row){
       }
     }
   } else {
-    base_rows <- base_row
+    
+    if("stratify" %in% col_names){
+      for (strat_name in dt[, unique(stratify)]){
+        
+        base_row[, stratify := strat_name]
+        base_rows <- rbind(base_rows, base_row)
+        
+      }
+      
+    } else {
+      base_rows <- base_row
+    }
+
   }
   
   dt <- rbind(dt, base_rows)
+  return(dt)
 }

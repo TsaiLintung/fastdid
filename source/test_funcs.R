@@ -9,11 +9,18 @@ test_create_event_data <- function(){
                                        covariate_base_balance = "x",
                                        covariate_base_stratify = "s",
                                        balanced_panel = TRUE,
-                                       control_group = "both")
+                                       control_group = "both", verbose = FALSE)
   
   expect_equal(nrow(event_panel), 94,
                info = "nrow after create_event_panel")
   
+}
+
+test_plot_event_dynamics <- function(){
+  #generate estimation and att
+  dt <- generate_sim_dt(type = "dynamic")[["dt"]]
+  dynamic_est <- generate_est(dt, "dynamic")
+  expect_silent(dynamic_est |> plot_event_dynamics(), info = "no error in single outcome 2 stratify")
 }
 
 # test get result -------------------------------------
@@ -100,11 +107,10 @@ generate_est <- function(dt, type, p = list(t_name = "time", unit_name = "unit",
                                           covariate_base_balance = p$balance_name,
                                           covariate_base_stratify = p$stratify_name,
                                           balanced_panel = TRUE,
-                                          control_group = "both"))
+                                          control_group = "both", verbose = FALSE))
   
-  est <- suppressMessages(suppressWarnings(
-    get_event_result(event_panel, variable = p$y_name, trends = FALSE, mem.clean = FALSE, result_type = type)
-    ))
+  est <- get_event_result(event_panel, variable = p$y_name, trends = FALSE, mem.clean = FALSE, result_type = type)
+
   
   return(est)
   
