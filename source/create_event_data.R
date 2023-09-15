@@ -16,44 +16,70 @@ create_event_data<-function(maindata,
                             
                             #checks and control
                             balanced_panel = TRUE, #If TRUE, enforce the dataset into a balanced panel
+                            check_not_treated = FALSE, #If TRUE, only allows controls to be used for cohort o if they are observed in the dataset to be untreated in year o.                      
+                            stratify_by_cohort= FALSE,
                             lower_event_time = -Inf, #Earliest period (relative to treatment time) for which to estimate effects
                             upper_event_time = Inf, #Latest period (relative to treatment time) for which to estimate effects
                             min_control_gap = NULL, #controls must be treated at least this many years away from matched treated units
                             max_control_gap = NULL, #controls must be treated no more than this many years away from matched treated units
                             treat_criteria = NULL, #replacement of onsetagevar, provide a character col that must == TRUE for the treated
                             base_restrict = NULL, #a single var, restricting to households for which var == 1 in base period,
-                            base_restrict_treated = NULL, #a single var, restricting TREATED GUYS to households for which var == 1 in base period,
-                            check_not_treated = FALSE, #If TRUE, only allows controls to be used for cohort o if they are observed in the dataset to be untreated in year o.                      
-                            stratify_by_cohort= FALSE,
+                            base_restrict_treated = NULL, #a single var, restricting TREATED GUYS to households for which var == 1 in base period
                             
-                            #legacy/advanced
-                            instrument=NA,
-                            covs_instrument_base_balance=NA, #Balance these characteristics jointly across BOTH treatment and instrument status.
-                            instrument_exposure="full",
-                            stratify_balance_val = NA #Set to TRUE to balance each strata on covariates to look like the overall treated sample, Set to a value of "stratify" to balance all other strata to look like the given one.
+                            #function behavior
+                            verbose = TRUE,
+                            copy_dataset = TRUE
+
 ) 
 {
+  
+  # argument validation -----------------------------------
+  
+  if(!is.data.table(maindata)) stop("rawdata must be a data.table")
+  
+  dt_names <- names(maindata)
+  name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
+  check_arg(timevar, unitvar, cohortvar, "scalar charin", .choices = dt_names, .message = name_message)
+
+  covariate_message <- "__ARG__ must be NULL or a character vector which are all names of columns from the dataset."
+  check_arg(covariate_base_stratify, covariate_base_balance, covariate_base_balance, covariate_base_balance_linear, 
+            covariate_base_balance_linear_subset, covariate_base_support,
+            "NULL | multi charin", .choices = dt_names, .message = covariate_message)
+  
+  checkvar_message <- "__ARG__ must be NULL or a character scalar which are all names of columns from the dataset."
+  check_arg(anycohortvar, base_restrict, base_restrict_treated, treat_criteria,
+            "NULL | scalar charin", .choices = dt_names, .message = checkvar_message)
+
+  check_arg(control_group, "scalar charin", .choices = c("both", "never", "later"))
+  
+  check_arg(balanced_panel, check_not_treated, stratify_by_cohort, "scalar logical")
+
+  if(lower_event_time > base_time) stop("lower_event_time must lie below base_time")
+  if("anycohort" %in% dt_names) warning("column name 'anycohort' detected in input data. The input may already be changed by past function call, avoid this by calling with copy == TRUE.")
 
   # name change ----------------------------------
 
+  if(copy_dataset){
+    maindata <- copy(maindata)
+    if(verbose) message("copying the dataset to avoid changing the original input.")
+  }
+  
   if(is.null(anycohortvar)){
     maindata[,anycohortvar:=get(cohortvar)]
     anycohortvar<-"anycohortvar"
   }
-
   setnames(maindata,c(timevar,unitvar,cohortvar,anycohortvar),c("time","id","cohort","anycohort"))
   if(!is.null(base_restrict)) setnames(maindata,base_restrict,"base_restrict")
   if(!is.null(base_restrict_treated)) setnames(maindata,base_restrict_treated,"base_restrict_treated")
-  if(any(is.na(maindata$cohort))) stop("cohort variable should not be missing (it can be infinite instead)")
-  if(any(is.na(maindata$anycohort))) stop("anycohort variable should not be missing (it can be infinite instead)")
   if(is.null(covariate_base_balance_linear_subset)) covariate_base_balance_linear_subset <- covariate_base_balance
   
-  # validation -----------------------------------
+
+  # data validation -----------------------------------------------
   
-  if(lower_event_time > base_time) stop("lower_event_time must lie below base_time")
-  if(!is.data.table(maindata)) stop("rawdata must be a data.table")
-  if(!all(is.na(stratify_balance_val)) & all(covariate_base_stratify == 1)) stop("It makes no sense to specify stratify_balance_val without specifying covariate_base_stratify")
-  if(!instrument_exposure %in% c("full","partial","all","base")) stop("instrument_exposure, must be set to either full, partial, all, or base")
+  nessary_col <- c("cohort", "anycohort")
+  
+  if(any(is.na(maindata$cohort))) stop("cohort variable should not be missing (it can be infinite instead)")
+  if(any(is.na(maindata$anycohort))) stop("anycohort variable should not be missing (it can be infinite instead)")
   
   if(balanced_panel){
     
@@ -78,6 +104,7 @@ create_event_data<-function(maindata,
   }
 
   # stacking for cohort -----------------------------------------------------------------
+  if(verbose) message("stacking control and treated cohorts")
   
   treatdata<-copy(maindata[!is.infinite(cohort) & !is.infinite(anycohort) ,])
   
@@ -118,7 +145,7 @@ create_event_data<-function(maindata,
     
     #Make sure people in the control cohort are actually observed in that period
     #(to verify they don't belong to the cohort)
-    if(check_not_treated == TRUE){
+    if(check_not_treated){
     controlcohort[ ,obscohort := max(time == o),by=id]
     controlcohort<-controlcohort[obscohort==1,]
     controlcohort[,obscohort:=NULL]
@@ -137,6 +164,8 @@ create_event_data<-function(maindata,
   
   controldata[,treated:=0]
   controldata<-controldata[event_time >= lower_event_time & event_time <= upper_event_time,]
+  
+  
   
   # covariate to factor -----------------------------------------------------------
   
@@ -221,7 +250,8 @@ create_event_data<-function(maindata,
   }
   
   # stacking for event_time ----------------------------------------------------------------
-
+  if(verbose) message("stacking the dataset for each event time")
+  
   #if is balanced panel, after knowing its max and min, can be sure it is observed when in the middle
   controldata[, `:=`(min_event_time = min(event_time),
                      max_event_time = max(event_time)), by = .(id, cohort)]
@@ -244,6 +274,7 @@ create_event_data<-function(maindata,
   eventdata <- rbindlist(data_list,use.names=TRUE)
   
   # estimating ipw ----------------------------------------------------------------------------------
+  if(verbose) message("estimating inverse probability weighting")
   
   if(is.null(eventdata)) {stop("eventdata is empty!")}
 
@@ -292,24 +323,8 @@ create_event_data<-function(maindata,
   eventdata[,pval:=NULL]
   
   eventdata[, treated := qF(treated)] #can't do it before feols call
-  
-  #  deal with extensions ----------------------------------------------
-  
-  if(!is.na(instrument)){
-    eventdata <- eventdata |> process_iv(instrument, instrument_exposure, covs_instrument_base_balance, saturate)
-  }
-  
-  if(!is.na(stratify_balance_val)){
-    eventdata <- eventdata |> process_stratify(stratify_balance_val)
-  }
-  
-  eventdata[,treated:=qF(treated)]
-  
-  # construct_event_variables --------------------------------------------
-  
-  if(!is.na(instrument)){
-    eventdata <- construct_event_variables_iv(eventdata)
-  }
+
+ 
   
   return(eventdata)
 

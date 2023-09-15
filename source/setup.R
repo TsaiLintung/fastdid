@@ -8,6 +8,7 @@ require(car)
 require(kit)
 require(collapse)
 require(fastmatch)
+require(dreamerr)
 
 setDTthreads(0)
 options(kit.nThread = getDTthreads())

@@ -9,7 +9,8 @@ get_event_result<-function(eventdata,
                            weights="pweight",
                            base_time = -1,
                            trends=FALSE,
-                           mem.clean = TRUE)
+                           mem.clean = TRUE,
+                           separate_stratify = TRUE)
 {
   
   if(is.null(covariate) & result_type == "covariates"){stop("please provide covariate when getting covariates result")}
@@ -21,15 +22,35 @@ get_event_result<-function(eventdata,
   
   call <- get_estimate_call(result_type, variable, trends, covariate)
   
-  as.formula(paste0("c(",paste0(variable,collapse=",") , ") ~ event_time_stratify + treated_event_time_stratify | unitfe"))
+  if(eventdata[, uniqueN(stratify)] > 1 & separate_stratify){
+    
+    dt <- data.table()
+    for(stratify_type in eventdata[, unique(stratify)]){
+      
+      strat_eventdata <- eventdata[stratify == stratify_type]
+      
+      strat_results<-feols(as.formula(call),
+                     data = strat_eventdata,
+                     weights= strat_eventdata[,get(weights)],
+                     cluster=clustervar, lean = TRUE, mem.clean = mem.clean)
+      
+      strat_dt <- parse_event_result(strat_results, variable, result_type)
+      strat_dt[, stratify := stratify_type]
+      dt <- rbind(dt, strat_dt)
+    }
+    
+  } else {
+    
+    results<-feols(as.formula(call),
+                   data = eventdata,
+                   weights= eventdata[,get(weights)],
+                   cluster=clustervar, lean = TRUE, mem.clean = mem.clean)
+    dt <- parse_event_result(results, variable, result_type)
+    
+  }
   
-  results<-feols(as.formula(call),
-                 data = eventdata,
-                 weights= eventdata[,get(weights)],
-                 cluster=clustervar, lean = TRUE, mem.clean = mem.clean)
+  return(dt)
   
-  dt <- parse_event_result(results, variable, result_type)
-
 }
 
 # helper functions --------------------------------------------
