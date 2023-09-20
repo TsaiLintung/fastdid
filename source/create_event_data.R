@@ -29,18 +29,13 @@ create_event_data<-function(maindata,
                             
                             #function behavior
                             verbose = TRUE,
-                            copy_dataset = TRUE,
-                            parallelize = TRUE
+                            copy_dataset = TRUE
 
 ) 
 {
-  if(parallelize){
-    plan(sequential)
-  } else {
-    plan(multisession)
-  }
 
   # argument validation -----------------------------------
+  
   
   if(!is.data.table(maindata)) stop("rawdata must be a data.table")
   
@@ -101,7 +96,11 @@ create_event_data<-function(maindata,
   if(verbose) message("check data after first stack")
   factor_cols <- c("id", "cohort", "time_pair", "time")
   
-  event_list <- stacked_list |> future_lapply(function (x) check_stacked_data(x, base_time,
+  
+  
+  core <- detectCores()
+  
+  event_list <- stacked_list |> lapply(function (x) check_stacked_data(x, base_time,
                                              balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear) |> 
                                              bind_treat_control() |> 
                                              stack_for_event_time(base_time) |>  
@@ -324,7 +323,6 @@ stack_for_event_time <- function(eventdata, base_time){
     #here
     stackeddata <- rbind(pair_id_cohort, pair_id_base)
     
-    stackeddata <- stackeddata |> merge(eventdata, by = c("id", "event_time"), all.x = TRUE, all.y = FALSE, allow.cartesian = TRUE)
     if(nrow(stackeddata) == 0){warning("some data is empty after stacking.")}
     
     double_stack_list<-c(double_stack_list, list(stackeddata))
@@ -332,6 +330,7 @@ stack_for_event_time <- function(eventdata, base_time){
   }
   
   double_stack_dt <- rbindlist(double_stack_list)
+  double_stack_dt <- double_stack_dt |> merge(eventdata, by = c("id", "event_time"), all.x = TRUE, all.y = FALSE, allow.cartesian = TRUE)
   
   return(double_stack_dt)
   

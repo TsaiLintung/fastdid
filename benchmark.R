@@ -8,6 +8,8 @@ library(profvis)
 
 setwd("~/GitHub/EventStudyCode")
 
+
+
 # load event code ---------------------------------------------------------------------
 
 source("source/sim_did.R")
@@ -40,7 +42,7 @@ run_event_code <- function(sample_size, time_period){
                                           cohortvar = "G",
                                           #covariate_base_balance = "x",
                                           covariate_base_stratify = "s",
-                                          control_group = "both", copy = FALSE, verbose = FALSE, parallelize = TRUE))
+                                          control_group = "both", copy = FALSE, verbose = FALSE))
   event_est_ce <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
 }
 
@@ -55,13 +57,16 @@ run_dfbd <- function(sample_size, time_period){
   varnames$cohort_name = "G"
   varnames$id_name = "unit"
   # estimate the ATT for all cohorts at event time 1 only
-  result <- DiD(dt, varnames, min_event=1, max_event=1)
+  result <- DiD(dt, varnames)
   return(result)
 }
 
 # start benchmarks ----------------------------------------------------------------------
 
-#profvis(run_event_code(100000,10))
+profvis(run_event_code(100000,10))
+profvis(run_dfbd(100000,10))
+
+#
 
 t <- 10
 

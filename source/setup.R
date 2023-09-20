@@ -9,7 +9,7 @@ require(kit)
 require(collapse)
 require(fastmatch)
 require(dreamerr)
-require(future.apply)
+library(parallel)
 
 
 setDTthreads(0)
