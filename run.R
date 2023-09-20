@@ -18,7 +18,8 @@ source("source/plot_event_dynamics.R")
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic", balanced = FALSE, second_outcome = FALSE, seed = 1)
+simdt <- sim_did(1000, 10, cov = "int", hetero = "dynamic", balanced = TRUE, second_outcome = FALSE, seed = 1, 
+                 na = "none")
 dt <- simdt$dt
 
 min_time <- -Inf
@@ -35,7 +36,20 @@ event_panel <- dt %>% create_event_data(timevar = t_name, unitvar = unit_name,
                                         balanced_panel = TRUE,
                                         control_group = "both", copy = FALSE)
 
+cohort_pop <- dt[, .(pop = .N), by = "cohort"]
+
+event_est_ce <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "cohort_event_time")
+
+event_est_ce <- event_est_ce |> merge(cohort_pop, by = "cohort")
+
+event_est_ce_mean <- event_est_ce[, .(weighted_Estimate = sum(Estimate*pop)/sum(pop)), by = "event_time"]
+
 event_est <- get_event_result(event_panel, variable = y_name, trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
+
+est_both <- merge(event_est, event_est_ce_mean, by = "event_time")
+est_both[, est_diff := Estimate - weighted_Estimate]
+
+
 
 # full  ---------------------------------------------------------------------------------
 

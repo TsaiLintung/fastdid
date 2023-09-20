@@ -46,4 +46,5 @@ p$sample_size <- 1000
 
 test_get_result_dynamic(p)
 test_get_result_cohort_event_time(p)
+test_dynamic_cohort_event_time_consistent()
 test_get_result_means()

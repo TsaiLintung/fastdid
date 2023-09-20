@@ -96,6 +96,8 @@ construct_event_variable <- function(eventdata, result_type, variable, covariate
     
   }else if(result_type == "pooled"){
     
+    eventdata[,post:=event_time >= 0]
+    
     eventdata[,unitfe := finteraction(time_pair,treated,stratify)] #the level difference between treated and untreated units within each time_pair and stratify
     
     #event_time_stratify
@@ -169,10 +171,22 @@ get_event_time <- function(x){
   return(as.numeric(str_sub(x, start + 1, end - 1)))
 }
 
+get_cohort <- function(x){
+  
+  dot_pos <- str_locate_all(x, "\\.")
+  start <- dot_pos[[1]][1, 1]
+  end <- dot_pos[[1]][2, 1]
+  return(as.numeric(str_sub(x, start + 1, end - 1)))
+  
+}
+
 get_stratify <- function(x){
-  start <- str_locate(x, "\\.")[1]
+  
+  dot_pos <- str_locate_all(x, "\\.")
+  start <- ifelse(length(dot_pos[[1]])==0,str_locate(x, "stratify")[2], dot_pos[[1]][length(dot_pos), 1])
   end <-str_length(x)
   return(str_sub(x, start + 1, end))
+  
 }
 
 parse_event_result <- function(results, variable, result_type){
@@ -198,10 +212,15 @@ parse_event_result <- function(results, variable, result_type){
     dt[,event_time:= lapply(variable, get_event_time)]
     dt[,event_time := unlist(event_time)]
   }
+  
+  if(result_type == "cohort_event_time"){
+    dt[,cohort:= lapply(variable, get_cohort)]
+    dt[,cohort := unlist(cohort)]
+  }
 
   dt[,stratify:= lapply(variable, get_stratify)]
   dt[,stratify := unlist(stratify)]
-  if(all(dt[, stratify == 1])){dt[, stratify := NULL]}
+  if(all(dt[, stratify == 1], na.rm = TRUE)){dt[, stratify := NULL]}
   
   return(dt)
   

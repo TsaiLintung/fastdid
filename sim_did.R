@@ -1,5 +1,6 @@
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, 
-                    cov = "no", hetero = "dynamic", second_outcome = FALSE, na = "none", balanced = TRUE, seed = NA, stratify = TRUE, treatment_assign = "latent"){
+                    cov = "no", hetero = "dynamic", second_outcome = FALSE, na = "none", 
+                    balanced = TRUE, seed = NA, stratify = TRUE, treatment_assign = "latent"){
   
   if(!is.na(seed)){set.seed(seed)}
   
@@ -35,16 +36,13 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3,
       dt_i[treat_latent <= treat_thres & treat_latent > last_treat_thres, G := t]
       last_treat_thres <- treat_thres
     }
-    
+    rm(t)
   } else if (treatment_assign == "uniform"){
-    message("when treatment is uniform, untreated prop is not used")
+    message("when treatment is set to 'uniform', untreated propensity is fixed")
     dt_i[,G := floor((unit-1)/(sample_size/time_period))]
     dt_i[G < 2, G := Inf]
   }
-  
 
-  rm(t)
-  
   #assign unit FE
   dt_i[, unit_fe := rnorm(sample_size)]
   
@@ -62,22 +60,22 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3,
   dt[, D := as.integer(time >= G)]
   
   #untreated potential outcomes
-  dt[, y0 := unit_fe + time_fe + x*x_trend + rnorm(sample_size*time_period, sd = 0.1)]
+  dt[, y0 := unit_fe + time_fe + x*x_trend + rnorm(sample_size*time_period, sd = 0.001)]
   
   #generate gtatt
   att <- CJ(G = 1:time_period, time = 1:time_period)
   if(hetero == "all"){
-    att[, attgt := rnorm(time_period*time_period, mean = 2, sd = 0.5)]
+    att[, attgt := rnorm(time_period*time_period, mean = 2, sd = 1)]
   } else if (hetero == "dynamic"){
     for(event_t in 0:max(att[,time-G])){
-      att[time - G == event_t, attgt := rnorm(1, mean = 2, sd = 0.5)]
+      att[time - G == event_t, attgt := rnorm(1, mean = 2, sd = 1)]
     }
   }
   att[time < G, attgt := 0] #no anticipation
   
   dt <- dt |> merge(att, by = c("time", "G"), all.x = TRUE, all.y = FALSE)
   dt[is.na(attgt), attgt := 0]
-  dt[, tau := (attgt + rnorm(n = sample_size*time_period, sd = 0.1))*s]
+  dt[, tau := attgt*s]
   
   #potential outcome
   dt[, y1 := y0 + tau]

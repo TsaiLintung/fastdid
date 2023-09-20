@@ -88,11 +88,36 @@ test_get_result_means <- function(){
   
 }
 
+test_dynamic_cohort_event_time_consistent <- function(){
+  
+  #generate estimation and att
+  sim_dt <- generate_sim_dt(stratify = FALSE, balanced = TRUE)
+  att <- sim_dt$att
+  dt <- sim_dt$dt
+  
+  cohort_pop <- dt[, .(pop = .N), by = "G"]
+  
+  event_est_ce <- generate_est(dt, "cohort_event_time")
+  event_est_ce <- event_est_ce |> merge(cohort_pop, by.x = "cohort", by.y = "G")
+  event_est_ce_mean <- event_est_ce[, .(weighted_Estimate = sum(Estimate*pop)/sum(pop)), by = "event_time"]
+  #
+  
+  event_est <-  generate_est(dt, "dynamic")
+  
+  est_both <- merge(event_est, event_est_ce_mean, by = "event_time")
+  est_both[, est_diff := Estimate - weighted_Estimate]
+  
+  return(expect_equal(est_both[, Estimate], est_both[, weighted_Estimate], tolerance = 1e-13,
+                      info = "Dynamic estimate is equal to pop-weighted average of cohort event_time estimate."))
+  
+}
+
 # helper function --------------------
 
-generate_sim_dt <- function(p = list(sample_size = 100, time_period = 10),type = "dynamic", seed = 1){
+generate_sim_dt <- function(p = list(sample_size = 100, time_period = 10),type = "dynamic", seed = 1, stratify = TRUE, balanced = FALSE){
   hetero_type <- ifelse(type == "cohort_event_time", "all", "dynamic")
-  simdt <- sim_did(p$sample_size, p$time_period, cov = "int", hetero = hetero_type, balanced = FALSE, second_outcome = FALSE, seed = seed)
+  simdt <- sim_did(p$sample_size, p$time_period, cov = "int", hetero = hetero_type, balanced = balanced, second_outcome = FALSE, seed = seed,
+                   stratify = stratify)
   dt <- simdt$dt
   att <- simdt$att
   return(list(dt = dt, att = att))
