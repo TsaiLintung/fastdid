@@ -79,14 +79,11 @@ create_event_data<-function(maindata,
   maindata <- maindata |> validate_eventdata(covariates, balanced_panel)
   
   # main part --------------------------------------
-  
 
-  
-  
   if(verbose) message("converting covariates to factor")
   maindata <- maindata |> covariate_to_factor(base_time, 
-                                                covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear_subset,
-                                                stratify_by_cohort)
+                                              covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear_subset,
+                                              stratify_by_cohort)
   
   
   if(verbose) message("stacking control and treated cohorts")
@@ -94,38 +91,43 @@ create_event_data<-function(maindata,
                                      control_group, base_time,
                                      treat_criteria, lower_event_time, upper_event_time, 
                                      min_control_gap, max_control_gap, check_not_treated) 
-  treatdata <- stacked_cohort$treat
-  controldata <- stacked_cohort$control
+  treat_list <- stacked_cohort$treat
+  control_list <- stacked_cohort$control
   rm(stacked_cohort) 
 
   
   if(verbose) message("check data after first stack")
-  check_stacked_data(treatdata, controldata, base_time,
-                     balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear)
+  future_mapply(function(X,Y) {
+    check_stacked_data(X, Y, base_time,
+                       balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear)
+  }, X=treat_list, Y=control_list)
   
-
-
   if(verbose) message("stacking the dataset for each event time")
-  eventdata <- rbind(controldata, treatdata)
-  eventdata <- stack_for_event_time(eventdata, base_time)
-  rm(treatdata)
-  rm(controldata)
+  event_list <- future_mapply(function(X,Y) list(rbind(X, Y)), X=treat_list, Y=control_list)
+  rm(treat_list)
+  rm(control_list)
+  
+  event_list <- event_list |> future_lapply(function (x) stack_for_event_time(x, base_time))
+  event_list <- unlist(event_list, recursive = FALSE)
+
+
   gc()
+ 
+  event_list <- event_list |> future_lapply(function (x){
+    factor_cols <- c("id", "cohort", "time_pair", "time")
+    #turn the cols into factors
+    for(col in factor_cols){
+      x[, (col) := qF(get(col))]
+    }
+    #keep a numeric version for later comparisons
+    x[, event_time_fact := qF(event_time)]
+  })
 
-
-  #turn the cols into factors
-  factor_cols <- c("id", "cohort", "time_pair", "time")
-  for(col in factor_cols){
-    eventdata[, (col) := qF(get(col))]
-  }
-  #keep a numeric version for later comparisons
-  eventdata[, event_time_fact := qF(event_time)]
 
   if(verbose) message("estimating inverse probability weighting")
-  eventdata <- eventdata |> estimate_ipw(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear)
-
+  event_list <- event_list |> future_lapply(function (x) estimate_ipw(x, covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear))
+  eventdata <- rbindlist(event_list)
   eventdata[, treated := qF(treated)] #can't do it before feols call
-
 
   return(eventdata)
 
@@ -190,12 +192,10 @@ covariate_to_factor <- function(dt, base_time,
                        supportvars = covariate_base_support)
     if(!is.null(cov_vars)){
       dt[,(covariate_type) :=  do.call(finteraction, dt[, cov_vars, with = FALSE])]
-      dt[, cov_vars := NULL, with = FALSE]
     } else {
       dt[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
     }
   }
-  
   return(dt)
   
 }
@@ -205,21 +205,23 @@ stack_for_cohort <- function(maindata,
                              treat_criteria, lower_event_time, upper_event_time, 
                              min_control_gap, max_control_gap, check_not_treated){
   
-  treatdata<-maindata[!is.infinite(cohort) & !is.infinite(anycohort) & 
-                        cohort >= min(time) + 1,] #cohort treated on the first period is not useful
-  
-  if(!is.null(treat_criteria)){
-    treatdata <- treatdata[get(treat_criteria == TRUE)]
-  }
-  
-  treatdata[,treated:=1]
-  treatdata[,event_time:=time-cohort]
-  treatdata<-treatdata[event_time >= lower_event_time & event_time <= upper_event_time,]
-  
   #stacking control cohorts.
-  #I assume people who never suffer the event have a value cohort = Inf
+  treat_list <- list()
   control_list <- list()
-  for(o in unique(treatdata$cohort)){
+  cohorts <- maindata[, unique(cohort)]
+  cohorts <- cohorts[cohorts != maindata[, min(time)] & !is.infinite(cohorts)] #the min cohort won't have valid base_time control
+  for(o in cohorts){
+    
+    treatcohort<-maindata[cohort == o,] #cohort treated on the first period is not useful
+    
+    if(!is.null(treat_criteria)){
+      treatcohort <- treatcohort[get(treat_criteria == TRUE)]
+    }
+    
+    treatcohort[,treated:=1]
+    treatcohort[,event_time:=time-cohort]
+    treatcohort<-treatcohort[event_time >= lower_event_time & event_time <= upper_event_time,]
+    
     
     #find the relevant control group
     if(control_group=="both") {
@@ -244,28 +246,28 @@ stack_for_cohort <- function(maindata,
     controlcohort <- controlcohort[useful_control == TRUE]
     controlcohort[, useful_control := NULL]
     
+    controlcohort[, treated := 0]
+
+    treat_list <- c(treat_list, list(treatcohort))
     control_list <- c(control_list, list(controlcohort))
     
   }
   
-  controldata<-rbindlist(control_list)
-  
-  
-  gc()
-  
-  controldata[, treated := 0]
-  controldata<-controldata[event_time >= lower_event_time & event_time <= upper_event_time & 
-                           anycohort - cohort > event_time]
+  control_list <- control_list |> lapply(function(x) x[event_time >= lower_event_time & event_time <= upper_event_time & 
+                                                       anycohort - cohort > event_time])
+
   
   #Make sure people in the control cohort are actually observed in that period
   #(to verify they don't belong to the cohort)
   if(check_not_treated){
-    controldata[ ,obscohort := any(time == cohort),by=id]
-    controldata<-controlcohort[obscohort==1,]
-    controldata[,obscohort:=NULL]
+    control_list <- control_list |> lapply(function(x) {
+      x[ ,obscohort := any(time == cohort),by=id]
+      x<-x[obscohort==1,]
+      x[,obscohort:=NULL]
+    })
   }
   
-  return(list(treat = treatdata, control = controldata))
+  return(list(treat = treat_list, control = control_list))
   
 } 
 
@@ -321,12 +323,11 @@ check_stacked_data<- function(treatdata, controldata, base_time,
 }
 
 stack_for_event_time <- function(eventdata, base_time){
-  
   id_cohort_obs_span <- eventdata[,.(max_event_time = max(event_time),
-                                     min_event_time = min(event_time)) , by = c("id", "cohort")]
+                                     min_event_time = min(event_time)) , by = "id"]
    
   event_times<-eventdata[treated==1,funique(event_time)]
-  data_list <- list()
+  double_stack_list <- list()
   for(t in event_times){
     
     if(t == -1){next}
@@ -334,29 +335,22 @@ stack_for_event_time <- function(eventdata, base_time){
     pair_id_cohort <- id_cohort_obs_span[t <= max_event_time & t >= min_event_time]
     pair_id_cohort[,time_pair := t]
 
-    data_list<-c(data_list, list(pair_id_cohort))
+    pair_id_cohort[, event_time := time_pair]
+    
+    pair_id_base <- copy(pair_id_cohort)
+    pair_id_base[, event_time := -1]
+    
+    #here
+    stackeddata <- rbind(pair_id_cohort, pair_id_base)
+    
+    stackeddata <- stackeddata |> merge(eventdata, by = c("id", "event_time"), all.x = TRUE, all.y = FALSE, allow.cartesian = TRUE)
+    if(nrow(stackeddata) == 0){warning("some data is empty after stacking.")}
+    
+    double_stack_list<-c(double_stack_list, list(stackeddata))
     
   }
-  paired_id_cohort <- rbindlist(data_list,use.names=TRUE)
-  
-  paired_id_cohort[, max_event_time := NULL]
-  paired_id_cohort[, min_event_time := NULL]
-  
-  paired_id_cohort[, event_time := time_pair]
-  
-  paired_id_base <- copy(paired_id_cohort)
-  paired_id_base[, event_time := -1]
 
-  #here
-  stackeddata <- rbind(paired_id_cohort, paired_id_base)
-  
-  stackeddata <- stackeddata |> merge(eventdata, by = c("id", "cohort", "event_time"), all.x = TRUE, all.y = FALSE, allow.cartesian = TRUE)
-  
-  stackeddata[,c("anycohort"):=NULL]
-  
-  if(nrow(stackeddata) == 0){stop("data is empty after stacking.")}
-  
-  return(stackeddata)
+  return(double_stack_list)
   
 }
 
@@ -380,7 +374,7 @@ estimate_ipw<- function(eventdata, covariate_base_stratify, covariate_base_balan
     
   } else {
     call <- paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
-                                      sep="finteraction(cohort,event_time_fact,time_pair,stratify,balancevars_linear_subset,)"),
+                                      sep="finteraction(cohort,time_pair,event_time_fact,stratify,balancevars_linear_subset,)"),
                    "| finteraction(cohort,event_time_fact,time_pair,stratify,balancevars)")
   }
   
