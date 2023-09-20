@@ -104,7 +104,6 @@ create_event_data<-function(maindata,
                                              estimate_ipw(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear))
   
   eventdata <- rbindlist(event_list)
-  eventdata[, treated := qF(treated)] #can't do it before feols call
 
   return(eventdata)
 
@@ -299,22 +298,23 @@ check_stacked_data<- function(dt_list, base_time,
 }
 
 stack_for_event_time <- function(eventdata, base_time){
-  id_cohort_obs_span <- eventdata[,.(max_event_time = max(event_time),
-                                     min_event_time = min(event_time)) , by = "id"]
+  
+  setkey(eventdata, event_time)
+  
+  eventdata[,`:=`(max_event_time = max(event_time),
+                  min_event_time = min(event_time)) , by = "id"]
    
   event_times<-eventdata[treated==1,funique(event_time)]
+  
   double_stack_list <- list()
   for(t in event_times){
     
     if(t == -1){next}
     
-    pair_id_cohort <- id_cohort_obs_span[t <= max_event_time & t >= min_event_time]
-    pair_id_cohort[,time_pair := t]
+    event_time_data <- eventdata[t <= max_event_time & t >= min_event_time & (event_time == -1 | event_time == t)] #already made sure every unit have -1 in it
+    event_time_data[,time_pair := t]
     
-    pair_id_base <- merge(pair_id_cohort, eventdata[event_time == -1], by = "id")
-    pair_id_cohort  <- merge(pair_id_cohort, eventdata[event_time == t], by = "id")
-    
-    double_stack_list<-c(double_stack_list, list(pair_id_cohort), list(pair_id_base))
+    double_stack_list<-c(double_stack_list, list(event_time_data))
     
   }
   
@@ -352,7 +352,7 @@ estimate_ipw<- function(eventdata, covariate_base_stratify, covariate_base_balan
   } else {
     call <- paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
                                       sep="finteraction(cohort,time_pair,event_time_fact,stratify,balancevars_linear_subset,)"),
-                   "| finteraction(cohort,event_time_fact,time_pair,stratify,balancevars)")
+                   "| finteraction(cohort,event_time_fact,stratify,balancevars)")
   }
   
   #estimate propensity score
@@ -363,7 +363,9 @@ estimate_ipw<- function(eventdata, covariate_base_stratify, covariate_base_balan
   eventdata <- eventdata[pval < 1 & pval > 0]
   eventdata[,pweight := ifelse(treated == 1, 1, pval/(1-pval))]
   eventdata[,pval:=NULL]
-
+  
+  eventdata[, treated := qF(treated)]#can't do it before feols call
+  
   return(eventdata)
   
 }
