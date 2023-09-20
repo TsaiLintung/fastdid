@@ -11,7 +11,7 @@ require(fastmatch)
 require(dreamerr)
 require(future.apply)
 
-plan(multisession)
+
 setDTthreads(0)
 options(kit.nThread = getDTthreads())
 setFixest_nthreads(getDTthreads())

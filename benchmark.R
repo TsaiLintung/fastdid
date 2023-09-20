@@ -40,33 +40,11 @@ run_event_code <- function(sample_size, time_period){
                                           cohortvar = "G",
                                           #covariate_base_balance = "x",
                                           covariate_base_stratify = "s",
-                                          control_group = "both", copy = FALSE, verbose = FALSE))
+                                          control_group = "both", copy = FALSE, verbose = FALSE, parallelize = TRUE))
   event_est_ce <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
 }
 
-run_did <-  function(sample_size, time_period){
-  dt <- get_dt(sample_size, time_period)
-  did_est <- suppressWarnings(att_gt(yname = "y",
-                    tname = "time",
-                    idname = "unit",
-                    gname = "G",
-                    #xformla = ~x,
-                    data = dt,
-                    bstrap = FALSE))
-}
 
-
-run_old_event_code <-  function(sample_size, time_period){
-  dt <- get_dt(sample_size, time_period)
-  event_panel <- suppressWarnings(create_event_data_old(dt, timevar = "time", unitvar =  "unit", 
-                                                    cohortvar = "G",
-                                                    #covariate_base_balance = "x",
-                                                    covariate_base_stratify = "s",
-                                                    balanced_panel = FALSE,
-                                                    never_treat_action = "both"))
-  event_panel <- construct_event_variables(event_panel)
-  event_es <- get_result_dynamic(event_panel, variable = "y", trends = FALSE)
-}
 
 run_dfbd <- function(sample_size, time_period){
   dt <- get_dt(sample_size, time_period)
@@ -107,7 +85,31 @@ for(order in seq(2,5)){
 all_bm |> ggplot(aes(x = order, y = time_mean, color = expr)) + geom_point() + geom_line()
 
 
+# not used
 
+run_did <-  function(sample_size, time_period){
+  dt <- get_dt(sample_size, time_period)
+  did_est <- suppressWarnings(att_gt(yname = "y",
+                                     tname = "time",
+                                     idname = "unit",
+                                     gname = "G",
+                                     #xformla = ~x,
+                                     data = dt,
+                                     bstrap = FALSE))
+}
+
+
+run_old_event_code <-  function(sample_size, time_period){
+  dt <- get_dt(sample_size, time_period)
+  event_panel <- suppressWarnings(create_event_data_old(dt, timevar = "time", unitvar =  "unit", 
+                                                        cohortvar = "G",
+                                                        #covariate_base_balance = "x",
+                                                        covariate_base_stratify = "s",
+                                                        balanced_panel = FALSE,
+                                                        never_treat_action = "both"))
+  event_panel <- construct_event_variables(event_panel)
+  event_es <- get_result_dynamic(event_panel, variable = "y", trends = FALSE)
+}
 
 
 
