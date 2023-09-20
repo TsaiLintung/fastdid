@@ -10,7 +10,7 @@ setwd("~/GitHub/EventStudyCode")
 
 # load event code ---------------------------------------------------------------------
 
-source("sim_did.R")
+source("source/sim_did.R")
 
 source("source/setup.R")
 source("source/create_event_data.R")
@@ -38,7 +38,7 @@ p$stratify_name <- "s"
 p$balance_name <- "x"
 
 test_create_event_data()
-#test_get_result
+test_plot_event_dynamics()
 
 # test estimations
 

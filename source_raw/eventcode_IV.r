@@ -9,7 +9,7 @@ library(rlist)
 library(car)
 
 #Treated households:
-create_event_data<-function(maindata,
+create_event_data_old<-function(maindata,
                             #if no covariates for balancing or stratification, just specify a constant (as follows):
                             covariate_base_stratify=1, #vector of variable names, treatment effects are stratified by their joint unique values.
                             covariate_base_balance=1, #vector of variable names to include in finding exact matches for treated units

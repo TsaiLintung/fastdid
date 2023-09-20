@@ -1,5 +1,5 @@
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, 
-                    cov = "no", hetero = "dynamic", second_outcome = FALSE, na = "none", 
+                    cov = "no", hetero = "all", second_outcome = FALSE, na = "none", 
                     balanced = TRUE, seed = NA, stratify = TRUE, treatment_assign = "latent"){
   
   if(!is.na(seed)){set.seed(seed)}

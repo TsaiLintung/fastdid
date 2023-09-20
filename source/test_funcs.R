@@ -18,7 +18,7 @@ test_create_event_data <- function(){
 
 test_plot_event_dynamics <- function(){
   #generate estimation and att
-  dt <- generate_sim_dt(type = "dynamic")[["dt"]]
+  dt <- generate_sim_dt()[["dt"]]
   dynamic_est <- generate_est(dt, "dynamic")
   expect_silent(dynamic_est |> plot_event_dynamics(), info = "no error in single outcome 2 stratify")
 }
@@ -112,6 +112,8 @@ test_dynamic_cohort_event_time_consistent <- function(){
   
 }
 
+
+
 # helper function --------------------
 
 generate_sim_dt <- function(p = list(sample_size = 100, time_period = 10),type = "dynamic", seed = 1, stratify = TRUE, balanced = FALSE){
@@ -136,7 +138,6 @@ generate_est <- function(dt, type, p = list(t_name = "time", unit_name = "unit",
   
   est <- get_event_result(event_panel, variable = p$y_name, trends = FALSE, mem.clean = FALSE, result_type = type)
 
-  
   return(est)
   
 }

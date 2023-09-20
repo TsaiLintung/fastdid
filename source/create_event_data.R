@@ -101,23 +101,22 @@ create_event_data<-function(maindata,
 
   
   if(verbose) message("stacking control and treated cohorts")
-  
   stacked_cohort <- stack_for_cohort(maindata, 
                                      control_group, treat_criteria, lower_event_time, upper_event_time, 
                                      min_control_gap, max_control_gap, check_not_treated) 
   treatdata <- stacked_cohort$treat
   controldata <- stacked_cohort$control
   rm(stacked_cohort) 
-
   
-  treatdata |> covariate_to_factor(base_time, 
+  if(verbose) message("converting covariates to factor")
+  treatdata <- treatdata |> covariate_to_factor(base_time, 
                                    covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear_subset,
                                    stratify_by_cohort)
-  controldata |> covariate_to_factor(base_time,
+  controldata <- controldata |> covariate_to_factor(base_time,
                                      covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear_subset,
                                      stratify_by_cohort)
   
-  
+  if(verbose) message("check data after first stack")
   check_stacked_data(treatdata, controldata, base_time,
                      balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear)
   
@@ -138,16 +137,19 @@ create_event_data<-function(maindata,
   #keep a numeric version for later comparisons
   eventdata[, event_time_fact := qF(event_time)]
   
-  
   if(verbose) message("estimating inverse probability weighting")
   eventdata <- eventdata |> estimate_ipw(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear)
 
+  
+  
   eventdata[, treated := qF(treated)] #can't do it before feols call
 
 
   return(eventdata)
 
 }
+
+# Functions for important steps --------------------------------------------------------------
 
 stack_for_cohort <- function(maindata, 
                              control_group, treat_criteria, lower_event_time, upper_event_time, 
@@ -289,12 +291,14 @@ covariate_to_factor <- function(dt, base_time,
                        balancevars = covariate_base_balance,
                        balancevars_linear_subset = covariate_base_balance_linear_subset,
                        supportvars = covariate_base_support)
-    if(is.character(cov_vars)){
+    if(!is.null(cov_vars)){
       dt[,(covariate_type) :=  do.call(finteraction, dt[, cov_vars, with = FALSE])]
     } else {
       dt[,(covariate_type) := factor(1,levels=c(1,"OMIT"))]
     }
   }
+  
+  return(dt)
   
 }
 

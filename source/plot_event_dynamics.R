@@ -1,4 +1,4 @@
-plot_event_dynamics <-function(raw_dt, graphname = "event study plot", note = "", base_time = -1, significance_level = 0.05, stratify_offset =0.4){
+plot_event_dynamics <-function(raw_dt, graphname = "event study plot", note = "", base_time = -1, significance_level = 0.05, stratify_offset =0.1){
   
   dt <- copy(raw_dt)
   
@@ -16,7 +16,7 @@ plot_event_dynamics <-function(raw_dt, graphname = "event study plot", note = ""
   
   #add some offset
   if("stratify" %in% names(dt)){
-    dt[, event_time := event_time + stratify_offset*(as.integer(stratify)-1)/dt[, uniqueN(stratify)]]
+    dt[, event_time := event_time + stratify_offset*(as.integer(stratify)-1)]
   }
   
   figure <- dt %>%
