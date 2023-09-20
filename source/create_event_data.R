@@ -95,11 +95,7 @@ create_event_data<-function(maindata,
 
   if(verbose) message("check data after first stack")
   factor_cols <- c("id", "cohort", "time_pair", "time")
-  
-  
-  
-  core <- detectCores()
-  
+
   event_list <- stacked_list |> lapply(function (x) check_stacked_data(x, base_time,
                                              balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear) |> 
                                              bind_treat_control() |> 
@@ -129,7 +125,7 @@ validate_eventdata <- function(maindata, covariates, balanced_panel){
     if(anyDuplicated(maindata[, .(id, time)])){
       dup <- duplicated(maindata[,.(id, time)])
       warning(nrow(dup_id), " units is observed more than once in some periods, enforcing balanced panel by dropping them")
-      maindata <- maindata[!id %fin% dup]
+      maindata <- maindata[!id %in% dup]
     }
     
     #check if any is missing
@@ -138,7 +134,7 @@ validate_eventdata <- function(maindata, covariates, balanced_panel){
     if(any(id_count[, count < time_period])){
       mis_id <- id_count[count < time_period]
       warning(nrow(mis_id), " units is missing in some periods, enforcing balanced panel by dropping them")
-      maindata <- maindata[!id %fin% mis_id$id]
+      maindata <- maindata[!id %in% mis_id$id]
     }
     
   }
@@ -314,24 +310,16 @@ stack_for_event_time <- function(eventdata, base_time){
     
     pair_id_cohort <- id_cohort_obs_span[t <= max_event_time & t >= min_event_time]
     pair_id_cohort[,time_pair := t]
-
-    pair_id_cohort[, event_time := time_pair]
     
-    pair_id_base <- copy(pair_id_cohort)
-    pair_id_base[, event_time := -1]
+    pair_id_base <- merge(pair_id_cohort, eventdata[event_time == -1], by = "id")
+    pair_id_cohort  <- merge(pair_id_cohort, eventdata[event_time == t], by = "id")
     
-    #here
-    stackeddata <- rbind(pair_id_cohort, pair_id_base)
-    
-    if(nrow(stackeddata) == 0){warning("some data is empty after stacking.")}
-    
-    double_stack_list<-c(double_stack_list, list(stackeddata))
+    double_stack_list<-c(double_stack_list, list(pair_id_cohort), list(pair_id_base))
     
   }
   
   double_stack_dt <- rbindlist(double_stack_list)
-  double_stack_dt <- double_stack_dt |> merge(eventdata, by = c("id", "event_time"), all.x = TRUE, all.y = FALSE, allow.cartesian = TRUE)
-  
+
   return(double_stack_dt)
   
 }

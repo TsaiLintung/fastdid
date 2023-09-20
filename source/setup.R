@@ -1,15 +1,10 @@
 require(data.table)
-require(tidyverse)
+require(stringr)
 require(fixest)
-require(Hmisc)
-require(lfe)
 require(rlist)
-require(car)
 require(kit)
 require(collapse)
-require(fastmatch)
 require(dreamerr)
-library(parallel)
 
 
 setDTthreads(0)

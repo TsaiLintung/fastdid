@@ -5,6 +5,7 @@ gc()
 library(peakRAM)
 library(microbenchmark)
 library(profvis)
+library(ggplot2)
 
 setwd("~/GitHub/EventStudyCode")
 
