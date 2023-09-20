@@ -8,10 +8,9 @@ test_create_event_data <- function(){
                                        cohortvar = "G",
                                        covariate_base_balance = "x",
                                        covariate_base_stratify = "s",
-                                       balanced_panel = TRUE,
                                        control_group = "both", verbose = FALSE)
   
-  expect_equal(nrow(event_panel), 94,
+  expect_equal(nrow(event_panel), 82,
                info = "nrow after create_event_panel")
   
 }
@@ -100,7 +99,6 @@ test_dynamic_cohort_event_time_consistent <- function(){
   event_est_ce <- generate_est(dt, "cohort_event_time")
   event_est_ce <- event_est_ce |> merge(cohort_pop, by.x = "cohort", by.y = "G")
   event_est_ce_mean <- event_est_ce[, .(weighted_Estimate = sum(Estimate*pop)/sum(pop)), by = "event_time"]
-  #
   
   event_est <-  generate_est(dt, "dynamic")
   
@@ -133,7 +131,6 @@ generate_est <- function(dt, type, p = list(t_name = "time", unit_name = "unit",
                                           cohortvar = p$cohort_name,
                                           covariate_base_balance = p$balance_name,
                                           covariate_base_stratify = p$stratify_name,
-                                          balanced_panel = TRUE,
                                           control_group = "both", verbose = FALSE))
   
   est <- get_event_result(event_panel, variable = p$y_name, trends = FALSE, mem.clean = FALSE, result_type = type)

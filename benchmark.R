@@ -4,6 +4,7 @@ gc()
 
 library(peakRAM)
 library(microbenchmark)
+library(profvis)
 
 setwd("~/GitHub/EventStudyCode")
 
@@ -26,10 +27,9 @@ library(DiDforBigData)
 # ------------------------------------------------------------------------------------ 
 
 get_dt <- function(sample_size, time_period){
-  simdt <- sim_did(sample_size, time_period, cov = "int", hetero = "all", balanced = FALSE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+  simdt <- sim_did(sample_size, time_period, cov = "no", hetero = "all", balanced = FALSE, second_outcome = FALSE, seed = 1, stratify = FALSE)
   dt <- simdt$dt
   return(dt)
-  
 }
 
 # functions for individual package call ---------------------------------------------
@@ -38,9 +38,8 @@ run_event_code <- function(sample_size, time_period){
   dt <- get_dt(sample_size, time_period)
   event_panel <- suppressWarnings(create_event_data(dt, timevar = "time", unitvar =  "unit", 
                                           cohortvar = "G",
-                                          covariate_base_balance = "x",
+                                          #covariate_base_balance = "x",
                                           covariate_base_stratify = "s",
-                                          balanced_panel = TRUE,
                                           control_group = "both", copy = FALSE, verbose = FALSE))
   event_est_ce <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
 }
@@ -51,7 +50,7 @@ run_did <-  function(sample_size, time_period){
                     tname = "time",
                     idname = "unit",
                     gname = "G",
-                    xformla = ~x,
+                    #xformla = ~x,
                     data = dt,
                     bstrap = FALSE))
 }
@@ -61,7 +60,7 @@ run_old_event_code <-  function(sample_size, time_period){
   dt <- get_dt(sample_size, time_period)
   event_panel <- suppressWarnings(create_event_data_old(dt, timevar = "time", unitvar =  "unit", 
                                                     cohortvar = "G",
-                                                    covariate_base_balance = "x",
+                                                    #covariate_base_balance = "x",
                                                     covariate_base_stratify = "s",
                                                     balanced_panel = FALSE,
                                                     never_treat_action = "both"))
@@ -79,25 +78,28 @@ run_dfbd <- function(sample_size, time_period){
   varnames$id_name = "unit"
   # estimate the ATT for all cohorts at event time 1 only
   result <- DiD(dt, varnames, min_event=1, max_event=1)
+  return(result)
 }
 
 # start benchmarks ----------------------------------------------------------------------
 
+#profvis(run_event_code(100000,10))
+
 t <- 10
 
 all_bm <- data.table()
-for(order in seq(2,4)){
+for(order in seq(2,5)){
   s = 10^order
   bm_time <- microbenchmark(
     run_event_code(s,t),
-    run_did(s,t),
-    run_old_event_code(s,t),
+    #run_did(s,t),
+    #run_old_event_code(s,t),
     run_dfbd(s,t),
-    times = 3, setup = gc)
+    times = 3, setup = gc())
   
   bm_time <- bm_time |> as.data.table()
-  bm_time <- bm_time[, .(time_mean = mean(time),
-                         time_sd = sd(time)), by = "expr"]
+  bm_time <- bm_time[, .(time_mean = mean(time)/10^9,
+                         time_sd = sd(time)/10^9), by = "expr"]
   bm_time[, order := order]
   all_bm <- rbind(all_bm, bm_time)
 }

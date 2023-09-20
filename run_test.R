@@ -15,7 +15,7 @@ source("source/sim_did.R")
 source("source/setup.R")
 source("source/create_event_data.R")
 source("source/get_event_result.R")
-
+source("source/plot_event_dynamics.R")
 source("source/test_funcs.R")
 
 # setup --------------------------------------------------------------------------

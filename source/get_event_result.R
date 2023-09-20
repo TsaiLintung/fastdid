@@ -30,7 +30,7 @@ get_event_result<-function(eventdata,
   if(eventdata[, uniqueN(stratify)] > 1 & separate_stratify){
     
     dt <- data.table()
-
+    
     for(stratify_type in eventdata[, unique(stratify)]){
       
       strat_eventdata <- eventdata[stratify == stratify_type]
@@ -38,9 +38,10 @@ get_event_result<-function(eventdata,
       strat_results<-feols(as.formula(call),
                      data = strat_eventdata,
                      weights= strat_eventdata[,get(weights)],
+                     split = ~splitvar,
                      cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
       
-      strat_dt <- parse_event_result(strat_results, variable, result_type)
+      strat_dt <- parse_event_result(strat_results, result_type)
       strat_dt[, stratify := stratify_type]
       dt <- rbind(dt, strat_dt)
     }
@@ -51,9 +52,9 @@ get_event_result<-function(eventdata,
     results<-feols(as.formula(call),
                    data = eventdata,
                    weights= eventdata[,get(weights)],
+                   split = ~splitvar,
                    cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
-    dt <- parse_event_result(results, variable, result_type)
-    
+    dt <- parse_event_result(results, result_type)
   }
   
   return(dt)
@@ -66,10 +67,14 @@ construct_event_variable <- function(eventdata, result_type, variable, covariate
   
   base_event_stratify <- paste0(c(base_time,1),collapse=".")
   
+  eventdata[, splitvar := 1]
+  
   if(result_type == "cohort_event_time"){
     
     eventdata[,unitfe := finteraction(cohort, time_pair,treated,stratify)] #the level difference between treated and untreated units within each time_pair and stratify
-
+    eventdata[, splitvar := finteraction(cohort, time_pair)]
+    
+    
     #cohort_event_time_stratify
     eventdata[,cohort_event_time_stratify:= finteraction(event_time_fact,cohort,stratify)]
     eventdata[event_time==base_time, cohort_event_time_stratify := base_event_stratify]
@@ -83,6 +88,7 @@ construct_event_variable <- function(eventdata, result_type, variable, covariate
   }else if(result_type == "dynamic"){
     
     eventdata[,unitfe := finteraction(time_pair,treated,stratify)] #the level difference between treated and untreated units within each time_pair and stratify
+    eventdata[,splitvar := time_pair]
     
     #event_time_stratify
     eventdata[,event_time_stratify:= finteraction(event_time_fact,stratify)]
@@ -189,23 +195,15 @@ get_stratify <- function(x){
   
 }
 
-parse_event_result <- function(results, variable, result_type){
+parse_event_result <- function(results, result_type){
 
-  if(length(variable) == 1){
-    
-    dt<-data.table(variable = row.names(results$coeftable),results$coeftable,obs=results$nobs)
-    
-  } else {
-    
-    dt <- data.table()
-    for(i in 1:length(variable)){
-      
-      result <- results[[i]]
-      dt <- rbind(dt, data.table(variable = row.names(result$coeftable),result$coeftable,obs=result$nobs,outcome = variable[i]))
-    }  
-    
+  dt <- data.table()
+  for(j in seq(1, length(results))){
+    est <- results[[j]]$coeftable
+    dt_row <- data.table(variable = rownames(est), est, obs = results[[j]]$nobs, outcome = deparse(results[[j]]$fml[[2]]))
+    dt <- rbind(dt, dt_row)
   }
-  
+
   dt[,result:=result_type]
   
   if(result_type %in% c("dynamic", "cohort_event_time")){

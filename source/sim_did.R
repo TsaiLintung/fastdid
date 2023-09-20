@@ -38,7 +38,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3,
     }
     rm(t)
   } else if (treatment_assign == "uniform"){
-    message("when treatment is set to 'uniform', untreated propensity is fixed")
+    #when treatment is set to 'uniform', untreated propensity is fixed
     dt_i[,G := floor((unit-1)/(sample_size/time_period))]
     dt_i[G < 2, G := Inf]
   }
