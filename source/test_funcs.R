@@ -52,6 +52,17 @@ test_plot_event_dynamics <- function(){
   expect_silent(dynamic_est |> plot_event_dynamics(), info = "no error in single outcome 2 stratify")
 }
 
+test_no_combine <- function(){
+  dt <- generate_sim_dt()[["dt"]]
+  event_panel <- suppressWarnings(create_event_data(dt, timevar = "time", unitvar =  "unit", 
+                                               cohortvar = "G",
+                                               balanced_panel = TRUE,
+                                               control_group = "both", copy = FALSE, combine = FALSE, verbose = FALSE))
+  expect_silent(event_est <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, 
+                                              result_type = "cohort_event_time"),
+                info = "not combining works.")
+}
+
 # test get result -------------------------------------
 
 test_dynamic_est <- function(p){

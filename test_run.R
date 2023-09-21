@@ -18,22 +18,19 @@ source("source/plot_event_dynamics.R")
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1000, 10, cov = "no", hetero = "all", balanced = FALSE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(100000, 10, cov = "no", hetero = "all", balanced = FALSE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
-#profvis({
-  event_panel <- dt %>% create_event_data(timevar = "time", unitvar =  "unit", 
-                                          cohortvar = "G",
-                                          #covariate_base_balance = "x",
-                                          #covariate_base_stratify = "s",
-                                          balanced_panel = TRUE,
-                                          control_group = "both", copy = FALSE)
+profvis({
+event_panel_list <- dt %>% create_event_data(timevar = "time", unitvar =  "unit", 
+                                        cohortvar = "G",
+                                        #covariate_base_balance = "x",
+                                        #covariate_base_stratify = "s",
+                                        balanced_panel = TRUE,
+                                        control_group = "both", copy = FALSE, combine = FALSE)
 #}) 
-
-#profvis({ 
-  event_est <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
-#})
-
+event_est <- get_event_result(event_panel_list, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "cohort_event_time")
+})
 
 event_est |> plot_event_dynamics()
 

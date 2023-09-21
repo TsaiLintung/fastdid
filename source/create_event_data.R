@@ -30,7 +30,8 @@ create_event_data<-function(maindata,
                             #function behavior
                             verbose = TRUE,
                             copy_dataset = TRUE,
-                            validate = TRUE
+                            validate = TRUE,
+                            combine = TRUE
 
 ) 
 {
@@ -86,19 +87,16 @@ create_event_data<-function(maindata,
   
   # main part --------------------------------------
 
-  if(verbose) message("converting covariates to factor")
   maindata <- maindata |> covariate_to_factor(base_time, 
                                               covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear_subset,
                                               stratify_by_cohort)
   
   
-  if(verbose) message("stacking control and treated cohorts")
   stacked_list <- stack_for_cohort(maindata, 
                                    control_group, base_time,
                                    treat_criteria, lower_event_time, upper_event_time, 
                                    min_control_gap, max_control_gap, check_not_treated) 
 
-  if(verbose) message("check data after first stack")
   factor_cols <- c("id", "cohort", "time_pair", "time")
 
   event_list <- stacked_list |> lapply(function (x) check_stacked_data(x, base_time,
@@ -107,10 +105,12 @@ create_event_data<-function(maindata,
                                              var_to_vector(factor_cols) |> 
                                              estimate_ipw(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear))
   
-  eventdata <- rbindlist(event_list)
-
-  return(eventdata)
-
+  
+  if(combine){
+    return(rbindlist(event_list))
+  } else {
+    return(event_list)
+  }
 }
 
 # Functions for important steps --------------------------------------------------------------

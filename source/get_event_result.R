@@ -10,6 +10,31 @@ get_event_result<-function(eventdata,
                            separate_stratify = TRUE,
                            separate_cohort_time = TRUE)
 {
+  #allow list input (useful when not combined)
+  if(!is.data.table(eventdata)){
+    if(!is.data.table(eventdata[[1]])){stop("please provide a data.table")}
+    if(result_type != "cohort_event_time"){stop("by-cohort list is only available when using 'cohort_event_time'")}
+    
+    all_results <- data.table()
+    for(i in seq(1, length(eventdata))){
+      results <- get_event_result(eventdata = eventdata[[i]],
+                                  variable = variable,
+                                  result_type = result_type,
+                                  covariate = covariate,
+                                  clustervar=clustervar, 
+                                  weights=weights,
+                                  base_time = base_time,
+                                  trends=trends,
+                                  mem.clean = mem.clean,
+                                  separate_stratify = separate_stratify,
+                                  separate_cohort_time = separate_cohort_time)
+      all_results <- rbind(all_results, results)
+    }
+    
+    return(all_results)
+  } 
+  
+  
   dt_names <- names(eventdata)
   check_arg(variable,"multi charin", .choices = dt_names)
   check_arg(result_type,"charin", .choices = c("cohort_event_time", "dynamic", "pooled", "means", "covariate"))

@@ -40,7 +40,7 @@ p$balance_name <- "x"
 test_create_event_data()
 test_get_event_result()
 test_plot_event_dynamics()
-
+test_no_combine()
 
 # test estimations
 

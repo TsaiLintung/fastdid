@@ -43,12 +43,9 @@ run_event_code <- function(sample_size, time_period){
                                           cohortvar = "G",
                                           #covariate_base_balance = "x",
                                           covariate_base_stratify = "s",
-                                          control_group = "both", copy = FALSE, verbose = FALSE))
-  #event_est_ce <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic",
-  #                                 separate_cohort_time = TRUE)
+                                          control_group = "both", copy = FALSE, verbose = FALSE, combine = FALSE))
+  event_est_ce <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "cohort_event_time")
 }
-
-
 
 run_dfbd <- function(sample_size, time_period){
   dt <- get_dt(sample_size, time_period)
@@ -64,17 +61,10 @@ run_dfbd <- function(sample_size, time_period){
 }
 
 # start benchmarks ----------------------------------------------------------------------
-
-
-profvis(run_event_code(1000000,10))
-profvis(run_dfbd(100000,10))
-
-#
-
 t <- 10
 
 all_bm <- data.table()
-for(order in seq(2,5)){
+for(order in seq(2,6)){
   s = 10^order
   bm_time <- microbenchmark(
     run_event_code(s,t),
@@ -87,24 +77,31 @@ for(order in seq(2,5)){
   bm_time <- bm_time[, .(time_mean = mean(time)/10^9,
                          time_sd = sd(time)/10^9), by = "expr"]
   bm_time[, order := order]
+  message(s)
   all_bm <- rbind(all_bm, bm_time)
 }
 
+all_bm |> fwrite("profile_log/est_time.csv")
+all_bm |> ggplot(aes(x = order, y = time_mean, color = expr)) + geom_point() + geom_line()
+
+t <- 10
+all_bm <- data.table()
+for(order in seq(2,4)){
+  s = 10^order
+  
+  ec_ram <- peakRAM(run_event_code(s,t))|> as.data.table()
+  gc()
+  dfbd_ram <- peakRAM(run_dfbd(s,t))
+  bm_ram <- rbind(ec_ram, dfbd_ram) |> as.data.table()
+  bm_ram[, order := order]
+  message(s)
+  all_bm <- rbind(all_bm, bm_ram)
+}
+
+all_bm |> fwrite("profile_log/est_ram.csv")
 all_bm |> ggplot(aes(x = order, y = time_mean, color = expr)) + geom_point() + geom_line()
 
 
-# not used
-
-run_did <-  function(sample_size, time_period){
-  dt <- get_dt(sample_size, time_period)
-  did_est <- suppressWarnings(att_gt(yname = "y",
-                                     tname = "time",
-                                     idname = "unit",
-                                     gname = "G",
-                                     #xformla = ~x,
-                                     data = dt,
-                                     bstrap = FALSE))
-}
 
 
 run_old_event_code <-  function(sample_size, time_period){
@@ -112,7 +109,7 @@ run_old_event_code <-  function(sample_size, time_period){
   event_panel <- suppressWarnings(create_event_data_old(dt, timevar = "time", unitvar =  "unit", 
                                                         cohortvar = "G",
                                                         #covariate_base_balance = "x",
-                                                        covariate_base_stratify = "s",
+                                                        #covariate_base_stratify = "s",
                                                         balanced_panel = FALSE,
                                                         never_treat_action = "both"))
   event_panel <- construct_event_variables(event_panel)
