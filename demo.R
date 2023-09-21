@@ -112,9 +112,12 @@ event_est |> plot_event_dynamics()
 
 # no combine estimation -----------------------------------------------------------------
 
+#by deferring binding the cohorts, both time and memory can be saved, but it also means only cohort_event_time can be estimated easily. 
+
 simdt <- sim_did(100000, 10, cov = "int", hetero = "all", balanced = FALSE, second_outcome = FALSE, seed = 1, stratify = TRUE)
 dt <- simdt$dt
 
+#combine as usual
 default_ram_usage <- peakRAM({
   event_panel <- dt %>% create_event_data(timevar = "time", unitvar =  "unit", 
                                           cohortvar = "G",
@@ -128,21 +131,21 @@ default_ram_usage <- peakRAM({
 
 gc()
 
-simdt <- sim_did(100000, 10, cov = "int", hetero = "all", balanced = FALSE, second_outcome = FALSE, seed = 1, stratify = TRUE)
+#old event code
+simdt <- sim_did(sample_size, period, cov = "int", hetero = "all", balanced = FALSE, second_outcome = FALSE, seed = 1, stratify = TRUE)
 dt <- simdt$dt
 
-nocombine_ram_usage <- peakRAM({
-  event_panel <- dt %>% create_event_data(timevar = "time", unitvar =  "unit", 
-                                          cohortvar = "G",
-                                          covariate_base_balance = "x",
-                                          covariate_base_stratify = "s",
-                                          balanced_panel = TRUE,
-                                          control_group = "both", copy = FALSE, combine = FALSE)
-  
-  event_est <- get_event_result(event_panel, variable = c("y"), trends = FALSE, mem.clean = FALSE, result_type = "cohort_event_time")
+old_ram_usage <- peakRAM({
+event_panel <- suppressWarnings(create_event_data_old(dt, timevar = "time", unitvar =  "unit", 
+                                                      cohortvar = "G",
+                                                      covariate_base_balance = "x",
+                                                      covariate_base_stratify = "s",
+                                                      balanced_panel = FALSE,
+                                                      never_treat_action = "both"))
+event_panel <- construct_event_variables(event_panel)
+event_es <- get_result_dynamic(event_panel, variable = "y", trends = FALSE)
 })
-
-#saves about 40% peak ram used
-message("Default peak ram: ", default_ram_usage$Peak_RAM_Used_MiB)
-message("No combine peak ram: ", nocombine_ram_usage$Peak_RAM_Used_MiB)
+#no combine saves about 40% peak ram used
+message("New peak ram: ", default_ram_usage$Peak_RAM_Used_MiB) #2206
+message("Old peak ram: ", old_ram_usage$Peak_RAM_Used_MiB) #7998
 
