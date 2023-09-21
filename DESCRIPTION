@@ -1,0 +1,15 @@
+Package: eventstudy
+Type: Package
+Title: Concise Summary of What the Package Does
+Version: 1.0
+Date: 2023-09-21
+Author: Your Name
+Maintainer: Your Name <your@email.com>
+Description: More about what it does (maybe more than one line).
+License: GPL (>= 2)
+Imports:
+    data.table,
+    stringr
+Suggests: tinytest
+Encoding: UTF-8
+RoxygenNote: 7.2.3
