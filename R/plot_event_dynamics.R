@@ -1,4 +1,5 @@
-plot_event_dynamics <-function(raw_dt, graphname = "event study plot", note = "", base_time = -1, significance_level = 0.05, stratify_offset =0.1){
+plot_event_dynamics <-function(raw_dt, 
+                               graphname = "event study plot", note = "", base_time = -1, significance_level = 0.05, stratify_offset =0.1){
   
   dt <- copy(raw_dt)
   

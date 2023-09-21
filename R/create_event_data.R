@@ -13,7 +13,6 @@
 #' @param covariate_base_balance Vector of variable names to include in finding exact matches for treated units (default is NULL).
 #' @param covariate_base_balance_linear Vector of variable names to include linearly in propensity score estimator (default is NULL).
 #' @param covariate_base_balance_linear_subset Vector of variable names within which the linear propensity score regression will be estimated (default is NULL).
-#' @param covariate_base_support Vector of variable names on which to impose common support across treated and control units (default is NULL).
 #' @param balanced_panel Logical, whether to enforce a balanced panel (default is TRUE).
 #' @param check_not_treated If TRUE, only allows controls to be used for a cohort if they are observed in the dataset to be untreated in that cohort (default is FALSE).
 #' @param stratify_by_cohort Logical, whether to stratify by cohort (default is FALSE).
@@ -33,12 +32,15 @@
 #'
 #' @details This function generates event data for treated households based on the provided input parameters.
 #' 
+#' @import data.table magrittr stringr rlist collapse dreamerr ggplot2
+#' @importFrom fixest feols
 #' @examples
 #' 
 #' create_event_data(maindata, "time", "id", "cohort", "both")
 #' 
 #'
 #' @export
+
 create_event_data<-function(maindata,
                             timevar,
                             unitvar,
@@ -47,13 +49,11 @@ create_event_data<-function(maindata,
                             base_time = -1,
                             anycohortvar = NULL, #period when ANY kind of event arises, used to find control cohorts
                             
-                            
                             #covaraites
                             covariate_base_stratify=NULL, #vector of variable names, treatment effects are stratified by their joint unique values.
                             covariate_base_balance=NULL, #vector of variable names to include in finding exact matches for treated units
                             covariate_base_balance_linear=NULL, #vector of variable names to include linearly in propensity score estimator
                             covariate_base_balance_linear_subset=NULL, #vector of variable names within which the linear propensity score regression will be estimated
-                            covariate_base_support=NULL, #vector of variable names on which to impose common support across treated and control units
                             
                             #checks and control
                             balanced_panel = TRUE,
@@ -87,7 +87,7 @@ create_event_data<-function(maindata,
 
   covariate_message <- "__ARG__ must be NULL or a character vector which are all names of columns from the dataset."
   check_arg(covariate_base_stratify, covariate_base_balance, covariate_base_balance, covariate_base_balance_linear, 
-            covariate_base_balance_linear_subset, covariate_base_support,
+            covariate_base_balance_linear_subset, 
             "NULL | multi charin", .choices = dt_names, .message = covariate_message)
   
   checkvar_message <- "__ARG__ must be NULL or a character scalar which are all names of columns from the dataset."
@@ -115,18 +115,19 @@ create_event_data<-function(maindata,
   setkey(maindata, id)
   if(!is.null(base_restrict)) setnames(maindata,base_restrict,"base_restrict")
   if(!is.null(base_restrict_treated)) setnames(maindata,base_restrict_treated,"base_restrict_treated")
+  if(!is.null(treat_criteria)) setnames(maindata,treat_criteria,"treat_criteria")
   if(is.null(covariate_base_balance_linear_subset)) covariate_base_balance_linear_subset <- covariate_base_balance
   
   # data validation
   if(validate){
-    covariates <-  c(covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear)
+    covariates <-  c(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear)
     maindata <- maindata |> validate_eventdata(covariates, balanced_panel)
   }
   
   # main part --------------------------------------
 
   maindata <- maindata |> covariate_to_factor(base_time, 
-                                              covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear_subset,
+                                              covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear_subset,
                                               stratify_by_cohort)
   
   
@@ -191,7 +192,7 @@ validate_eventdata <- function(maindata, covariates, balanced_panel){
 }
 
 covariate_to_factor <- function(dt, base_time,
-                                covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear_subset,
+                                covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear_subset,
                                 stratify_by_cohort){
   
   #turn covariates interaction to factors
@@ -199,13 +200,12 @@ covariate_to_factor <- function(dt, base_time,
     stratifyvars <- ifelse(stratify_by_cohort, c(covariate_base_stratify, "cohort"), covariate_base_stratify)
   } else {stratifyvars <- covariate_base_stratify}
   
-  for(covariate_type in c("stratify", "balancevars", "balancevars_linear_subset", "supportvars")){
+  for(covariate_type in c("stratify", "balancevars", "balancevars_linear_subset")){
     
     cov_vars <- switch(covariate_type, 
                        stratify = stratifyvars,
                        balancevars = covariate_base_balance,
-                       balancevars_linear_subset = covariate_base_balance_linear_subset,
-                       supportvars = covariate_base_support)
+                       balancevars_linear_subset = covariate_base_balance_linear_subset)
     if(!is.null(cov_vars)){
       dt[,(covariate_type) :=  do.call(finteraction, dt[, cov_vars, with = FALSE])]
     } else {
@@ -225,14 +225,21 @@ stack_for_cohort <- function(maindata,
   
   #stacking control cohorts.
   dt_list <- list()
-  cohorts <- maindata[, unique(cohort)]
+  cohorts <- maindata[, unique(anycohort)]
   cohorts <- cohorts[cohorts != maindata[, min(time)] & !is.infinite(cohorts)] #the min cohort won't have valid base_time control
+  
+  if(control_group == "later" | maindata[is.infinite(anycohort), .N] == 0){
+    cohorts <- cohorts[cohorts != max(cohorts)] #if no never treated, the last cohort won't have never treated
+  }
+  
+  potential_controldata <- maindata[anycohort > time]
+  
   for(o in cohorts){
     
-    treatcohort<-maindata[cohort == o,] #cohort treated on the first period is not useful
+    treatcohort<-maindata[anycohort == o,] #cohort treated on the first period is not useful
     
     if(!is.null(treat_criteria)){
-      treatcohort <- treatcohort[get(treat_criteria == TRUE)]
+      treatcohort <- treatcohort[treat_criteria == TRUE]
     }
     
     treatcohort[,treated:=1]
@@ -242,13 +249,13 @@ stack_for_cohort <- function(maindata,
     
     #find the relevant control group
     if(control_group=="both") {
-      controlcohort <- maindata[(anycohort > o | is.infinite(anycohort)) ,]
+      controlcohort <- potential_controldata[(anycohort > o | is.infinite(anycohort)) ,]
     }
     if(control_group=="later"){
-      controlcohort <- maindata[(anycohort > o & !is.infinite(anycohort)) ,]
+      controlcohort <- potential_controldata[(anycohort > o & !is.infinite(anycohort)) ,]
     }
     if(control_group=="never") {
-      controlcohort <- maindata[is.infinite(anycohort) ,]
+      controlcohort <- potential_controldata[is.infinite(anycohort) ,]
     }
     
     #enfornce min/max control gap
@@ -256,7 +263,7 @@ stack_for_cohort <- function(maindata,
     if (!is.null(min_control_gap))  controlcohort <- controlcohort[anycohort - o >=  min_control_gap,]
     
     controlcohort[,cohort := o]
-    controlcohort[, event_time := time-cohort]
+    controlcohort[,event_time := time-cohort]
     
     #a control would only be useful if it is observed in the base period
     controlcohort[, useful_control := any(event_time == base_time), by = "id"]
@@ -264,8 +271,6 @@ stack_for_cohort <- function(maindata,
     controlcohort[, useful_control := NULL]
     
     controlcohort[, treated := 0]
-    
-    controlcohort <- controlcohort[anycohort - cohort > event_time]
     
     if(!is.infinite(-lower_event_time)|!is.infinite(upper_event_time)){
       controlcohort <- controlcohort[event_time >= lower_event_time & event_time <= upper_event_time]
@@ -279,6 +284,8 @@ stack_for_cohort <- function(maindata,
     
     controlcohort[, anycohort := NULL]
     treatcohort[, anycohort := NULL]
+    
+    if(nrow(controlcohort)==0|nrow(treatcohort)==0){next}
     
     dt_list <- c(dt_list, list(list(treat = treatcohort, control = controlcohort)))
     
@@ -326,8 +333,8 @@ check_stacked_data<- function(dt_list, base_time,
     #common support checking is only needed when there is linear regression - interpolation and extrapolation
     #o.w. a propensity score within 0,1 means it has common support
     
-    treatdata[,temp:=finteraction(balancevars,supportvars,stratify,event_time,cohort)]
-    controldata[,temp:=finteraction(balancevars,supportvars,stratify,event_time,cohort)]
+    treatdata[,temp:=finteraction(balancevars,stratify,event_time,cohort)]
+    controldata[,temp:=finteraction(balancevars,stratify,event_time,cohort)]
     commonvals<-intersect(unique(treatdata$temp),unique(controldata$temp))
     treatdata<-treatdata[temp%in%commonvals,]
     controldata<-controldata[temp%in%commonvals,]
@@ -417,14 +424,14 @@ estimate_ipw<- function(eventdata, covariate_base_stratify, covariate_base_balan
     call <- "treated ~ 1 | finteraction(cohort,time_pair,event_time_fact,stratify,balancevars)" 
     
   } else {
-    call <- paste0("treated ~",paste0(covariate_base_balance_linear,collapse="+",
-                                      sep="finteraction(cohort,time_pair,event_time_fact,stratify,balancevars_linear_subset,)"),
-                   "| finteraction(cohort,event_time_fact,stratify,balancevars)")
+    call <- paste0("treated ~ 1 | ",paste0(paste0("finteraction(cohort,time_pair,event_time_fact,stratify,balancevars_linear_subset)[",
+                                             covariate_base_balance_linear, "]"),collapse="+"),
+                   "+ finteraction(cohort,event_time_fact,stratify,balancevars)")
   }
   
   #estimate propensity score
   #in a specific cohort-time_pair estimation, propensity to get treated at event_time, given stratify and balance
-  eventdata[,pval:= feols(as.formula(call), data = eventdata, lean = FALSE)$fitted.values]
+  eventdata[,pval:= feols(as.formula(call), data = eventdata, lean = FALSE, note = FALSE)$fitted.values]
   
   #only keep propensity score between 0,1 is equivalent to checking common support
   eventdata <- eventdata[pval < 1 & pval > 0]

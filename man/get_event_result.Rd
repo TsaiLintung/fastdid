@@ -53,6 +53,3 @@ Calculate various types of event results from an event dataset.
 result <- get_event_result(eventdata, "variable_name", "cohort_event_time")
 
 }
-\seealso{
-
-}

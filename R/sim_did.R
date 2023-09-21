@@ -21,7 +21,7 @@
 #'
 #' @export
 #' 
-#' @import data.table magrittr stats
+#' 
 
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, 
                     cov = "no", hetero = "all", second_outcome = FALSE, na = "none", 

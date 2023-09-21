@@ -11,7 +11,7 @@
 #' @param weights The weight variable for weighted analysis. Default is "pweight".
 #' @param base_time The base time for dynamic analysis. Default is -1.
 #' @param trends Logical, indicating whether to include trends in the analysis.
-#' @param mem.clean Logical, indicating whether to perform memory cleanup.
+#' @param mem.clean Logical, indicating whether to perform memory cleanup during FEOLS.
 #' @param separate_stratify Logical, indicating whether to separate stratified cohorts.
 #' @param separate_cohort_time Logical, indicating whether to separate cohort time.
 #'
@@ -32,7 +32,7 @@ get_event_result <- function(eventdata,
                              weights = "pweight",
                              base_time = -1,
                              trends = FALSE,
-                             mem.clean = TRUE,
+                             mem.clean = FALSE,
                              separate_stratify = TRUE,
                              separate_cohort_time = TRUE) {
   #allow list input (useful when not combined)

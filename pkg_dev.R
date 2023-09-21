@@ -3,20 +3,15 @@ library(roxygen2)
 library(tinytest)
 library(usethis)
 
-require(data.table)
-require(stringr)
-require(fixest)
-require(rlist)
-require(collapse)
-require(dreamerr)
 
 
 
 setwd("~/GitHub/EventStudyCode")
 
-load_all()
+
 
 roxygenise()
+load_all()
 
-run_test_file("inst/tinytest/test_plot_event_dynamics.R", verbose=0)
+run_test_file("inst/tinytest/test_create_event_data.R", verbose=0)
 

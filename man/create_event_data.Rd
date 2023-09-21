@@ -101,6 +101,3 @@ create_event_data(maindata, "time", "id", "cohort", "both")
 
 
 }
-\seealso{
-
-}
