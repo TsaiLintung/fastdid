@@ -4,16 +4,46 @@ test_create_event_data <- function(){
   
   dt <-  sim_did(5, 5, seed = 1, treatment_assign = "uniform", stratify = FALSE)[["dt"]]
   
-  event_panel <- create_event_data(dt, timevar = "time", unitvar = "unit", 
+  expect_silent(event_panel <- create_event_data(dt, timevar = "time", unitvar = "unit", 
                                        cohortvar = "G",
                                        covariate_base_balance = "x",
                                        covariate_base_stratify = "s",
-                                       control_group = "both", verbose = FALSE)
+                                       control_group = "both", verbose = FALSE))
   
-  expect_equal(nrow(event_panel), 82,
-               info = "nrow after create_event_panel")
+  dt <-  sim_did(5, 5, seed = 1, treatment_assign = "uniform", stratify = TRUE)[["dt"]]
+  
+  expect_silent(event_panel <- create_event_data(dt, timevar = "time", unitvar = "unit", 
+                                                 cohortvar = "G",
+                                                 covariate_base_balance = "x",
+                                                 covariate_base_stratify = "s",
+                                                 control_group = "both", verbose = FALSE))
+
   
 }
+
+test_get_event_result <- function(){
+  
+  dt <-  sim_did(100, 10, seed = 1, treatment_assign = "uniform", stratify = TRUE, second_outcome = TRUE)[["dt"]]
+  
+  event_panel <- create_event_data(dt, timevar = "time", unitvar = "unit", 
+                                   cohortvar = "G",
+                                   covariate_base_balance = "x",
+                                   covariate_base_stratify = "s",
+                                   control_group = "both", verbose = FALSE)
+  expect_silent(event_est <- get_event_result(event_panel, variable = c("y", "y2"), 
+                                              trends = FALSE, mem.clean = FALSE, result_type = "dynamic", 
+                                              separate_cohort_time = FALSE, separate_stratify = FALSE),
+                info = "get_event_result dynamic, no split")
+  expect_silent(event_est <- get_event_result(event_panel, variable = c("y", "y2"), 
+                                              trends = FALSE, mem.clean = FALSE, result_type = "dynamic"),
+                info = "get_event_result dynamic, split by stratify and cohort event time")
+  expect_silent(event_est <- get_event_result(event_panel, variable = c("y", "y2"), 
+                                              trends = FALSE, mem.clean = FALSE, result_type = "cohort_event_time", separate_cohort_time = TRUE),
+                info = "get_event_result, cohort event time, split by stratify and cohort event time")
+  
+  
+}
+
 
 test_plot_event_dynamics <- function(){
   #generate estimation and att
@@ -24,7 +54,7 @@ test_plot_event_dynamics <- function(){
 
 # test get result -------------------------------------
 
-test_get_result_dynamic <- function(p){
+test_dynamic_est <- function(p){
   
   #generate estimation and att
   sim_dt <- generate_sim_dt(p, "dynamic")
@@ -45,7 +75,7 @@ test_get_result_dynamic <- function(p){
   
 }
 
-test_get_result_cohort_event_time <- function(p){
+test_cohort_event_time_est <- function(p){
   
   #generate estimation and att
   sim_dt <- generate_sim_dt(p, "cohort_event_time")

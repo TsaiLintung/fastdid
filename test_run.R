@@ -3,6 +3,7 @@ rm(list = ls())
 gc()
 
 library(profvis)
+library(ggplot2)
 
 setwd("~/GitHub/EventStudyCode")
 

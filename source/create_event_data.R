@@ -29,7 +29,8 @@ create_event_data<-function(maindata,
                             
                             #function behavior
                             verbose = TRUE,
-                            copy_dataset = TRUE
+                            copy_dataset = TRUE,
+                            validate = TRUE
 
 ) 
 {
@@ -76,8 +77,12 @@ create_event_data<-function(maindata,
   if(is.null(covariate_base_balance_linear_subset)) covariate_base_balance_linear_subset <- covariate_base_balance
   
   # data validation
-  covariates <-  c(covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear)
-  maindata <- maindata |> validate_eventdata(covariates, balanced_panel)
+  if(validate){
+    covariates <-  c(covariate_base_stratify, covariate_base_balance, covariate_base_support, covariate_base_balance_linear)
+    maindata <- maindata |> validate_eventdata(covariates, balanced_panel)
+  }
+  
+
   
   # main part --------------------------------------
 
@@ -98,7 +103,6 @@ create_event_data<-function(maindata,
 
   event_list <- stacked_list |> lapply(function (x) check_stacked_data(x, base_time,
                                              balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear) |> 
-                                             bind_treat_control() |> 
                                              stack_for_event_time(base_time) |>  
                                              var_to_vector(factor_cols) |> 
                                              estimate_ipw(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear))
@@ -182,6 +186,8 @@ stack_for_cohort <- function(maindata,
                              treat_criteria, lower_event_time, upper_event_time, 
                              min_control_gap, max_control_gap, check_not_treated){
   
+  setkey(maindata, id)
+  
   #stacking control cohorts.
   dt_list <- list()
   cohorts <- maindata[, unique(cohort)]
@@ -224,9 +230,11 @@ stack_for_cohort <- function(maindata,
     
     controlcohort[, treated := 0]
     
-    controlcohort <- controlcohort[event_time >= lower_event_time & event_time <= upper_event_time & 
-                                   anycohort - cohort > event_time]
+    controlcohort <- controlcohort[anycohort - cohort > event_time]
     
+    if(!is.infinite(-lower_event_time)|!is.infinite(upper_event_time)){
+      controlcohort <- controlcohort[event_time >= lower_event_time & event_time <= upper_event_time]
+    }
     
     if(check_not_treated){
       controlcohort[ ,obscohort := any(time == cohort),by=id]
@@ -293,32 +301,45 @@ check_stacked_data<- function(dt_list, base_time,
     
   }
   
+  dt_list$treat <- treatdata
+  dt_list$control <- controldata  
+  
   return(dt_list)
   
 }
 
 stack_for_event_time <- function(eventdata, base_time){
   
-  setkey(eventdata, event_time)
+  controldata <- eventdata$control
+  treatdata <- eventdata$treat
+ 
   
-  eventdata[,`:=`(max_event_time = max(event_time),
+  controldata[,`:=`(max_event_time = max(event_time),
                   min_event_time = min(event_time)) , by = "id"]
+  treatdata[,`:=`(max_event_time = max(event_time),
+                    min_event_time = min(event_time)) , by = "id"]
    
-  event_times<-eventdata[treated==1,funique(event_time)]
+  event_times<-treatdata[treated == 1,funique(event_time)] #equals to 0, 
+  
+  setkey(treatdata, event_time)
+  setkey(controldata, event_time)
   
   double_stack_list <- list()
   for(t in event_times){
     
     if(t == -1){next}
     
-    event_time_data <- eventdata[t <= max_event_time & t >= min_event_time & (event_time == -1 | event_time == t)] #already made sure every unit have -1 in it
-    event_time_data[,time_pair := t]
+    event_time_treat <- treatdata[t <= max_event_time & t >= min_event_time & (event_time == -1 | event_time == t)] #already made sure every unit have -1 in it
+    event_time_treat[,time_pair := t]
     
-    double_stack_list<-c(double_stack_list, list(event_time_data))
+    event_time_control <- controldata[t <= max_event_time & t >= min_event_time & (event_time == -1 | event_time == t)] #already made sure every unit have -1 in it
+    event_time_control[,time_pair := t]
+    
+    double_stack_list<-c(double_stack_list, list(event_time_treat), list(event_time_control))
     
   }
   
-  double_stack_dt <- rbindlist(double_stack_list)
+  double_stack_dt <- rbindlist(double_stack_list, use.names=TRUE)
 
   return(double_stack_dt)
   

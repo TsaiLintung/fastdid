@@ -38,13 +38,15 @@ p$stratify_name <- "s"
 p$balance_name <- "x"
 
 test_create_event_data()
+test_get_event_result()
 test_plot_event_dynamics()
+
 
 # test estimations
 
 p$sample_size <- 1000
 
-test_get_result_dynamic(p)
-test_get_result_cohort_event_time(p)
+test_dynamic_est(p)
+test_cohort_event_time_est(p)
 test_dynamic_cohort_event_time_consistent()
 test_get_result_means()

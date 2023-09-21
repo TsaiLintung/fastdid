@@ -7,7 +7,8 @@ get_event_result<-function(eventdata,
                            base_time = -1,
                            trends=FALSE,
                            mem.clean = TRUE,
-                           separate_stratify = TRUE)
+                           separate_stratify = TRUE,
+                           separate_cohort_time = TRUE)
 {
   dt_names <- names(eventdata)
   check_arg(variable,"multi charin", .choices = dt_names)
@@ -27,37 +28,10 @@ get_event_result<-function(eventdata,
   
   call <- get_estimate_call(result_type, variable, trends, covariate)
   
-  if(eventdata[, uniqueN(stratify)] > 1 & separate_stratify){
-    
-    dt <- data.table()
-    
-    for(stratify_type in eventdata[, unique(stratify)]){
-      
-      strat_eventdata <- eventdata[stratify == stratify_type]
-      
-      strat_results<-feols(as.formula(call),
-                     data = strat_eventdata,
-                     weights= strat_eventdata[,get(weights)],
-                     split = ~splitvar,
-                     cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
-      
-      strat_dt <- parse_event_result(strat_results, result_type)
-      strat_dt[, stratify := stratify_type]
-      dt <- rbind(dt, strat_dt)
-    }
-
-    
-  } else {
-    
-    results<-feols(as.formula(call),
-                   data = eventdata,
-                   weights= eventdata[,get(weights)],
-                   split = ~splitvar,
-                   cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
-    dt <- parse_event_result(results, result_type)
-  }
+  results <- eventdata |> estimate_att(call, weights, clustervar, result_type, 
+                                       mem.clean, separate_cohort_time, separate_stratify)
   
-  return(dt)
+  return(results)
   
 }
 
@@ -171,6 +145,83 @@ get_estimate_call <- function(result_type, variable, trends, covariate = NULL){
   
 }
 
+
+estimate_att <- function(eventdata, call, weights, clustervar, result_type, 
+                         mem.clean,separate_cohort_time, separate_stratify){
+  all_results_dt <- data.table()
+  
+  if(!eventdata[, uniqueN(stratify)] > 1 | !separate_stratify){
+    
+    if(!separate_cohort_time){
+      results<-feols(as.formula(call),
+                     data = eventdata,
+                     weights= eventdata[,get(weights)],
+                     split = ~splitvar,
+                     cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
+      
+      all_results_dt <- parse_event_result(results, result_type)
+      
+    } else {
+      
+      #split by cohort / cohort+event_time
+      for(split in eventdata[, unique(splitvar)]){
+        
+        eventdata_split <- eventdata[splitvar == split]
+        results_split <- feols(as.formula(call),
+                               data = eventdata_split,
+                               weights= eventdata_split[,get(weights)],
+                               split = ~splitvar,
+                               cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
+        results_split_dt <- parse_event_result(results_split, result_type)
+        all_results_dt <- rbind(all_results_dt, results_split_dt)
+        
+      }      
+      
+    }
+    
+  } else {
+    
+    for(stratify_type in eventdata[, unique(stratify)]){
+      
+      strat_eventdata <- eventdata[stratify == stratify_type]
+      
+      if(!separate_cohort_time){
+        strat_results<-feols(as.formula(call),
+                             data = strat_eventdata,
+                             weights= strat_eventdata[,get(weights)],
+                             split = ~splitvar,
+                             cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
+        strat_results_dt <- parse_event_result(strat_results, result_type)
+        strat_results_dt[, stratify := stratify_type]
+        all_results_dt <- rbind(all_results_dt, strat_results_dt)
+        
+      }  else {
+        
+        #split by cohort / cohort+event_time
+        strat_results <- list()
+        for(split in strat_eventdata[, unique(splitvar)]){
+          
+          strat_eventdata_split <- strat_eventdata[splitvar == split]
+          strat_results_split <- feols(as.formula(call),
+                                 data = strat_eventdata_split,
+                                 split = ~splitvar,
+                                 weights= strat_eventdata_split[,get(weights)],
+                                 cluster=clustervar, lean = TRUE, mem.clean = mem.clean, notes = FALSE)
+          strat_results_split_dt <- parse_event_result(strat_results_split, result_type)
+          strat_results_split_dt[, stratify := stratify_type]
+          all_results_dt <- rbind(all_results_dt, strat_results_split_dt)
+          
+        }      
+ 
+      }
+
+    }
+
+  }
+  
+  return(all_results_dt)
+}
+
 get_event_time <- function(x){
   start <- str_locate(x, "stratify")[2]
   end <- str_locate(x, "\\.")[1]
@@ -196,7 +247,7 @@ get_stratify <- function(x){
 }
 
 parse_event_result <- function(results, result_type){
-
+  
   dt <- data.table()
   for(j in seq(1, length(results))){
     est <- results[[j]]$coeftable

@@ -44,7 +44,8 @@ run_event_code <- function(sample_size, time_period){
                                           #covariate_base_balance = "x",
                                           covariate_base_stratify = "s",
                                           control_group = "both", copy = FALSE, verbose = FALSE))
-  event_est_ce <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
+  #event_est_ce <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic",
+  #                                 separate_cohort_time = TRUE)
 }
 
 
@@ -64,7 +65,8 @@ run_dfbd <- function(sample_size, time_period){
 
 # start benchmarks ----------------------------------------------------------------------
 
-profvis(run_event_code(100000,10))
+
+profvis(run_event_code(1000000,10))
 profvis(run_dfbd(100000,10))
 
 #
