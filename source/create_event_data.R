@@ -83,8 +83,6 @@ create_event_data<-function(maindata,
     maindata <- maindata |> validate_eventdata(covariates, balanced_panel)
   }
   
-
-  
   # main part --------------------------------------
 
   maindata <- maindata |> covariate_to_factor(base_time, 
@@ -92,18 +90,17 @@ create_event_data<-function(maindata,
                                               stratify_by_cohort)
   
   
-  stacked_list <- stack_for_cohort(maindata, 
-                                   control_group, base_time,
-                                   treat_criteria, lower_event_time, upper_event_time, 
-                                   min_control_gap, max_control_gap, check_not_treated) 
+  stacked_list <- maindata |> stack_for_cohort(control_group, base_time,
+                                               treat_criteria, lower_event_time, upper_event_time, 
+                                               min_control_gap, max_control_gap, check_not_treated) 
 
   factor_cols <- c("id", "cohort", "time_pair", "time")
 
   event_list <- stacked_list |> lapply(function (x) check_stacked_data(x, base_time,
-                                             balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear) |> 
-                                             stack_for_event_time(base_time) |>  
-                                             var_to_vector(factor_cols) |> 
-                                             estimate_ipw(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear))
+                                                                       balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear) |> 
+                                                    stack_for_event_time(base_time) |>  
+                                                    var_to_factor(factor_cols) |> 
+                                                    estimate_ipw(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear))
   
   
   if(combine){
@@ -114,8 +111,6 @@ create_event_data<-function(maindata,
 }
 
 # Functions for important steps --------------------------------------------------------------
-
-bind_treat_control <- function (x) {rbind(x$treat, x$control)}
 
 validate_eventdata <- function(maindata, covariates, balanced_panel){
   
@@ -242,6 +237,9 @@ stack_for_cohort <- function(maindata,
       controlcohort[,obscohort:=NULL]
     }
     
+    controlcohort[, anycohort := NULL]
+    treatcohort[, anycohort := NULL]
+    
     dt_list <- c(dt_list, list(list(treat = treatcohort, control = controlcohort)))
     
   }
@@ -335,17 +333,25 @@ stack_for_event_time <- function(eventdata, base_time){
     event_time_control <- controldata[t <= max_event_time & t >= min_event_time & (event_time == -1 | event_time == t)] #already made sure every unit have -1 in it
     event_time_control[,time_pair := t]
     
+    #remove uncessary cols ASAP
+    event_time_treat[, max_event_time := NULL]
+    event_time_treat[, min_event_time := NULL]
+    event_time_control[, max_event_time := NULL]
+    event_time_control[, min_event_time := NULL]
+    
     double_stack_list<-c(double_stack_list, list(event_time_treat), list(event_time_control))
     
   }
   
   double_stack_dt <- rbindlist(double_stack_list, use.names=TRUE)
-
+  
+  
+  
   return(double_stack_dt)
   
 }
 
-var_to_vector <- function(x, factor_cols){
+var_to_factor <- function(x, factor_cols){
     #turn the cols into factors
     for(col in factor_cols){
       x[, (col) := qF(get(col))]

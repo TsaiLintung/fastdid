@@ -22,7 +22,7 @@ plot_event_dynamics <-function(raw_dt, graphname = "event study plot", note = ""
   figure <- dt %>%
     ggplot() +
     geom_hline(yintercept = 0, linetype = 'dashed', col = 'red')
-
+  
   if("stratify" %in% names(dt)){
     figure <- figure + geom_line(aes(x = event_time, y = att, color = stratify)) + 
       geom_point(aes(x = event_time, y = att, color = stratify)) +
@@ -37,6 +37,9 @@ plot_event_dynamics <-function(raw_dt, graphname = "event study plot", note = ""
   
   if("outcome" %in% names(dt)){
     figure <- figure + facet_wrap(~ outcome, scales = "free")
+  }
+  if("cohort" %in% names(dt)){
+    figure <- figure + facet_wrap(~ cohort, scales = "free")
   }
 
   figure <- figure +
@@ -56,41 +59,24 @@ plot_event_dynamics <-function(raw_dt, graphname = "event study plot", note = ""
 add_base_row <- function(dt, base_row){
   
   col_names <- names(dt)
+  opt_cols <- c("outcome", "stratify", "cohort")
   
-  base_rows <- data.table()
-  if("outcome" %in% col_names){
-    for (out_name in dt[, unique(outcome)]) {
+  for(opt_col in opt_cols){
+    if(opt_col %in% col_names){
       
-      base_row[, outcome := out_name]
+      row_list <- list()
       
-      if("stratify" %in% col_names){
-        for (strat_name in dt[, unique(stratify)]){
-          
-          base_row[, stratify := strat_name]
-          base_rows <- rbind(base_rows, base_row)
-          
-        }
-        
-      } else {
-        base_rows <- rbind(base_rows, base_row)
-      }
-    }
-  } else {
-    
-    if("stratify" %in% col_names){
-      for (strat_name in dt[, unique(stratify)]){
-        
-        base_row[, stratify := strat_name]
-        base_rows <- rbind(base_rows, base_row)
-        
+      for (col_name in dt[, unique(get(opt_col))]) {
+        base_row_sub <- copy(base_row)
+        base_row_sub[, c(opt_col) := col_name]
+        row_list <- c(row_list, list(base_row_sub))
       }
       
-    } else {
-      base_rows <- base_row
-    }
-
+    } 
+    base_row <- rbindlist(row_list)
   }
+
+  dt <- dt |> rbind(base_row)
   
-  dt <- rbind(dt, base_rows)
   return(dt)
 }
