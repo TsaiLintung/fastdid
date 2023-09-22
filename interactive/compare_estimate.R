@@ -56,25 +56,9 @@ did_dynamic_result <- aggte(did_result, "dynamic", clustervars = "unit")
 did_dynamic_est <- data.table(Estimate = did_dynamic_result$att.egt , `Std. Error` = did_dynamic_result$se.egt, event_time = did_dynamic_result$egt)
 did_dynamic_est[, method := "did"]
 
-#compare ---------------------------------------
-
-est_compare <- rbind(did_est, event_est_ce[,.(cohort, event_time, Estimate, `Std. Error`, method)])
-est_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
-                                                                                            ymin = Estimate - 1.96*`Std. Error`)) + 
-  facet_wrap(~event_time + cohort, scales = "free")
-
-
-dynamic_compare <-  rbind(did_dynamic_est, event_est_dynamic[,.(event_time, Estimate, `Std. Error`, method)],
-                          event_est_sum[,.(event_time, Estimate, `Std. Error`, method)])
-
-dynamic_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
-                                                                                                ymin = Estimate - 1.96*`Std. Error`)) + 
-  facet_wrap(~event_time, scales = "free")
-
 # old event code
 
-
-source("old/source_raw/eventcode_IV.R")
+source("interactive/source_raw/eventcode_IV.R")
 
 event_panel <- suppressWarnings(create_event_data_old(dt, timevar = "time", unitvar =  "unit", 
                                                       cohortvar = "G",
@@ -82,4 +66,28 @@ event_panel <- suppressWarnings(create_event_data_old(dt, timevar = "time", unit
                                                       never_treat_action = "both"))
 event_panel <- construct_event_variables(event_panel)
 event_es <- get_result_dynamic(event_panel, variable = "y", trends = FALSE)
+event_es[, method := "old event code"]
+event_es[, event_time := lapply(variable, get_event_time)]
+event_es[, event_time := unlist(event_time)]
+#compare ---------------------------------------
+
+est_compare <- rbind(did_est, event_est_ce[,.(cohort, event_time, Estimate, `Std. Error`, method)])
+est_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
+                                                                                            ymin = Estimate - 1.96*`Std. Error`)) + 
+  facet_wrap(~event_time + cohort, scales = "free")
+ggsave("interactive/plots/ec_compare.png", height = 15, width = 15)
+
+#aggregated ec is definitely wrong cuz dependence
+dynamic_compare <-  rbind(did_dynamic_est, event_est_dynamic[,.(event_time, Estimate, `Std. Error`, method)],
+                          event_est_sum[,.(event_time, Estimate, `Std. Error`, method)],
+                          event_es[,.(event_time, Estimate, `Std. Error`, method)])
+
+dynamic_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
+                                                                                                ymin = Estimate - 1.96*`Std. Error`)) + 
+  facet_wrap(~event_time, scales = "free")
+ggsave("interactive/plots/dynamic_compare.png", height = 15, width = 15)
+
+# old event code
+
+
 

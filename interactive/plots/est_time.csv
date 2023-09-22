@@ -1,0 +1,11 @@
+expr,time_mean,order
+"run_event_code(s, t)",4.089636,2
+"run_dfbd(s, t)",12.8332713,2
+"run_event_code(s, t)",4.0175001,3
+"run_dfbd(s, t)",12.3194691,3
+"run_event_code(s, t)",6.305932,4
+"run_dfbd(s, t)",14.2544302,4
+"run_dfbd(s, t)",27.6660738,5
+"run_event_code(s, t)",17.9897684,5
+"run_dfbd(s, t)",201.0297511,6
+"run_event_code(s, t)",236.490178,6
