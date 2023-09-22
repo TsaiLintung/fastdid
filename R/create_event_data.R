@@ -125,7 +125,7 @@ create_event_data<-function(maindata,
   }
   
   # main part --------------------------------------
-
+  
   maindata <- maindata |> covariate_to_factor(base_time, 
                                               covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear_subset,
                                               stratify_by_cohort)
@@ -134,15 +134,20 @@ create_event_data<-function(maindata,
   stacked_list <- maindata |> stack_for_cohort(control_group, base_time,
                                                treat_criteria, lower_event_time, upper_event_time, 
                                                min_control_gap, max_control_gap, check_not_treated) 
-
-  factor_cols <- c("id", "cohort", "time_pair", "time")
-
+  
+  rm(maindata)
+  
   event_list <- stacked_list |> lapply(function (x) check_stacked_data(x, base_time,
                                                                        balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear) |> 
-                                                    stack_for_event_time(base_time) |>  
-                                                    var_to_factor(factor_cols) |> 
-                                                    estimate_ipw(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear))
+                                                    stack_for_event_time(base_time))
   
+  rm(stacked_list)
+  
+  event_list <- unlist(event_list, recursive = FALSE)
+  
+  factor_cols <- c("cohort", "time_pair")
+  event_list <- event_list |> lapply(function (x) var_to_factor(x, factor_cols) |> 
+                                                  estimate_ipw(covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear))
   
   if(combine){
     return(rbindlist(event_list))
@@ -222,7 +227,7 @@ stack_for_cohort <- function(maindata,
                              min_control_gap, max_control_gap, check_not_treated){
   
   setkey(maindata, id)
-  
+
   #stacking control cohorts.
   dt_list <- list()
   cohorts <- maindata[, unique(anycohort)]
@@ -287,7 +292,9 @@ stack_for_cohort <- function(maindata,
     
     if(nrow(controlcohort)==0|nrow(treatcohort)==0){next}
     
-    dt_list <- c(dt_list, list(list(treat = treatcohort, control = controlcohort)))
+    cohortdata <- rbind(treatcohort, controlcohort)
+    
+    dt_list <- c(dt_list, list(cohortdata))
     
   }
   
@@ -295,36 +302,27 @@ stack_for_cohort <- function(maindata,
   
 } 
 
-check_stacked_data<- function(dt_list, base_time,
+check_stacked_data<- function(eventdata, base_time,
                               balanced_panel, base_restrict, base_restrict_treated, covariate_base_balance_linear){
-  
-  treatdata <- dt_list$treat
-  controldata <- dt_list$control
   
   if(!balanced_panel){
     
     #only needed when panel is not already balanced
-    treatdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-    controldata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
-    if(max(treatdata$obsbase)>1) stop("Error: some treated units are observed more than once in the reference period")
-    if(max(controldata$obsbase)>1) stop("Error: some control units are observed more than once in the reference period")
-    treatdata <- treatdata[obsbase==1,]
-    controldata <- controldata[obsbase==1,]
-    treatdata[,obsbase := NULL]
-    controldata[,obsbase := NULL]
-    
+    eventdata[,obsbase:=sum(event_time==base_time),by=.(id,cohort)]
+    if(max(eventdata$obsbase)>1) warning("Error: some units are observed more than once in the reference period")
+    eventdata <- eventdata[obsbase==1,]
+    eventdata[,obsbase := NULL]
+
   }
   
   #check base-restrict
   if(!is.null(base_restrict)){
-    controldata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
-    controldata <- controldata[base_restrict == 1,]
-    treatdata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
-    treatdata <- treatdata[base_restrict == 1,]
+    eventdata[,base_restrict := max(base_restrict * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
+    eventdata <- eventdata[base_restrict == 1,]
   }
   if(!is.null(base_restrict_treated)){
-    treatdata[,base_restrict_treated := max(base_restrict_treated * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
-    treatdata <- treatdata[base_restrict_treated == 1,]
+    eventdata[,base_restrict_treated := max(base_restrict_treated * (event_time == base_time), na.rm=TRUE),by=.(id, cohort)]
+    eventdata <- eventdata[base_restrict_treated == 1 | treated == 0,] #only limit it for treated units
   }
   
   #check common support
@@ -333,68 +331,46 @@ check_stacked_data<- function(dt_list, base_time,
     #common support checking is only needed when there is linear regression - interpolation and extrapolation
     #o.w. a propensity score within 0,1 means it has common support
     
-    treatdata[,temp:=finteraction(balancevars,stratify,event_time,cohort)]
-    controldata[,temp:=finteraction(balancevars,stratify,event_time,cohort)]
-    commonvals<-intersect(unique(treatdata$temp),unique(controldata$temp))
-    treatdata<-treatdata[temp%in%commonvals,]
-    controldata<-controldata[temp%in%commonvals,]
-    
-    treatdata[,temp:=NULL]
-    controldata[,temp:=NULL]
+    eventdata[,temp:=finteraction(balancevars,stratify,event_time,cohort)]
+    commonvals<-intersect(eventdata[treated == 1, unique(temp)],eventdata[treated == 0, unique(temp)])
+    eventdata<-eventdata[temp%in%commonvals,]
+    eventdata[,temp:=NULL]
     rm(commonvals)
     gc()
     
   }
   
-  dt_list$treat <- treatdata
-  dt_list$control <- controldata  
-  
-  return(dt_list)
+  return(eventdata)
   
 }
 
 stack_for_event_time <- function(eventdata, base_time){
   
-  controldata <- eventdata$control
-  treatdata <- eventdata$treat
- 
-  
-  controldata[,`:=`(max_event_time = max(event_time),
+  eventdata[,`:=`(max_event_time = max(event_time),
                   min_event_time = min(event_time)) , by = "id"]
-  treatdata[,`:=`(max_event_time = max(event_time),
-                    min_event_time = min(event_time)) , by = "id"]
    
-  event_times<-treatdata[treated == 1,funique(event_time)] #equals to 0, 
-  
-  setkey(treatdata, event_time)
-  setkey(controldata, event_time)
+  event_times<-eventdata[treated == 1,funique(event_time)] #equals to 0, 
   
   double_stack_list <- list()
   for(t in event_times){
     
     if(t == -1){next}
     
-    event_time_treat <- treatdata[t <= max_event_time & t >= min_event_time & (event_time == -1 | event_time == t)] #already made sure every unit have -1 in it
-    event_time_treat[,time_pair := t]
-    
-    event_time_control <- controldata[t <= max_event_time & t >= min_event_time & (event_time == -1 | event_time == t)] #already made sure every unit have -1 in it
-    event_time_control[,time_pair := t]
+    event_time_data <- eventdata[t <= max_event_time & t >= min_event_time & (event_time == -1 | event_time == t)] #already made sure every unit have -1 in it
+
+    event_time_data[, time_pair := t]
     
     #remove uncessary cols ASAP
-    event_time_treat[, max_event_time := NULL]
-    event_time_treat[, min_event_time := NULL]
-    event_time_control[, max_event_time := NULL]
-    event_time_control[, min_event_time := NULL]
+    event_time_data[, max_event_time := NULL]
+    event_time_data[, min_event_time := NULL]
     
-    double_stack_list<-c(double_stack_list, list(event_time_treat), list(event_time_control))
+    if(event_time_data[treated == 1, .N]==0|event_time_data[treated == 0, .N]==0){next}
+    
+    double_stack_list<-c(double_stack_list, list(event_time_data))
     
   }
   
-  double_stack_dt <- rbindlist(double_stack_list, use.names=TRUE)
-  
-  
-  
-  return(double_stack_dt)
+  return(double_stack_list)
   
 }
 
@@ -410,23 +386,26 @@ var_to_factor <- function(x, factor_cols){
 
 estimate_ipw<- function(eventdata, covariate_base_stratify, covariate_base_balance, covariate_base_balance_linear){
   
-  if(is.null(covariate_base_stratify)){
-    eventdata[, stratify := 1]
+  
+  fe_var <- "event_time_fact"
+  
+  if(!is.null(covariate_base_stratify)){
+    fe_var <- paste0(fe_var, ",stratify")
   }
   
-  if(is.null(covariate_base_balance)){
-    eventdata[, balancevars := 1]
-  }
+  if(!is.null(covariate_base_balance)){
+    fe_var_wb <- paste0(fe_var, ",balancevars")
+  } else {fe_var_wb <- fe_var}
   
   #construct the call  
   if(is.null(covariate_base_balance_linear)){
     
-    call <- "treated ~ 1 | finteraction(cohort,time_pair,event_time_fact,stratify,balancevars)" 
+    call <- paste0("treated ~ 1 | finteraction(", fe_var_wb,")") 
     
   } else {
-    call <- paste0("treated ~ 1 | ",paste0(paste0("finteraction(cohort,time_pair,event_time_fact,stratify,balancevars_linear_subset)[",
+    call <- paste0("treated ~ 1 | ",paste0(paste0(paste0("finteraction(", fe_var, ",balancevars_linear_subset)["),
                                              covariate_base_balance_linear, "]"),collapse="+"),
-                   "+ finteraction(cohort,event_time_fact,stratify,balancevars)")
+                   paste0("+ finteraction(",fe_var_wb,")"))
   }
   
   #estimate propensity score

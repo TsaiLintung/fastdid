@@ -16,7 +16,6 @@ create_event_data(
   covariate_base_balance = NULL,
   covariate_base_balance_linear = NULL,
   covariate_base_balance_linear_subset = NULL,
-  covariate_base_support = NULL,
   balanced_panel = TRUE,
   check_not_treated = FALSE,
   stratify_by_cohort = FALSE,
@@ -55,8 +54,6 @@ create_event_data(
 \item{covariate_base_balance_linear}{Vector of variable names to include linearly in propensity score estimator (default is NULL).}
 
 \item{covariate_base_balance_linear_subset}{Vector of variable names within which the linear propensity score regression will be estimated (default is NULL).}
-
-\item{covariate_base_support}{Vector of variable names on which to impose common support across treated and control units (default is NULL).}
 
 \item{balanced_panel}{Logical, whether to enforce a balanced panel (default is TRUE).}
 

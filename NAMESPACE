@@ -2,7 +2,6 @@
 
 export(create_event_data)
 export(get_event_result)
-export(hello2)
 export(sim_did)
 import(collapse)
 import(data.table)

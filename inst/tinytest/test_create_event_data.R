@@ -15,11 +15,11 @@ expect_silent(event_panel <- create_event_data(dt, timevar = "time", unitvar = "
 rm(dt, event_panel)
 
 
-dt <-  sim_did(100, 10, untreated_prop = 0)[["dt"]]
+dt <-  sim_did(100, 10, untreated_prop = 0, treatment_assign = "uniform")[["dt"]]
 expect_silent(event_panel <- create_event_data(dt, timevar = "time", unitvar = "unit", 
-                                                cohortvar = "G",
-                                                control_group = "later", verbose = FALSE),
-               info = "create_event_data later only")
+                                               cohortvar = "G",
+                                               control_group = "later", verbose = FALSE),
+              info = "create_event_data later only")
 rm(dt, event_panel)
 
 
