@@ -12,8 +12,6 @@
 #' @param base_time The base time for dynamic analysis. Default is -1.
 #' @param trends Logical, indicating whether to include trends in the analysis.
 #' @param mem.clean Logical, indicating whether to perform memory cleanup during FEOLS.
-#' @param separate_stratify Logical, indicating whether to separate stratified cohorts.
-#' @param separate_cohort_time Logical, indicating whether to separate cohort time.
 #'
 #' @return A data.table containing the calculated event results.
 #'
@@ -21,7 +19,7 @@
 #' # Example usage:
 #' result <- get_event_result(eventdata, "variable_name", "cohort_event_time")
 #'
-#' @import data.table
+#' @import data.table rlist
 #'
 #' @export
 get_event_result <- function(eventdata,
@@ -32,17 +30,15 @@ get_event_result <- function(eventdata,
                              weights = "pweight",
                              base_time = -1,
                              trends = FALSE,
-                             mem.clean = FALSE,
-                             separate_stratify = TRUE,
-                             separate_cohort_time = TRUE) {
-  #allow list input (useful when not combined)
-  if(!is.data.table(eventdata)){
-    if(!is.data.table(eventdata[[1]])){stop("please provide a data.table")}
-    if(result_type != "cohort_event_time"){stop("by-cohort list is only available when using 'cohort_event_time'")}
-    
+                             mem.clean = FALSE) {
+
+  if(!is.data.table(eventdata[[1]])){stop("please provide a data.table")}
+  
+  if(result_type == "cohort_event_time"){
     all_results <- data.table()
     for(i in seq(1, length(eventdata))){
-      results <- get_event_result(eventdata = eventdata[[i]],
+      
+      results <- compute_event_result(eventdata = eventdata[[i]],
                                   variable = variable,
                                   result_type = result_type,
                                   covariate = covariate,
@@ -50,14 +46,69 @@ get_event_result <- function(eventdata,
                                   weights=weights,
                                   base_time = base_time,
                                   trends=trends,
-                                  mem.clean = mem.clean,
-                                  separate_stratify = separate_stratify,
-                                  separate_cohort_time = separate_cohort_time)
+                                  mem.clean = mem.clean)
       all_results <- rbind(all_results, results)
     }
     
     return(all_results)
-  } 
+    
+  } else if (result_type == "dynamic"){
+    
+    cohort_event_times <- names(eventdata) #names are in format like event_time.cohort
+    event_times <- unique((function(x){str_sub(x, 1, str_locate(x, "\\.")[,1]-1)})(cohort_event_times)) #get the unique event times
+
+    all_results <- data.table()
+    for(t in event_times){
+      
+      event_time_data_list <- eventdata[str_starts(cohort_event_times, t)]
+      event_time_data <- rbindlist(event_time_data_list)
+      
+      results <- compute_event_result(eventdata = event_time_data,
+                                  variable = variable,
+                                  result_type = result_type,
+                                  covariate = covariate,
+                                  clustervar=clustervar, 
+                                  weights=weights,
+                                  base_time = base_time,
+                                  trends=trends,
+                                  mem.clean = mem.clean)
+      
+      all_results <- rbind(all_results, results)
+    }
+    return(all_results)
+    
+  } else {
+    
+    eventdata <- rbindlist(eventdata)
+    
+    results <- compute_event_result(eventdata = eventdata,
+                                variable = variable,
+                                result_type = result_type,
+                                covariate = covariate,
+                                clustervar=clustervar, 
+                                weights=weights,
+                                base_time = base_time,
+                                trends=trends,
+                                mem.clean = mem.clean)
+    
+    return(eventdata)
+  
+}
+
+}
+  
+compute_event_result <- function(eventdata,
+                             variable,
+                             result_type,
+                             covariate = NULL,
+                             clustervar = "id",
+                             weights = "pweight",
+                             base_time = -1,
+                             trends = FALSE,
+                             mem.clean = FALSE) {
+  
+  #allow list input (useful when not combined)
+  if(!is.data.table(eventdata)){stop("input panel must be data.table")} 
   
   #input validation
   dt_names <- names(eventdata)
@@ -78,8 +129,7 @@ get_event_result <- function(eventdata,
   
   call <- get_estimate_call(result_type, variable, trends, covariate)
   
-  results <- eventdata |> estimate_att(call, weights, clustervar, result_type, 
-                                       mem.clean, separate_cohort_time, separate_stratify)
+  results <- eventdata |> estimate_att(call, weights, clustervar, result_type,mem.clean )
   
   return(results)
   
@@ -191,11 +241,10 @@ get_estimate_call <- function(result_type, variable, trends, covariate = NULL){
 }
 
 
-estimate_att <- function(eventdata, call, weights, clustervar, result_type, 
-                         mem.clean,separate_cohort_time, separate_stratify){
+estimate_att <- function(eventdata, call, weights, clustervar, result_type, mem.clean){
   all_results_dt <- data.table()
   
-  if(!eventdata[, uniqueN(stratify)] > 1 | !separate_stratify){
+  if(!eventdata[, uniqueN(stratify)] > 1){
 
     results<-feols(as.formula(call),
                    data = eventdata,
@@ -242,8 +291,7 @@ get_cohort <- function(x){
 
 get_stratify <- function(x){
   
-  dot_pos <- str_locate_all(x, "\\.")
-  start <- ifelse(length(dot_pos[[1]])==0,str_locate(x, "stratify")[2], dot_pos[[1]][length(dot_pos), 1])
+  start <- str_locate(x, "\\.(?=[^.]*$)")[1]
   end <-str_length(x)
   return(str_sub(x, start + 1, end))
   

@@ -7,9 +7,10 @@ library(microbenchmark)
 library(profvis)
 library(devtools)
 
+setwd("~/GitHub/EventStudyCode")
 load_all()
 
-setwd("~/GitHub/EventStudyCode")
+
 library(DiDforBigData)
 
 # ------------------------------------------------------------------------------------ 
@@ -17,10 +18,10 @@ library(DiDforBigData)
 # functions for individual package call ---------------------------------------------
 
 run_event_code <- function(sample_size, time_period){
-  dt <- dt <- sim_did(sample_size, time_period)[["dt"]]
+  dt <- dt <- sim_did(sample_size, time_period, seed = 1)[["dt"]]
   event_panel <- suppressWarnings(create_event_data(dt, timevar = "time", unitvar =  "unit", cohortvar = "G",
-                                          control_group = "both", copy = FALSE, verbose = FALSE, combine = FALSE))
-  event_est_ce <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "cohort_event_time")
+                                          control_group = "both", copy = FALSE, verbose = FALSE))
+  event_est <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
 }
 
 run_dfbd <- function(sample_size, time_period){

@@ -40,7 +40,6 @@
 #' 
 #'
 #' @export
-
 create_event_data<-function(maindata,
                             timevar,
                             unitvar,
@@ -71,7 +70,7 @@ create_event_data<-function(maindata,
                             verbose = TRUE,
                             copy_dataset = TRUE,
                             validate = TRUE,
-                            combine = TRUE
+                            combine = FALSE
 
 ) 
 {
@@ -366,9 +365,14 @@ stack_for_event_time <- function(eventdata, base_time){
     
     if(event_time_data[treated == 1, .N]==0|event_time_data[treated == 0, .N]==0){next}
     
-    double_stack_list<-c(double_stack_list, list(event_time_data))
+    new_list <- list(event_time_data)
+    names(new_list) <- as.character(t)
+    double_stack_list<-c(double_stack_list, new_list)
     
   }
+  
+  cohort <- eventdata[, as.character(first(cohort))]
+  names(double_stack_list) <- str_c(names(double_stack_list), paste0(".", cohort))
   
   return(double_stack_list)
   

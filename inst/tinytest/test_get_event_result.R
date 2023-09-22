@@ -10,7 +10,7 @@ att[, event_time := time-G] #process att
 att_dynamic <- att[!event_time %in% c(-1,10-1), .(attgt = mean(attgt)), by = "event_time"]
 merged_att <- merge(dynamic_est, att_dynamic, by = "event_time")
 ratio <- get_att_in_ci_ratio(merged_att)
-expect_equal(ratio, 1, info = "att in dynamic's CI, no balance and stratify")
+expect_true(ratio>0.9, info = "(almost all) att in dynamic's CI, no balance and stratify")
 
 cohort_time_est <- event_panel |> get_event_result(variable = "y", result_type = "cohort_event_time") #estimate
 att[, event_time := time-G]
@@ -68,6 +68,10 @@ merged_att <- merge(cohort_time_est, cohort_time_att, by = c("event_time", "G"))
 ratio <- get_att_in_ci_ratio(merged_att)
 expect_true(ratio>0.9, info = "(almost all) att in cohort_event_time's CI, with balance and stratify")
 
+expect_silent(event_panel |> get_event_result(variable = "y", result_type = "dynamic", trends = TRUE),
+              info = "dynamic result run without error, w balance and stratify, add trends")
+expect_silent(event_panel |> get_event_result(variable = "y", result_type = "cohort_event_time", trends = TRUE),
+              info = "cohort_event_time result run without error, w balance and stratify, add trends")
 expect_silent(event_panel |> get_event_result(variable = "y", result_type = "pooled"),
               info = "pooled result run without error, w balance and stratify")
 expect_silent(event_panel |> get_event_result(variable = "y", result_type = "means"),

@@ -13,9 +13,7 @@ get_event_result(
   weights = "pweight",
   base_time = -1,
   trends = FALSE,
-  mem.clean = FALSE,
-  separate_stratify = TRUE,
-  separate_cohort_time = TRUE
+  mem.clean = FALSE
 )
 }
 \arguments{
@@ -37,10 +35,6 @@ get_event_result(
 \item{trends}{Logical, indicating whether to include trends in the analysis.}
 
 \item{mem.clean}{Logical, indicating whether to perform memory cleanup during FEOLS.}
-
-\item{separate_stratify}{Logical, indicating whether to separate stratified cohorts.}
-
-\item{separate_cohort_time}{Logical, indicating whether to separate cohort time.}
 }
 \value{
 A data.table containing the calculated event results.

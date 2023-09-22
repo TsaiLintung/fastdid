@@ -29,7 +29,7 @@ create_event_data(
   verbose = TRUE,
   copy_dataset = TRUE,
   validate = TRUE,
-  combine = TRUE
+  combine = FALSE
 )
 }
 \arguments{

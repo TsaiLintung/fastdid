@@ -2,38 +2,71 @@
 rm(list = ls())
 gc()
 
+library(devtools)
 library(profvis)
-library(ggplot2)
 
 setwd("~/GitHub/EventStudyCode")
 
-# load event code ---------------------------------------------------------------------
+load_all()
 
-source("source/sim_did.R")
-source("source/utils.R")
-source("source/setup.R")
-source("source/get_event_result.R")
-source("source/create_event_data.R")
-source("source/plot_event_dynamics.R")
+library(did)
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(100000, 10, cov = "no", hetero = "all", balanced = FALSE, second_outcome = FALSE, seed = 1, stratify = FALSE)
-dt <- simdt$dt
+sample_size <- 1000
+time_period <- 10
 
-profvis({
-event_panel_list <- dt %>% create_event_data(timevar = "time", unitvar =  "unit", 
-                                        cohortvar = "G",
-                                        #covariate_base_balance = "x",
-                                        #covariate_base_stratify = "s",
-                                        balanced_panel = TRUE,
-                                        control_group = "both", copy = FALSE, combine = FALSE)
-#}) 
-event_est <- get_event_result(event_panel_list, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "cohort_event_time")
-})
+#cohort event time est
+dt <- sim_did(sample_size, time_period, seed = 1, hetero = "dynamic")[["dt"]]
 
-event_est |> plot_event_dynamics()
-
+event_panel <- suppressWarnings(create_event_data(dt, timevar = "time", unitvar =  "unit", cohortvar = "G",
+                                                  control_group = "both", copy = TRUE, verbose = FALSE))
 event_est_ce <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "cohort_event_time")
+event_est_ce[, method := "ec_aggregated"]
 
+cohort_obs <- dt[!is.infinite(G), .(count = uniqueN(unit)) , by = "G"]
+event_est_ce <- event_est_ce |> merge(cohort_obs, by.x = "cohort", by.y = "G")
+
+event_est_sum <- event_est_ce[, .(Estimate = sum(Estimate*count)/sum(count),
+                                  `Std. Error` = sqrt(sum(`Std. Error`^2*count*2))/sum(count)) , by = "event_time"]
+event_est_sum[, method := "ec_aggregated"]
+
+#dynamic est
+event_panel <- suppressWarnings(create_event_data(dt, timevar = "time", unitvar =  "unit", cohortvar = "G",
+                                                  control_group = "both", copy = TRUE, verbose = FALSE))
+event_est_dynamic <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
+event_est_dynamic[, method := "ec_dynamic"]
+
+#did estimates
+did_result <- att_gt(yname = "y",
+                  gname = "G",
+                  idname = "unit",
+                  tname = "time",
+                  data = dt,
+                  base_period = "universal",
+                  control_group = "notyettreated")
+did_est <- data.table(Estimate = did_result$att, `Std. Error` = did_result$se, cohort = unlist(did_result$group), time = unlist(did_result$t))
+did_est[, event_time := time - cohort]
+did_est[, method := "did"]
+did_est[, time := NULL]
+
+#dynamic 
+did_dynamic_result <- aggte(did_result, "dynamic", clustervars = "unit")
+did_dynamic_est <- data.table(Estimate = did_dynamic_result$att.egt , `Std. Error` = did_dynamic_result$se.egt, event_time = did_dynamic_result$egt)
+did_dynamic_est[, method := "did"]
+
+#compare ---------------------------------------
+
+est_compare <- rbind(did_est, event_est_ce[,.(cohort, event_time, Estimate, `Std. Error`, method)])
+est_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
+                                                                                            ymin = Estimate - 1.96*`Std. Error`)) + 
+  facet_wrap(~event_time + cohort, scales = "free")
+
+
+dynamic_compare <-  rbind(did_dynamic_est, event_est_dynamic[,.(event_time, Estimate, `Std. Error`, method)],
+                          event_est_sum[,.(event_time, Estimate, `Std. Error`, method)])
+
+dynamic_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
+                                                                                                ymin = Estimate - 1.96*`Std. Error`)) + 
+  facet_wrap(~event_time, scales = "free")
 

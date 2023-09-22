@@ -263,9 +263,8 @@ get_cohort <- function(x){
 }
 
 get_stratify <- function(x){
-  
-  dot_pos <- str_locate_all(x, "\\.")
-  start <- ifelse(length(dot_pos[[1]])==0,str_locate(x, "stratify")[2], dot_pos[[1]][length(dot_pos), 1])
+
+  start <- str_locate(x, "\\.(?=[^.]*$)")[1]
   end <-str_length(x)
   return(str_sub(x, start + 1, end))
   
