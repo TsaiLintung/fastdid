@@ -17,7 +17,7 @@ library(DiDforBigData)
 
 # functions for individual package call ---------------------------------------------
 
-run_event_code <- function(sample_size, time_period){
+run_event_code <- function(sample_size = 100000, time_period = 10){
   dt <- dt <- sim_did(sample_size, time_period, seed = 1)[["dt"]]
   event_panel <- suppressWarnings(create_event_data(dt, timevar = "time", unitvar =  "unit", cohortvar = "G",
                                           control_group = "both", copy = FALSE, verbose = FALSE))

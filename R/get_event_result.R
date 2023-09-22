@@ -297,7 +297,17 @@ get_stratify <- function(x){
   
 }
 
-parse_event_result <- function(results, result_type){
+parse_event_result <- function(results, result_type, depth = 1){
+  
+  if(is.null(results$coeftable)){
+    dt <- data.table()
+    if(depth >= 3){stop("empty list")}
+    for(result in results){
+      new_dt <- parse_event_result(result, result_type, depth + 1)
+      dt <- rbind(dt, new_dt)
+    }
+    return(dt)
+  }
   
   est <- results$coeftable
   dt <- data.table(variable = rownames(est), est, obs = results$nobs, outcome = deparse(results$fml[[2]]))
