@@ -1,11 +1,15 @@
 expr,time_mean,order
-"run_event_code(s, t)",4.089636,2
-"run_dfbd(s, t)",12.8332713,2
-"run_event_code(s, t)",4.0175001,3
-"run_dfbd(s, t)",12.3194691,3
-"run_event_code(s, t)",6.305932,4
-"run_dfbd(s, t)",14.2544302,4
-"run_dfbd(s, t)",27.6660738,5
-"run_event_code(s, t)",17.9897684,5
-"run_dfbd(s, t)",201.0297511,6
-"run_event_code(s, t)",236.490178,6
+"run_did(s, t)",1.8056066,2
+"run_event_code(s, t)",4.1515718,2
+"run_dfbd(s, t)",20.3550066,2
+"run_did(s, t)",0.9717549,3
+"run_event_code(s, t)",4.1639704,3
+"run_dfbd(s, t)",18.16804,3
+"run_did(s, t)",5.9836972,4
+"run_dfbd(s, t)",20.0491516,4
+"run_event_code(s, t)",5.949934,4
+"run_event_code(s, t)",20.8564559,5
+"run_did(s, t)",136.5667076,5
+"run_dfbd(s, t)",34.1957922,5
+"run_event_code(s, t)",259.6744677,6
+"run_dfbd(s, t)",204.7181405,6

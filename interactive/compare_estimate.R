@@ -27,9 +27,10 @@ event_est_ce[, method := "ec"]
 
 cohort_obs <- dt[!is.infinite(G), .(count = uniqueN(unit)) , by = "G"]
 event_est_ce <- event_est_ce |> merge(cohort_obs, by.x = "cohort", by.y = "G")
+event_est_ce[, weight := count/sum(count), by = "event_time"]
 
-event_est_sum <- event_est_ce[, .(Estimate = sum(Estimate*count)/sum(count),
-                                  `Std. Error` = sqrt(sum(`Std. Error`^2*count*2))/sum(count)) , by = "event_time"]
+event_est_sum <- event_est_ce[, .(Estimate = sum(Estimate*weight),
+                                  `Std. Error` = sqrt(sum(`Std. Error`^2*weight^2))) , by = "event_time"]
 event_est_sum[, method := "ec_aggregated"]
 
 #dynamic est ----------------------
@@ -74,20 +75,25 @@ event_es[, event_time := unlist(event_time)]
 est_compare <- rbind(did_est, event_est_ce[,.(cohort, event_time, Estimate, `Std. Error`, method)])
 est_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
                                                                                             ymin = Estimate - 1.96*`Std. Error`)) + 
-  facet_wrap(~event_time + cohort, scales = "free")
+  facet_wrap(~event_time + cohort, scales = "free") + labs(title = "Comparison of estimates, cohort_event_time and did")
 ggsave("interactive/plots/ec_compare.png", height = 15, width = 15)
 
 #aggregated ec is definitely wrong cuz dependence
 dynamic_compare <-  rbind(did_dynamic_est, event_est_dynamic[,.(event_time, Estimate, `Std. Error`, method)],
-                          event_est_sum[,.(event_time, Estimate, `Std. Error`, method)],
                           event_es[,.(event_time, Estimate, `Std. Error`, method)])
-
 dynamic_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
                                                                                                 ymin = Estimate - 1.96*`Std. Error`)) + 
-  facet_wrap(~event_time, scales = "free")
+  facet_wrap(~event_time, scales = "free") + labs(title = "Comparison of estimates, dynamic and did")
 ggsave("interactive/plots/dynamic_compare.png", height = 15, width = 15)
+dynamic_compare |> fwrite("interactive/plots/dynamic_compare.csv")
 
-# old event code
+#aggregated ec is definitely wrong cuz dependence
+aggre_compare <-  rbind(event_est_sum[,.(event_time, Estimate, `Std. Error`, method)],
+                        did_dynamic_est)
+aggre_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
+                                                                                            ymin = Estimate - 1.96*`Std. Error`)) + 
+  facet_wrap(~event_time, scales = "free") + labs(title = "Comparison of estimates, aggregated cohort_event_time and did")
+ggsave("interactive/plots/aggre_compare.png", height = 15, width = 15)
 
 
 
