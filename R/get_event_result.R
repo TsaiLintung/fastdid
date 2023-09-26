@@ -30,17 +30,18 @@ get_event_result <- function(eventdata,
                              weights = "pweight",
                              base_time = -1,
                              trends = FALSE,
-                             mem.clean = FALSE) {
+                             mem.clean = FALSE,
+                             dt = NULL) {
 
   if(!is.data.table(eventdata[[1]])){stop("please provide a data.table")}
   
-  if(result_type == "cohort_event_time"){
+  if(result_type %in% c("cohort_event_time", "dynamic")){
     all_results <- data.table()
     for(i in seq(1, length(eventdata))){
       
       results <- compute_event_result(eventdata = eventdata[[i]],
                                   variable = variable,
-                                  result_type = result_type,
+                                  result_type = "cohort_event_time",
                                   covariate = covariate,
                                   clustervar=clustervar, 
                                   weights=weights,
@@ -50,32 +51,20 @@ get_event_result <- function(eventdata,
       all_results <- rbind(all_results, results)
     }
     
-    return(all_results)
-    
-  } else if (result_type == "dynamic"){
-    
-    cohort_event_times <- names(eventdata) #names are in format like event_time.cohort
-    event_times <- unique((function(x){str_sub(x, 1, str_locate(x, "\\.")[,1]-1)})(cohort_event_times)) #get the unique event times
-
-    all_results <- data.table()
-    for(t in event_times){
+    if(result_type == "cohort_event_time") return(all_results)
+    else { #dynamic
       
-      event_time_data_list <- eventdata[str_starts(cohort_event_times, t)]
-      event_time_data <- rbindlist(event_time_data_list)
+      cohort_obs <- dt[!is.infinite(cohort), .(count = uniqueN(id)) , by = "cohort"]
+      all_results <- all_results |> merge(cohort_obs, by = "cohort")
+      all_results[, weight := count/sum(count), by = c("event_time", "stratify", "outcome")]
       
-      results <- compute_event_result(eventdata = event_time_data,
-                                  variable = variable,
-                                  result_type = result_type,
-                                  covariate = covariate,
-                                  clustervar=clustervar, 
-                                  weights=weights,
-                                  base_time = base_time,
-                                  trends=trends,
-                                  mem.clean = mem.clean)
+      all_results <- all_results[, .(Estimate = sum(Estimate*weight),
+                                    `Std. Error` = sqrt(sum(`Std. Error`^2*weight^2)),
+                                     obs = sum(obs)) , by = c("event_time", "stratify", "outcome")]
       
-      all_results <- rbind(all_results, results)
+      return(all_results)
+      
     }
-    return(all_results)
     
   } else {
     
@@ -327,7 +316,6 @@ parse_event_result <- function(results, result_type, depth = 1){
 
   dt[,stratify:= lapply(variable, get_stratify)]
   dt[,stratify := unlist(stratify)]
-  if(all(dt[, stratify == 1], na.rm = TRUE)){dt[, stratify := NULL]}
   
   return(dt)
   

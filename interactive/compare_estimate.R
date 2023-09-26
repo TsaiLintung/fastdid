@@ -35,11 +35,12 @@ event_est_sum[, method := "ec_aggregated"]
 
 #dynamic est ----------------------
 event_panel <- suppressWarnings(create_event_data(dt, timevar = "time", unitvar =  "unit", cohortvar = "G",
-                                                  control_group = "both", copy = TRUE, verbose = FALSE))
-event_est_dynamic <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic")
+                                                  control_group = "both", copy = FALSE, verbose = FALSE))
+event_est_dynamic <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic", dt = dt)
 event_est_dynamic[, method := "ec_dynamic"]
 
 #did estimates ------------------
+dt <- sim_did(sample_size, time_period, seed = 1, hetero = "dynamic")[["dt"]]
 did_result <- att_gt(yname = "y",
                   gname = "G",
                   idname = "unit",
@@ -79,8 +80,8 @@ est_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_error
 ggsave("interactive/plots/ec_compare.png", height = 15, width = 15)
 
 #aggregated ec is definitely wrong cuz dependence
-dynamic_compare <-  rbind(did_dynamic_est, event_est_dynamic[,.(event_time, Estimate, `Std. Error`, method)],
-                          event_es[,.(event_time, Estimate, `Std. Error`, method)])
+dynamic_compare <-  rbind(did_dynamic_est, event_est_dynamic[,.(event_time, Estimate, `Std. Error`, method)])
+                          #event_es[,.(event_time, Estimate, `Std. Error`, method)])
 dynamic_compare |> ggplot(aes(x = method, y = Estimate)) + geom_point() + geom_errorbar(aes(ymax = Estimate + 1.96*`Std. Error`,
                                                                                                 ymin = Estimate - 1.96*`Std. Error`)) + 
   facet_wrap(~event_time, scales = "free") + labs(title = "Comparison of estimates, dynamic and did")
