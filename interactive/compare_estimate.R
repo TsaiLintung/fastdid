@@ -35,8 +35,10 @@ event_est_sum[, method := "ec_aggregated"]
 
 #dynamic est ----------------------
 event_panel <- suppressWarnings(create_event_data(dt, timevar = "time", unitvar =  "unit", cohortvar = "G",
-                                                  control_group = "both", copy = FALSE, verbose = FALSE))
-event_est_dynamic <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic", dt = dt)
+                                                  control_group = "both", copy = TRUE, verbose = FALSE))
+cohort_obs <- dt[!is.infinite(G), .(count = uniqueN(unit)) , by = "G"]
+setnames(cohort_obs, "G", "cohort")
+event_est_dynamic <- get_event_result(event_panel, variable = "y", trends = FALSE, mem.clean = FALSE, result_type = "dynamic", cohort_obs = cohort_obs)
 event_est_dynamic[, method := "ec_dynamic"]
 
 #did estimates ------------------

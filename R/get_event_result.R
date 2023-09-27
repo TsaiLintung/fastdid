@@ -31,7 +31,7 @@ get_event_result <- function(eventdata,
                              base_time = -1,
                              trends = FALSE,
                              mem.clean = FALSE,
-                             dt = NULL) {
+                             cohort_obs = NULL) {
 
   if(!is.data.table(eventdata[[1]])){stop("please provide a data.table")}
   
@@ -53,8 +53,7 @@ get_event_result <- function(eventdata,
     
     if(result_type == "cohort_event_time") return(all_results)
     else { #dynamic
-      
-      cohort_obs <- dt[!is.infinite(cohort), .(count = uniqueN(id)) , by = "cohort"]
+
       all_results <- all_results |> merge(cohort_obs, by = "cohort")
       all_results[, weight := count/sum(count), by = c("event_time", "stratify", "outcome")]
       
