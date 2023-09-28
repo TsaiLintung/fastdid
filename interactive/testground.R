@@ -27,12 +27,12 @@ source("interactive/source_raw/drdidipw.R")
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(100000, 10, cov = "int", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(10000, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
 started.at <- proc.time()
 
-covariatesvar <- c("x")
+covariatesvar <- c()
 
 # preprocess
 
@@ -42,7 +42,7 @@ id_size <- dt[, uniqueN(unit)]
 time_periods <- dt[, unique(time)]
 time_size <- length(time_periods)
 cohorts <- dt[, unique(G)]
-
+treated_cohorts <- cohorts[!is.infinite(cohorts)]
 dt_inv <- dt[1:id_size]
 cohort_sizes <- dt_inv[, .(cohort_size = .N) , by = G]
 
@@ -62,12 +62,9 @@ for(i in 1:time_size){
   outcomes[[i]] <- dt[seq((i-1)*id_size+1,i*id_size), .(y)]
 }
 
-#the setup 
-last_coef <- NULL
+# attgt  -------------------------------------------------------------------------------------------------------------- 
+
 control_option <- "notyet"
-max_control <- Inf
-
-
 
 if(!Inf %in% cohorts & control_option != "notyet"){
   warning("no never-treated availble, switching to not-yet-treated control")
@@ -75,12 +72,14 @@ if(!Inf %in% cohorts & control_option != "notyet"){
 }
 
 max_control_cohort <- switch (control_option,
-  "notyet" = max(cohorts[!is.infinite(cohorts)]),
+  "notyet" = max(treated_cohorts),
   "both" = Inf,
   "never" = Inf
 )
 
-all_results <- list()
+last_coef <- NULL
+gt_att <- data.table()
+gt_inf_func <- data.table(unit = dt_inv[, unit])
 for(g in cohorts){
   for(t in time_periods){
     message(g,t)
@@ -88,7 +87,7 @@ for(g in cohorts){
     min_control_cohort <- ifelse(control_option == "never", Inf, t+1) #not-yet treated / never treated
     if(t == base_period){next} #no treatmenteffect for the base period
     if(g == Inf){next} #no treatmenteffect for never treated
-    if(t+1 >= max_control_cohort){next} #no control available if no never treated at the end
+    if(t >= max_control_cohort){next} #no control available if no never treated at the end
     
     did_setup <- rep(NA, id_size)
     did_setup[get_cohort_pos(cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
@@ -101,12 +100,29 @@ for(g in cohorts){
     cohort_did[, weights := 1]
     
     
-    results <- estimate_did(cohort_did)#, last_coef)
-    #last_coef <- results$logit_coef
-    all_results[[paste0(g, ".", t)]] <- results
+    results <- estimate_did(cohort_did, last_coef)
+    last_coef <- results$logit_coef
+    
+    gt_att <- rbind(gt_att, data.table(G = g, time = t, att = results$att))
+    gt_inf_func[[paste0(g, ".", t)]] <- results$inf_func
     
   }
 }
 
 timetaken(started.at)
+
+# aggregate  -------------------------------------------------------------------------------------------
+
+names(gt_inf_func)
+
+gt_att <- gt_att |> merge(cohort_sizes, by = "G")
+gt_att[, event_time := time-G]
+event_est <- gt_att[, .(att = sum(att*cohort_size)/sum(cohort_size)), by = "event_time"]
+
+
+event_est <- data.table()
+for(event_time in (min(time_periods)-max(treated_cohorts)):(max(time_periods)-min(treated_cohorts))){
+  message(event_time)
+ 
+}
 
