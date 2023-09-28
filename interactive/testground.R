@@ -84,9 +84,9 @@ for(g in cohorts){
   for(t in time_periods){
     message(g,t)
     base_period <- g-1
-    min_control_cohort <- ifelse(control_option == "never", Inf, t+1) #not-yet treated / never treated
+    min_control_cohort <- ifelse(control_option == "never", Inf, max(t+1, g)) #not-yet treated / never treated
     if(t == base_period){next} #no treatmenteffect for the base period
-    if(g == Inf){next} #no treatmenteffect for never treated
+    if(g == max_control_cohort | g == Inf){next} #no treatmenteffect for never treated or the last
     if(t >= max_control_cohort){next} #no control available if no never treated at the end
     
     did_setup <- rep(NA, id_size)
