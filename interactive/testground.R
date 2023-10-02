@@ -30,7 +30,7 @@ source("interactive/source_raw/drdidipw.R")
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1000, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(1000000, 10, cov = "int", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
 started.at <- proc.time()
@@ -113,33 +113,48 @@ for(g in cohorts){
     
   }
 }
+gt_inf_func[, unit := NULL]
 
+# construct weight -------------------------------------------------------------------------------------
 
+weights <- data.table()
+group_time <- gt_att[,.(G, time)] |> merge(cohort_sizes, by = "G")
+
+gt_count <- group_time[, .N]
+
+result_type <- "dynamic"
+balanced_composition <- FALSE
+min_event_time<- group_time[, min(time-G)]
+max_event_time<- group_time[, max(time-G)]
+targets <- c()
+
+for(et in min_event_time:max_event_time){
+  group_time[, agg_weight := 0]
+  group_time[, event_time := time - G]
+  total_size <- group_time[event_time == et, sum(cohort_size)]
+  group_time[, weight := ifelse(event_time == et, cohort_size/total_size, 0)]
+  target_weights <- group_time[, .(weight)] |> transpose()
+  names(target_weights) <- names(gt_inf_func)[names(gt_inf_func) != "unit"]
+  
+  targets <- c(targets, et)
+  weights <- rbind(weights, target_weights)
+}
 
 # aggregate  -------------------------------------------------------------------------------------------
 
+agg_att <- as.matrix(weights) %*% as.vector(gt_att[, att]) |> as.vector()
 
-gt_att <- gt_att |> merge(cohort_sizes, by = "G")
-gt_att[, event_time := time-G]
-event_est <- gt_att[, .(att = sum(att*cohort_size)/sum(cohort_size)), by = "event_time"]
-
-#construct weights based on the target param
-
-#aggregate att and if based on weights
-
-#bootstrap for if to get se
+inf_matrix <- as.matrix(gt_inf_func) %*% t(as.matrix(weights))
 
 # get bootstrap se ------------------------------------------------------------------------------------------
 
 clustervar <- "unit"
 
-timetaken(started.at)
-
 if(boot){
   top_quant <- 0.75
   bot_quant <- 0.25
-  boot_results <- BMisc::multiplier_bootstrap(as.matrix(gt_inf_func), biters = 1000) %>% as.data.table()
-  names(boot_results) <- names(gt_inf_func)
+  boot_results <- BMisc::multiplier_bootstrap(as.matrix(inf_matrix), biters = 1000) %>% as.data.table()
+  names(boot_results) <- names(inf_matrix)
   boot_top <- boot_results[, lapply(.SD, function(x) quantile(x, top_quant, type=1, na.rm = TRUE)),]
   boot_bot <- boot_results[, lapply(.SD, function(x) quantile(x, bot_quant, type=1, na.rm = TRUE)),]
   
@@ -149,35 +164,33 @@ if(boot){
   dt_se[, `:=`(boot_bot = NULL,
                boot_top = NULL)]
 } else {
-  gt_inf_func <- gt_inf_func %>% as.data.table()
-  dt_se <- gt_inf_func[, lapply(.SD, function(x) sd(x)/sqrt(length(x)))] %>% transpose(keep.names = "rn")
-  names(dt_se) <- c("setup", "se")
+  inf_matrix <- inf_matrix %>% as.data.table()
+  dt_se <- inf_matrix[, lapply(.SD, function(x) sd(x)/sqrt(length(x)))] %>% as.vector()
 }
 
-dt_se <- dt_se[setup != "unit"]
-dt_se[, `:=`(G = as.double(str_split_i(setup, "\\.", 1)),
-             time = as.double(str_split_i(setup, "\\.", 2)))]
-dt_se[, `:=`(setup = NULL)]
+did_result <- data.table(target = targets, se = dt_se, att = agg_att)
+
+timetaken(started.at)
 
 #compare with did -------------------------------------------------------------------------------------------------
 
 #construct the 2x2 dataset
-
-did_result <- att_gt(yname = "y",
-                     gname = "G",
-                     idname = "unit",
-                     tname = "time",
-                     data = dt,
-                     #xformla = ~x,
-                     base_period = "universal",
-                     control_group = "notyettreated",
-                     est_method = "ipw",
-                     clustervars = clustervar)
-
-did_result_dt <- data.table(G = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)
-
-compare <- did_result_dt |> merge(dt_se, by = c("G", "time"), all = TRUE) |> merge(gt_att, by = c("G", "time"), all = TRUE)
-
-compare[, se_diff := se-did_se]
-compare[, att_diff := att-did_att]
-compare
+# 
+# did_result <- att_gt(yname = "y",
+#                      gname = "G",
+#                      idname = "unit",
+#                      tname = "time",
+#                      data = dt,
+#                      #xformla = ~x,
+#                      base_period = "universal",
+#                      control_group = "notyettreated",
+#                      est_method = "ipw",
+#                      clustervars = clustervar)
+# 
+# did_result_dt <- data.table(G = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)
+# 
+# compare <- did_result_dt |> merge(dt_se, by = c("G", "time"), all = TRUE) |> merge(gt_att, by = c("G", "time"), all = TRUE)
+# 
+# compare[, se_diff := se-did_se]
+# compare[, att_diff := att-did_att]
+# compare
