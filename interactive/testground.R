@@ -36,7 +36,9 @@ dt <- simdt$dt
 started.at <- proc.time()
 
 covariatesvar <- c()
-boot <- FALSE
+boot <- TRUE
+result_type <- "group_time"
+cluster <- NULL
 
 # preprocess ----------------------------------------------------------
 
@@ -122,7 +124,7 @@ group_time <- gt_att[,.(G, time)] |> merge(cohort_sizes, by = "G")
 
 gt_count <- group_time[, .N]
 
-result_type <- "group_time"
+
 balanced_composition <- FALSE
 
 bool_to_pn <- function(x){ifelse(x, 1, -1)}
@@ -140,15 +142,14 @@ if (result_type == "dynamic") {
 min_target<- group_time[, min(target)]
 max_target<- group_time[, max(target)]
 
-targets <- c()
-for(tar in min_target:max_target){
+targets <- group_time[, unique(target)]
+for(tar in targets){
   group_time[, agg_weight := 0]
   total_size <- group_time[target == tar, sum(cohort_size)]
   group_time[, weight := ifelse(target == tar, cohort_size/total_size, 0)]
   target_weights <- group_time[, .(weight)] |> transpose()
   names(target_weights) <- names(gt_inf_func)
   
-  targets <- c(targets, tar)
   weights <- rbind(weights, target_weights)
 }
 
@@ -159,51 +160,84 @@ inf_matrix <- as.matrix(gt_inf_func) %*% t(as.matrix(weights))
 
 # get bootstrap se ------------------------------------------------------------------------------------------
 
-clustervar <- "unit"
+get_se <- function(inf_matrix, boot, biters, cluster) {
 
-if(boot){
-  top_quant <- 0.75
-  bot_quant <- 0.25
-  boot_results <- BMisc::multiplier_bootstrap(as.matrix(inf_matrix), biters = 1000) %>% as.data.table()
-  boot_top <- boot_results[, lapply(.SD, function(x) quantile(x, top_quant, type=1, na.rm = TRUE)),]
-  boot_bot <- boot_results[, lapply(.SD, function(x) quantile(x, bot_quant, type=1, na.rm = TRUE)),]
-  
-  dt_se <- rbind(boot_bot, boot_top) %>% transpose()
-  names(dt_se) <- c("boot_bot", "boot_top")
-  dt_se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))]
-} else {
-  inf_matrix <- inf_matrix %>% as.data.table()
-  dt_se <- inf_matrix[, lapply(.SD, function(x) sd(x)/sqrt(length(x)))] %>% as.vector()
+  if(boot){
+    top_quant <- 0.75
+    bot_quant <- 0.25
+    if(!is.null(cluster)){
+      inf_matrix <- inf_matrix |> as.data.table()
+      inf_matrix[, cluster := cluster]
+      inf_matrix <- inf_matrix[, lapply(.SD, mean), by = "cluster", .SDcols = names(inf_matrix)[names(inf_matrix) != "cluster"]] 
+      inf_matrix[, cluster := NULL]
+      inf_matrix <- inf_matrix |> as.matrix()
+    }
+    
+    boot_results <- BMisc::multiplier_bootstrap(inf_matrix, biters = biters) %>% as.data.table()
+    boot_top <- boot_results[, lapply(.SD, function(x) quantile(x, top_quant, type=1, na.rm = TRUE)),]
+    boot_bot <- boot_results[, lapply(.SD, function(x) quantile(x, bot_quant, type=1, na.rm = TRUE)),]
+    
+    dt_se <- rbind(boot_bot, boot_top) %>% transpose()
+    names(dt_se) <- c("boot_bot", "boot_top")
+    dt_se[, n_adjust := nrow(inf_matrix)/colSums(inf_matrix != 0)]
+    se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))*n_adjust]
+  } else {
+    if(!is.null(cluster)){stop("clustering only available with bootstrap")}
+    
+    inf_matrix <- inf_matrix %>% as.data.table()
+    se <- inf_matrix[, lapply(.SD, function(x) sd(x, na.rm = TRUE)*sqrt(length(x)-1)/length(x[x!=0]))] %>% as.vector() #should maybe use n-1 but did use n
+  }
+  return(unlist(se))
 }
+
+
+se <- get_se(inf_matrix = inf_matrix, boot = boot, biters = 1000, cluster = cluster)
 
 # gather results -------------------------------------------------------------------------------------------------
 
-did_result <- data.table(target = targets, att = agg_att, se = dt_se)
-
+result <- data.table(target = targets, att = agg_att, se = se)
 
 #compare with did -------------------------------------------------------------------------------------------------
 
 #construct the 2x2 dataset
-# 
-# did_result <- att_gt(yname = "y",
-#                      gname = "G",
-#                      idname = "unit",
-#                      tname = "time",
-#                      data = dt,
-#                      #xformla = ~x,
-#                      base_period = "universal",
-#                      control_group = "notyettreated",
-#                      est_method = "ipw",
-#                      clustervars = clustervar)
-# 
-# did_result_dt <- data.table(G = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)
-# 
-# compare <- did_result_dt |> merge(dt_se, by = c("G", "time"), all = TRUE) |> merge(gt_att, by = c("G", "time"), all = TRUE)
-# 
-# compare[, se_diff := se-did_se]
-# compare[, att_diff := att-did_att]
-# compare
+
+did_result <- att_gt(yname = "y",
+                     gname = "G",
+                     idname = "unit",
+                     tname = "time",
+                     data = dt,
+                     #xformla = ~x,
+                     base_period = "universal",
+                     control_group = "notyettreated",
+                     est_method = "ipw",
+                     clustervars = NULL,
+                     bstrap = boot)
+
+did_result2 <- att_gt(yname = "y",
+                     gname = "G",
+                     idname = "unit",
+                     tname = "time",
+                     data = dt,
+                     #xformla = ~x,
+                     base_period = "universal",
+                     control_group = "notyettreated",
+                     est_method = "ipw",
+                     clustervars = NULL,
+                     bstrap = boot)
+
+
+did_result_dt <- data.table(G = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se, did_se2 = did_result2$se)
+did_result_dt[,target := G*max(time)+time]
+compare <- did_result_dt |> merge(result, by = c("target"), all = TRUE) 
+compare <- compare[!is.na(did_se)]
+compare[, se_diff := se-did_se]
+compare[, se_rand := did_se2-did_se]
+compare[, att_diff := att-did_att]
+compare[, se_diff_ratio := abs(se_diff/did_se)]
+compare[, att_diff_ratio := abs(att_diff/did_att)]
+compare[, se_rand_ratio := abs(se_rand/did_se)]
+View(compare)
 
 
 timetaken(started.at)
-did_result
+result
