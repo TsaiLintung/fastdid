@@ -30,7 +30,7 @@ source("interactive/source_raw/drdidipw.R")
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1000000, 10, cov = "int", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(1000, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
 started.at <- proc.time()
@@ -122,28 +122,39 @@ group_time <- gt_att[,.(G, time)] |> merge(cohort_sizes, by = "G")
 
 gt_count <- group_time[, .N]
 
-result_type <- "dynamic"
+result_type <- "group_time"
 balanced_composition <- FALSE
-min_event_time<- group_time[, min(time-G)]
-max_event_time<- group_time[, max(time-G)]
-targets <- c()
 
-for(et in min_event_time:max_event_time){
+bool_to_pn <- function(x){ifelse(x, 1, -1)}
+
+if (result_type == "dynamic") {
+  group_time[, target := time-G]
+} else if (result_type == "group") {
+  group_time[, target := G*(bool_to_pn(time>=G))]
+} else if (result_type == "time") {
+  group_time[, target := time*(bool_to_pn(time>=G))]
+} else if (result_type == "group_time"){
+  group_time[, target := G*max(time)+time]
+}
+
+min_target<- group_time[, min(target)]
+max_target<- group_time[, max(target)]
+
+targets <- c()
+for(tar in min_target:max_target){
   group_time[, agg_weight := 0]
-  group_time[, event_time := time - G]
-  total_size <- group_time[event_time == et, sum(cohort_size)]
-  group_time[, weight := ifelse(event_time == et, cohort_size/total_size, 0)]
+  total_size <- group_time[target == tar, sum(cohort_size)]
+  group_time[, weight := ifelse(target == tar, cohort_size/total_size, 0)]
   target_weights <- group_time[, .(weight)] |> transpose()
-  names(target_weights) <- names(gt_inf_func)[names(gt_inf_func) != "unit"]
+  names(target_weights) <- names(gt_inf_func)
   
-  targets <- c(targets, et)
+  targets <- c(targets, tar)
   weights <- rbind(weights, target_weights)
 }
 
 # aggregate  -------------------------------------------------------------------------------------------
 
 agg_att <- as.matrix(weights) %*% as.vector(gt_att[, att]) |> as.vector()
-
 inf_matrix <- as.matrix(gt_inf_func) %*% t(as.matrix(weights))
 
 # get bootstrap se ------------------------------------------------------------------------------------------
@@ -154,23 +165,21 @@ if(boot){
   top_quant <- 0.75
   bot_quant <- 0.25
   boot_results <- BMisc::multiplier_bootstrap(as.matrix(inf_matrix), biters = 1000) %>% as.data.table()
-  names(boot_results) <- names(inf_matrix)
   boot_top <- boot_results[, lapply(.SD, function(x) quantile(x, top_quant, type=1, na.rm = TRUE)),]
   boot_bot <- boot_results[, lapply(.SD, function(x) quantile(x, bot_quant, type=1, na.rm = TRUE)),]
   
-  dt_se <- rbind(boot_bot, boot_top) %>% transpose(keep.names = "rn")
-  names(dt_se) <- c("setup", "boot_bot", "boot_top")
-  dt_se[, se := (boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))]
-  dt_se[, `:=`(boot_bot = NULL,
-               boot_top = NULL)]
+  dt_se <- rbind(boot_bot, boot_top) %>% transpose()
+  names(dt_se) <- c("boot_bot", "boot_top")
+  dt_se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))]
 } else {
   inf_matrix <- inf_matrix %>% as.data.table()
   dt_se <- inf_matrix[, lapply(.SD, function(x) sd(x)/sqrt(length(x)))] %>% as.vector()
 }
 
-did_result <- data.table(target = targets, se = dt_se, att = agg_att)
+# gather results -------------------------------------------------------------------------------------------------
 
-timetaken(started.at)
+did_result <- data.table(target = targets, att = agg_att, se = dt_se)
+
 
 #compare with did -------------------------------------------------------------------------------------------------
 
@@ -194,3 +203,7 @@ timetaken(started.at)
 # compare[, se_diff := se-did_se]
 # compare[, att_diff := att-did_att]
 # compare
+
+
+timetaken(started.at)
+did_result
