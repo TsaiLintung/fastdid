@@ -30,12 +30,13 @@ source("interactive/source_raw/drdidipw.R")
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1000000, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(1000, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
 started.at <- proc.time()
 
 covariatesvar <- c()
+boot <- FALSE
 
 # preprocess ----------------------------------------------------------
 
@@ -131,41 +132,32 @@ event_est <- gt_att[, .(att = sum(att*cohort_size)/sum(cohort_size)), by = "even
 # get bootstrap se ------------------------------------------------------------------------------------------
 
 clustervar <- "unit"
-gt_se <- data.table()
-boot <- FALSE
-
-for(g in cohorts){
-  for(t in time_periods){
-    
-    inf_func <- gt_inf_func[[paste0(g, ".", t)]]
-    
-    if(is.null(inf_func)){next}
-    
-    dt_se <- data.table(iff = inf_func, cluster = dt_inv[[clustervar]])
-    dt_se <- dt_se[!is.na(iff)]
-    
-    if(boot){
-      
-      dt_se <- dt_se[, .(iff = mean(iff)), by = cluster]
-      
-      
-      boot_result <- BMisc::multiplier_bootstrap(as.matrix(dt_se[, iff]), biters = 1000)
-      top_quant <- 0.75
-      bot_quant <- 0.25
-      boot_top <- quantile(boot_result, top_quant, type=1, na.rm = TRUE)
-      boot_bot <- quantile(boot_result, bot_quant, type=1, na.rm = TRUE)
-      se <- (boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))
-    } else {
-      se <- sd(dt_se[, iff])/sqrt(dt_se[, .N])
-    }
-    
-    gt_se <- rbind(gt_se, data.table(G = g, time = t, se = se))
-
-  }
-}
 
 timetaken(started.at)
 
+if(boot){
+  top_quant <- 0.75
+  bot_quant <- 0.25
+  boot_results <- BMisc::multiplier_bootstrap(as.matrix(gt_inf_func), biters = 1000) %>% as.data.table()
+  names(boot_results) <- names(gt_inf_func)
+  boot_top <- boot_results[, lapply(.SD, function(x) quantile(x, top_quant, type=1, na.rm = TRUE)),]
+  boot_bot <- boot_results[, lapply(.SD, function(x) quantile(x, bot_quant, type=1, na.rm = TRUE)),]
+  
+  dt_se <- rbind(boot_bot, boot_top) %>% transpose(keep.names = "rn")
+  names(dt_se) <- c("setup", "boot_bot", "boot_top")
+  dt_se[, se := (boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))]
+  dt_se[, `:=`(boot_bot = NULL,
+               boot_top = NULL)]
+} else {
+  gt_inf_func <- gt_inf_func %>% as.data.table()
+  dt_se <- gt_inf_func[, lapply(.SD, function(x) sd(x)/sqrt(length(x)))] %>% transpose(keep.names = "rn")
+  names(dt_se) <- c("setup", "se")
+}
+
+dt_se <- dt_se[setup != "unit"]
+dt_se[, `:=`(G = as.double(str_split_i(setup, "\\.", 1)),
+             time = as.double(str_split_i(setup, "\\.", 2)))]
+dt_se[, `:=`(setup = NULL)]
 
 #compare with did -------------------------------------------------------------------------------------------------
 
@@ -184,7 +176,7 @@ did_result <- att_gt(yname = "y",
 
 did_result_dt <- data.table(G = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)
 
-compare <- did_result_dt |> merge(gt_se, by = c("G", "time"), all = TRUE) |> merge(gt_att, by = c("G", "time"), all = TRUE)
+compare <- did_result_dt |> merge(dt_se, by = c("G", "time"), all = TRUE) |> merge(gt_att, by = c("G", "time"), all = TRUE)
 
 compare[, se_diff := se-did_se]
 compare[, att_diff := att-did_att]
