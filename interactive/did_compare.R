@@ -7,8 +7,8 @@ did_result <- att_gt(yname = "y",
                      base_period = "universal",
                      control_group = "notyettreated",
                      est_method = "ipw",
-                     clustervars = NULL,
-                     bstrap = boot)
+                     clustervars = "G",
+                     bstrap = TRUE)
 
 did_result2 <- att_gt(yname = "y",
                       gname = "G",
@@ -23,7 +23,7 @@ did_result2 <- att_gt(yname = "y",
                       bstrap = boot)
 
 
-did_result_dt <- data.table(G = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se, did_se2 = did_result2$se)
+did_result_dt <- data.table(G = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)#, did_se2 = did_result2$se)
 did_result_dt[,target := G*max(time)+time]
 compare <- did_result_dt |> merge(result, by = c("target"), all = TRUE) 
 compare <- compare[!is.na(did_se)]

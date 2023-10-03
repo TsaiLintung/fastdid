@@ -68,7 +68,7 @@ estimate_did <- function(dt_did, last_coef = NULL){
   
   inf_func_no_na <- inf_treat - inf_cont
   
-  inf_func <- rep(0, oldn)
+  inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
   inf_func[data_pos] <- inf_func_no_na
   return(list(att = att, inf_func = inf_func, logit_coef = logit_coef))
 }

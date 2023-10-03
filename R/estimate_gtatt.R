@@ -11,7 +11,8 @@ estimate_gtatt <- function(outcomes, covariates, weights,
   max_control_cohort <- ifelse(control_option == "notyet", max(treated_cohorts), Inf) 
   
   last_coef <- NULL
-  gt_att <- data.table()
+  gt <- data.table()
+  gt_att <- c()
   gt_inf_func <- data.table(placeholder = rep(NA, id_size))
   for(t in time_periods){
     for(g in cohorts){
@@ -37,13 +38,15 @@ estimate_gtatt <- function(outcomes, covariates, weights,
       last_coef <- results$logit_coef
       
       #collect the result
-      gt_att <- rbind(gt_att, data.table(G = g, time = t, att = results$att))
-      gt_inf_func[[paste0(g, ".", t)]] <- results$inf_func
+      gt <- rbind(gt, data.table(G = g, time = t)) #the sequence matters for the weights
+      gt_att <- c(gt_att, att = results$att)
+      gt_inf_func[[paste0(t, ".", g)]] <- results$inf_func
       
     }
   }
-  gt_inf_func[, placeholder := NULL]
-  return(list(att = gt_att, inf_func = gt_inf_func))
+  gt_inf_func[,placeholder := NULL]
+  
+  return(list(att = gt_att, inf_func = gt_inf_func, gt = gt))
 }
 
 get_cohort_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){

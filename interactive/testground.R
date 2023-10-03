@@ -27,11 +27,14 @@ load_all()
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1e+03, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = TRUE)
+simdt <- sim_did(1e+02, 10, cov = "no", hetero = "dynamic", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
-results <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit")
+started.at <- proc.time()
+results <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "group_time",
+                   clustervar = "clu", boot = TRUE)
+timetaken(started.at)
 
-
+profvis(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "group_time"))
 
 

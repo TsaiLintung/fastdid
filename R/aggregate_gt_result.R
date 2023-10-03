@@ -3,34 +3,36 @@ aggregate_gt_result <- function(gt_result, cohort_sizes,
   
   gt_att <- gt_result$att
   gt_inf_func <- gt_result$inf_func
+  gt <- gt_result$gt
   
-  group_time <- gt_att[,.(G, time)] |> merge(cohort_sizes, by = "G")
+  group_time <- gt |> merge(cohort_sizes, by = "G")
+  
+  setorder(group_time, time, G) #change the order to match the order in gtatt
   
   if(result_type == "group_time"){
     
     targets <- group_time[, unique(G*max(time)+time)]
     inf_matrix <- as.matrix(gt_inf_func)
-    agg_att <- as.vector(gt_att[, att])
+    agg_att <- as.vector(gt_att)
     
   } else {
     
-    agg_sch <- get_aggregate_scheme(group_time, result_type, balanced_composition)
+    agg_sch <- get_aggregate_scheme(group_time, result_type)
     targets <- agg_sch$targets
-    weights <- agg_sch$weights
+    weights <- as.matrix(agg_sch$weights)
+    colnames(weights) <- NULL
     
-    inf_matrix <- as.matrix(gt_inf_func) %*% t(as.matrix(weights))
-    agg_att <- as.matrix(weights) %*% as.vector(gt_att[, att]) |> as.vector()
+    inf_matrix <- as.matrix(gt_inf_func) %*% t(weights)
+    agg_att <- weights %*% gt_att
     
   }
   return(list(inf_matrix = inf_matrix, agg_att = agg_att, targets = targets))
 }
 
-get_aggregate_scheme <- function(group_time, result_type, balanced_composition){
+get_aggregate_scheme <- function(group_time, result_type){
   
   weights <- data.table()
   gt_count <- group_time[, .N]
-  
-  if(balanced_composition){stop("balanced_composition not implemented yet")}
   
   bool_to_pn <- function(x){ifelse(x, 1, -1)}
   
@@ -46,14 +48,15 @@ get_aggregate_scheme <- function(group_time, result_type, balanced_composition){
   max_target<- group_time[, max(target)]
   
   targets <- group_time[, unique(target)]
-  for(tar in targets){
+  for(tar in targets){ #the order matters
+    
     group_time[, agg_weight := 0]
     total_size <- group_time[target == tar, sum(cohort_size)]
     group_time[, weight := ifelse(target == tar, cohort_size/total_size, 0)]
     target_weights <- group_time[, .(weight)] |> transpose()
-    names(target_weights) <- names(gt_inf_func)
     
     weights <- rbind(weights, target_weights)
   }
+  
   return(list(weights = weights, targets = targets))
 }

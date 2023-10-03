@@ -20,3 +20,35 @@ set_max_thread <- function(){
 reverse_col <- function(x){
   return(x[,ncol(x):1])
 }
+
+convert_targets <- function(results, result_type, 
+                            time_offset, max_time){
+  
+  if(result_type == "dynamic"){
+    setnames(results, "target", "event_time")
+  } else if (result_type == "cohort"){
+    
+    results[, type := ifelse(target >= 0, "post", "pre")]
+    results[, target := abs(target)+time_offset]
+    setnames(results, "target", "cohort")
+    
+  } else if (result_type == "calendar"){
+    
+    results[, type := ifelse(target >= 0, "post", "pre")]
+    results[, target := abs(target)+time_offset]
+    setnames(results, "target", "time")
+    
+  } else if (result_type == "group_time"){
+    
+    results[, cohort := floor((target-1)/max_time)]
+    results[, time := (target-cohort*max_time)]
+    
+    #recover the time
+    results[, cohort := cohort + time_offset]
+    results[, time := time + time_offset]
+    
+    results[, target := NULL]
+    
+  }
+  return(results)
+}

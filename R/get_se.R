@@ -5,13 +5,7 @@ get_se <- function(inf_matrix, boot, biters, cluster) {
     top_quant <- 0.75
     bot_quant <- 0.25
     if(!is.null(cluster)){
-      
-      #aggregate the influence function by cluster
-      inf_matrix <- inf_matrix |> as.data.table()
-      inf_matrix[, cluster := cluster]
-      inf_matrix <- inf_matrix[, lapply(.SD, mean), by = "cluster", .SDcols = names(inf_matrix)[names(inf_matrix) != "cluster"]] 
-      inf_matrix[, cluster := NULL]
-      inf_matrix <- inf_matrix |> as.matrix()
+      stop("cluster still broken")#need to adjust for the 0s in the matrix
     }
     
     boot_results <- BMisc::multiplier_bootstrap(inf_matrix, biters = biters) %>% as.data.table()
@@ -20,7 +14,7 @@ get_se <- function(inf_matrix, boot, biters, cluster) {
     
     dt_se <- rbind(boot_bot, boot_top) %>% transpose()
     names(dt_se) <- c("boot_bot", "boot_top")
-    dt_se[, n_adjust := nrow(inf_matrix)/colSums(inf_matrix != 0)]
+    dt_se[, n_adjust := nrow(inf_matrix)/colSums(inf_matrix!=0)]
     se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))*n_adjust]
     
   } else {
