@@ -28,8 +28,10 @@ library(did)
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1e+03, 10, cov = "no", hetero = "dynamic", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(1e+03, 5, cov = "no", hetero = "dynamic", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE,
+                 epsilon_size = 1)
 dt <- simdt$dt
+dt[, y := y*100]
 
 # started.at <- proc.time()
 # results <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "group_time")

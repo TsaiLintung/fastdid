@@ -37,8 +37,6 @@ compare <- did_result_dt |> merge(result, by = c("cohort", "time"), all = TRUE)
 compare[, ratio := did_se/se]
 compare[, ratio2 := did_se/did_se2]
 
-compare[, mean(ratio, na.rm = TRUE)]
-compare[, mean(ratio2, na.rm = TRUE)]
 # 
 # compare <- compare[!is.na(did_se)]
 # compare[, se_diff := se-did_se]
@@ -52,3 +50,6 @@ compare[, mean(ratio2, na.rm = TRUE)]
 # 
 # timetaken(started.at)
 # result
+
+compare[, mean(ratio, na.rm = TRUE)]
+compare[, mean(ratio2, na.rm = TRUE)]

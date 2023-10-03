@@ -7,7 +7,8 @@ get_se <- function(inf_matrix, boot, biters, cluster) {
     if(!is.null(cluster)){
       cluster_n <- aggregate(cluster, by=list(cluster), length)[,2]
       inf_matrix <- fsum(inf_matrix, cluster) / cluster_n #the mean without 0 for each cluster of each setting
-      inf_matrix[is.na(inf_matrix)|abs(inf_matrix) < sqrt(.Machine$double.eps)*10] <- 0 #some cancels out, but not exactly zero because floating point zz
+      inf_matrix[is.na(inf_matrix)|(inf_matrix^2) < sqrt(.Machine$double.eps)*10] <- 0 #some cancels out, but not exactly zero because floating point zz
+      # I actually think I'm right compared to did  (base::colSums(bres^2) > sqrt(.Machine$double.eps)*10) doesn't make sense 
     }
 
     boot_results <- BMisc::multiplier_bootstrap(inf_matrix, biters = biters) %>% as.data.table()
@@ -17,8 +18,8 @@ get_se <- function(inf_matrix, boot, biters, cluster) {
     
     dt_se <- rbind(boot_bot, boot_top) %>% transpose()
     names(dt_se) <- c("boot_bot", "boot_top")
+
     dt_se[, n_adjust := (nrow(inf_matrix)-1)/colSums(inf_matrix!=0)]
-    
     se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))*n_adjust]
     
   } else {
