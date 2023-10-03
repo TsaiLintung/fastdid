@@ -1,5 +1,5 @@
 boot <- TRUE
-clust <-"G"
+clust <- "G"
 
 did_result <- att_gt(yname = "y",
                      gname = "G",

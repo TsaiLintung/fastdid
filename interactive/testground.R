@@ -28,7 +28,7 @@ library(did)
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1e+03, 5, cov = "no", hetero = "dynamic", balanced = TRUE, second_outcome = FALSE, seed = 333, stratify = FALSE)
+simdt <- sim_did(1e+03, 10, cov = "no", hetero = "dynamic", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
 # started.at <- proc.time()
