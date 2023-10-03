@@ -69,7 +69,7 @@ fastdid <- function(dt,
                                     result_type)
   
   #influence function -> se
-  agg_se <- get_se(agg_result$inf_matrix, boot, biters = 1000, cluster)
+  agg_se <- get_se(agg_result$inf_matrix, boot, biters = 10000, cluster)
   
   # post process -----------------------------------------------
   
