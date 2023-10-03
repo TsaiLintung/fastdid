@@ -22,22 +22,16 @@ setwd("~/GitHub/EventStudyCode")
 
 load_all()
 
-source("R/sim_did.R")
-source("interactive/newfuncs.R")
-
 
 # load event code ---------------------------------------------------------------------
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1000000, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = TRUE)
+simdt <- sim_did(1e+03, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = TRUE)
 dt <- simdt$dt
 
-started.at <- proc.time()
-profvis(result <- fastdid(dt))
+results <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit")
 
-
-timetaken(started.at)
 
 
 

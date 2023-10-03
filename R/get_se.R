@@ -1,0 +1,36 @@
+get_se <- function(inf_matrix, boot, biters, cluster) {
+  
+  if(boot){
+    
+    top_quant <- 0.75
+    bot_quant <- 0.25
+    if(!is.null(cluster)){
+      
+      #aggregate the influence function by cluster
+      inf_matrix <- inf_matrix |> as.data.table()
+      inf_matrix[, cluster := cluster]
+      inf_matrix <- inf_matrix[, lapply(.SD, mean), by = "cluster", .SDcols = names(inf_matrix)[names(inf_matrix) != "cluster"]] 
+      inf_matrix[, cluster := NULL]
+      inf_matrix <- inf_matrix |> as.matrix()
+    }
+    
+    boot_results <- BMisc::multiplier_bootstrap(inf_matrix, biters = biters) %>% as.data.table()
+    boot_top <- boot_results[, lapply(.SD, function(x) quantile(x, top_quant, type=1, na.rm = TRUE)),]
+    boot_bot <- boot_results[, lapply(.SD, function(x) quantile(x, bot_quant, type=1, na.rm = TRUE)),]
+    
+    dt_se <- rbind(boot_bot, boot_top) %>% transpose()
+    names(dt_se) <- c("boot_bot", "boot_top")
+    dt_se[, n_adjust := nrow(inf_matrix)/colSums(inf_matrix != 0)]
+    se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))*n_adjust]
+    
+  } else {
+    
+    if(!is.null(cluster)){stop("clustering only available with bootstrap")}
+    
+    inf_matrix <- inf_matrix %>% as.data.table()
+    se <- inf_matrix[, lapply(.SD, function(x) sd(x, na.rm = TRUE)*sqrt(length(x)-1)/length(x[x!=0]))] %>% as.vector() #should maybe use n-1 but did use n
+    
+  }
+  return(unlist(se))
+}
+
