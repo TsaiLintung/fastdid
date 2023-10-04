@@ -95,23 +95,26 @@ fastdid <- function(dt,
                               control_option)
   
   # aggregate att and inf function
-  agg_result <- aggregate_gt_result(gt_result, cohort_sizes,
-                                    result_type)
+  agg_result <- aggregate_gt(gt_result, cohort_sizes, 
+                             weights, dt_inv[, G],
+                             result_type)
   
   #influence function -> se
   agg_se <- get_se(agg_result$inf_matrix, boot, biters, cluster)
   
   # post process -----------------------------------------------
-  
-  result <- data.table(target = agg_result$targets, att = agg_result$agg_att, se = agg_se)
+
+  result <- data.table(target = agg_result$targets, att = agg_result$agg_att, se = agg_se, keep.rownames=FALSE)
   
   #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
   result <- result |> convert_targets(result_type, time_offset, max(time_periods))
   
   
   #recover the original dt
-  dt[, G := G+time_offset]
-  dt[, time := time+time_offset]
+  if(time_offset != 0){
+    dt[, time := time+time_offset]
+    dt[, G := G+time_offset]
+  }
   setnames(dt, c("time", "G", "unit"), c(timevar, cohortvar, unitvar))
   
   return(result)

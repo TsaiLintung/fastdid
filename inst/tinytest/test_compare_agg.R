@@ -1,14 +1,17 @@
 # setup ----------------------
 
+load_all()
+#load_all("~/Github/did")
 library(did)
 
 tol <- 0.01 #allow 1% different between estimates
-simdt <- sim_did(1e+03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(1e03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
-est_diff_ratio <- function(result, did_result){
+est_diff_ratio_agg <- function(result, did_result){
+  names(result) <- c("target", "att", "se")
   did_result_dt <- data.table(target = did_result$egt, did_att = did_result$att.egt, did_se = did_result$se.egt)
-  compare <- did_result_dt |> merge(result, by = c("cohort", "time"), all = TRUE) 
+  compare <- did_result_dt |> merge(result, by = c("target"), all = TRUE) 
   att_diff_per <- compare[, sum(abs(did_att-att), na.rm = TRUE)/sum(did_att, na.rm = TRUE)]
   se_diff_per <- compare[, sum(abs(did_se-se), na.rm = TRUE)/sum(did_se, na.rm = TRUE)]
   return(c(att_diff_per , se_diff_per))
@@ -23,8 +26,7 @@ did_result_gt <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "ti
                           clustervars = NULL,
                           bstrap = FALSE)
 did_result <- did::aggte(did_result_gt, type = "dynamic")
-
-expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+expect_equal(est_diff_ratio_agg(result, did_result), c(0,0), tolerance = tol,
              info = "simple")
 rm(result, did_result)
 

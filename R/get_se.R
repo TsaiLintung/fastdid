@@ -20,10 +20,9 @@ get_se <- function(inf_matrix, boot, biters, cluster) {
     dt_se[, n_adjust := (nrow(inf_matrix)-1)/colSums(inf_matrix!=0)]
     se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))*n_adjust]
     se[se < sqrt(.Machine$double.eps)*10] <- NA
+    
   } else {
-    
     if(!is.null(cluster)){stop("clustering only available with bootstrap")}
-    
     inf_matrix <- inf_matrix %>% as.data.table()
     se <- inf_matrix[, lapply(.SD, function(x) sd(x, na.rm = TRUE)*sqrt(length(x)-1)/length(x[x!=0]))] %>% as.vector() #should maybe use n-1 but did use n
     

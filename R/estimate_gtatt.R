@@ -40,12 +40,12 @@ estimate_gtatt <- function(outcomes, covariates, weights,
       #collect the result
       gt <- rbind(gt, data.table(G = g, time = t)) #the sequence matters for the weights
       gt_att <- c(gt_att, att = results$att)
-      gt_inf_func[[paste0(t, ".", g)]] <- results$inf_func
+      gt_inf_func[[paste0(g, ".", t)]] <- results$inf_func
       
     }
   }
   gt_inf_func[,placeholder := NULL]
-  
+  names(gt_att) <- names(gt_inf_func)
   return(list(att = gt_att, inf_func = gt_inf_func, gt = gt))
 }
 
