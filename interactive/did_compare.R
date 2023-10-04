@@ -20,8 +20,8 @@ library(BMisc)
 setwd("~/GitHub/EventStudyCode")
 
 load_all()
-load_all("~/GitHub/did")
-#library(did)
+#load_all("~/GitHub/did")
+library(did)
 
 
 # load event code ---------------------------------------------------------------------

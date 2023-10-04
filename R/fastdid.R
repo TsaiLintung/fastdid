@@ -1,8 +1,38 @@
+#' Fast DID Estimation
+#'
+#' This function performs Difference-in-Differences (DID) estimation using fast computation techniques.
+#'
+#' @param dt A data table containing the panel data.
+#' @param timevar The name of the time variable.
+#' @param cohortvar The name of the cohort variable.
+#' @param unitvar The name of the unit (group) variable.
+#' @param control_option A character string indicating the control option for the DID estimation. Default is "both".
+#' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
+#' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
+#' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
+#' @param weightvar The name of the weight variable (optional).
+#' @param clustervar The name of the cluster variable (optional).
+#' @param covariatesvar A character vector containing the names of covariate variables (optional).
+#' 
+#' @import data.table speedglm stringr magrittr collapse
+#' 
+#' @return A data table containing the estimated treatment effects and standard errors.
+#' @export
+#'
+#' @examples
+#' # Example usage of fastdid function
+#' result <- fastdid(data, "time", "cohort", "unit")
+#'
+#' @seealso
+#' \code{\link{estimate_gtatt}}, \code{\link{aggregate_gt_result}}, \code{\link{get_se}}, \code{\link{convert_targets}}
+#'
+#' @keywords difference-in-differences fast computation panel data estimation
 fastdid <- function(dt,
                     timevar, cohortvar, unitvar,
-                    weightvar=NULL,clustervar=NULL,covariatesvar = c(),
-                    control_option="both",result_type="group_time",
-                    boot=FALSE){
+                    control_option="both",result_type="group_time", 
+                    boot=FALSE, biters = 1000,
+                    weightvar=NULL,clustervar=NULL,covariatesvar = c()
+                    ){
   
   
   # validation arguments --------------------------------------------------------
@@ -69,7 +99,7 @@ fastdid <- function(dt,
                                     result_type)
   
   #influence function -> se
-  agg_se <- get_se(agg_result$inf_matrix, boot, biters = 10000, cluster)
+  agg_se <- get_se(agg_result$inf_matrix, boot, biters, cluster)
   
   # post process -----------------------------------------------
   
@@ -86,4 +116,37 @@ fastdid <- function(dt,
   
   return(result)
   
+}
+
+convert_targets <- function(results, result_type, 
+                            time_offset, max_time){
+  
+  if(result_type == "dynamic"){
+    setnames(results, "target", "event_time")
+    
+  } else if (result_type == "cohort"){
+    
+    results[, type := ifelse(target >= 0, "post", "pre")]
+    results[, target := abs(target)+time_offset]
+    setnames(results, "target", "cohort")
+    
+  } else if (result_type == "calendar"){
+    
+    results[, type := ifelse(target >= 0, "post", "pre")]
+    results[, target := abs(target)+time_offset]
+    setnames(results, "target", "time")
+    
+  } else if (result_type == "group_time"){
+    
+    results[, cohort := floor((target-1)/max_time)]
+    results[, time := (target-cohort*max_time)]
+    
+    #recover the time
+    results[, cohort := cohort + time_offset]
+    results[, time := time + time_offset]
+    
+    results[, target := NULL]
+    
+  }
+  return(results)
 }
