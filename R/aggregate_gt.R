@@ -12,10 +12,13 @@ aggregate_gt <- function(gt_result, cohort_sizes,
   
   setorder(group_time, time, G) #change the order to match the order in gtatt
   
+  gt_inf_func <- as.matrix(gt_inf_func)
+  gt_inf_func <- gt_inf_func %*% diag(length(id_cohorts)/colSums(abs(gt_inf_func) > 0)) 
+  
   if(result_type == "group_time"){
     
     targets <- group_time[, unique(G*max(time)+time)]
-    inf_matrix <- as.matrix(gt_inf_func)
+    inf_matrix <- gt_inf_func
     agg_att <- as.vector(gt_att)
     
   } else {
@@ -25,18 +28,15 @@ aggregate_gt <- function(gt_result, cohort_sizes,
     weights <- as.matrix(agg_sch$weights)
     rownames(weights) <- targets
     colnames(weights) <- names(gt_att)
+    
     #influence from estimating the weights
-   
-    inf_matrix <- as.matrix(gt_inf_func) %*% t(weights)
+    inf_matrix <- gt_inf_func %*% t(weights) 
     
     #get the influence from weight estimation
-    
     inf_weights <- sapply(asplit(weights, 1), function (x){
       get_weight_influence(x, gt_att, id_weights, id_cohorts, group_time[, .(G, time)])
     })
-    inf_weights[abs(inf_weights) < sqrt(.Machine$double.eps)*10] <- 0 #fill zero 
-    inf_matrix <- inf_matrix + inf_weights
-    
+    inf_matrix <- inf_matrix + inf_weights 
     agg_att <- weights %*% gt_att
     
   }
@@ -77,8 +77,6 @@ get_aggregate_scheme <- function(group_time, result_type, id_weights, id_cohorts
 }
 
 get_weight_influence <- function(agg_weights, gt_att, id_weights, id_cohorts, group) {
-  # note: weights are all of the form P(G=g|cond)/sum_cond(P(G=g|cond))
-  # this is equal to P(G=g)/sum_cond(P(G=g)) which simplifies things here
 
   keepers <- which(agg_weights > 0)
   
@@ -89,7 +87,7 @@ get_weight_influence <- function(agg_weights, gt_att, id_weights, id_cohorts, gr
   group[, time := as.integer(time)]
   group[, G := as.integer(G)]
   setorder(group, time, G)
-  
+
   # effect of estimating weights in the numerator
   if1 <- sapply(keepers, function(k) {
     (id_weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]) /
@@ -100,8 +98,8 @@ get_weight_influence <- function(agg_weights, gt_att, id_weights, id_cohorts, gr
     id_weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]
   })) %*%
     t(group[keepers,pg]/(sum(group[keepers,pg])^2))
-  
   # return the influence function for the weights
   inf_weight <- (if1 - if2) %*% as.vector(gt_att[keepers])
+  inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps)*10] <- 0 #fill zero 
   return(inf_weight)
 }

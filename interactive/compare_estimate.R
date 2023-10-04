@@ -7,9 +7,6 @@ library(profvis)
 
 setwd("~/GitHub/EventStudyCode")
 
-load_all()
-
-library(did)
 
 # setup --------------------------------
 
@@ -18,7 +15,8 @@ load_all()
 library(did)
 
 tol <- 0.01 #allow 1% different between estimates
-simdt <- sim_did(1000, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(1000, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE, 
+                 epsilon_size = 1)
 dt <- simdt$dt
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "dynamic")

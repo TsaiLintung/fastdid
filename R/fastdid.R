@@ -41,8 +41,11 @@ fastdid <- function(dt,
   # preprocess -------------------------------------------------------------------
   
   #make the dt conform to innocolus assumptions of fastdid
+  
+ 
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   
+  #change to int before sorting
   setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
   
   #time offset
