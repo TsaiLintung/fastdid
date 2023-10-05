@@ -17,7 +17,7 @@ est_diff_ratio_agg <- function(result, did_result){
 
 # dynamic -------------------
 
-result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "dynamic")
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "dynamic")
 did_result_gt <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                           #xformla = ~x,
                           control_group = "notyettreated",
@@ -30,7 +30,7 @@ rm(result, did_result)
 
 # group -------------------
 
-result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "group")
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group")
 did_result_gt <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                              #xformla = ~x,
                              control_group = "notyettreated",
@@ -43,7 +43,7 @@ rm(result, did_result)
 
 # time --------------------
 
-result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "time")
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "time")
 did_result_gt <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                              #xformla = ~x,
                              control_group = "notyettreated",
@@ -56,7 +56,7 @@ rm(result, did_result)
 
 # bootstrap clustered --------------------
 
-result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "simple")
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "simple")
 did_result_gt <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                              #xformla = ~x,
                              control_group = "notyettreated",

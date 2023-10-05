@@ -3,7 +3,8 @@
 library(did)
 
 tol <- 1e-2 #allow 1% different between estimates
-simdt <- sim_did(1e+03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(1e+03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE,
+                 seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
 est_diff_ratio <- function(result, did_result){
@@ -16,7 +17,7 @@ est_diff_ratio <- function(result, did_result){
 
 # simple -------------------
 
-result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "group_time")
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time")
 did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                           #xformla = ~x,
                           control_group = "notyettreated",
@@ -27,10 +28,25 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "simple")
 rm(result, did_result)
 
+# never -------------------
+
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                  control_option = "never")
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
+                          #xformla = ~x,
+                          control_group = "nevertreated",
+                          clustervars = NULL,
+                          bstrap = FALSE)
+
+expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+             info = "never treated")
+rm(result, did_result)
+
+
 # covariates -------------------
 
-result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "group_time",
-                  covariatesvar = "x")
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                  covariatesvar = c("x"))
 did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                           xformla = ~x,
                           control_group = "notyettreated",
@@ -43,7 +59,7 @@ rm(result, did_result)
 
 # bootstrap --------------------
 
-result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "group_time",
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                   boot = TRUE, biters = 10000)
 did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                           control_group = "notyettreated",
@@ -56,7 +72,7 @@ rm(result, did_result)
 
 # bootstrap clustered --------------------
 
-result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", result_type = "group_time",
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                   clustervar = "x",
                   boot = TRUE, biters = 10000)
 did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
@@ -69,5 +85,4 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
 rm(result, did_result)
 
 #clean up environment
-rm(dt, simdt, tol, est_diff_ratio)
 detach("package:did", unload=TRUE)

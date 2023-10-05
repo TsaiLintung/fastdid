@@ -26,16 +26,20 @@ aggregate_gt <- function(gt_result, cohort_sizes,
     targets <- agg_sch$targets
     weights <- as.matrix(agg_sch$weights)
     
-    #influence from estimating the weights
-    inf_matrix <- gt_inf_func %*% t(weights) 
+    #aggregated att
+    agg_att <- weights %*% gt_att
+    
+    
     
     #get the influence from weight estimation
+    #this needs to be optimized!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     inf_weights <- sapply(asplit(weights, 1), function (x){
       get_weight_influence(x, gt_att, id_weights, id_cohorts, group_time[, .(G, time)])
     })
-    inf_matrix <- inf_matrix + inf_weights 
-    agg_att <- weights %*% gt_att
     
+    #aggregated influence function
+    inf_matrix <- (gt_inf_func %*% t(weights)) + inf_weights 
+
   }
   return(list(inf_matrix = inf_matrix, agg_att = agg_att, targets = targets))
 }

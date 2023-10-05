@@ -12,6 +12,7 @@ sim_did(
   cov = "no",
   hetero = "all",
   second_outcome = FALSE,
+  second_cov = FALSE,
   na = "none",
   balanced = TRUE,
   seed = NA,

@@ -12,7 +12,7 @@ library(microbenchmark)
 setwd("~/GitHub/EventStudyCode")
 
 load_all()
-load_all("~/GitHub/did")
+#load_all("~/GitHub/did")
 #library(did)
 
 
@@ -20,7 +20,7 @@ load_all("~/GitHub/did")
 
 # simple ---------------------------------------------------------------------
 
-simdt <- sim_did(1e+03, 10, cov = "no", hetero = "dynamic", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE,
+simdt <- sim_did(1e+06, 10, cov = "no", hetero = "dynamic", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE,
                  epsilon_size = 1)
 dt <- simdt$dt
 

@@ -24,7 +24,7 @@
 #' 
 
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size = 0.001,
-                    cov = "no", hetero = "all", second_outcome = FALSE, na = "none", 
+                    cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, na = "none", 
                     balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent"){
   
   if(!is.na(seed)){set.seed(seed)}
@@ -39,6 +39,10 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
     dt_i[, x := rnorm(sample_size)]
   }
   
+  if(second_cov){
+    dt_i[, x2 := rnorm(sample_size)]
+  } else {dt_i[, x2 := 1]}
+  
   if(stratify){
     dt_i[, s := fifelse(rnorm(sample_size) > 0, 1, 2)]
   } else {
@@ -50,7 +54,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   #assign treated group based on a latent related to X
   
   if(treatment_assign == "latent"){
-    dt_i[, treat_latent := x*0.2 + rnorm(sample_size)] #unit with larger X tend to be treated and treated earlier
+    dt_i[, treat_latent := x*0.2 + x2*0.2 + rnorm(sample_size)] #unit with larger X tend to be treated and treated earlier
     untreated_thres <- quantile(dt_i$treat_latent, untreated_prop)
     dt_i[treat_latent <= untreated_thres, G := Inf] #unit with low latent is never treated
     
@@ -85,7 +89,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   dt[, D := as.integer(time >= G)]
   
   #untreated potential outcomes
-  dt[, y0 := unit_fe + time_fe + x*x_trend + rnorm(sample_size*time_period, sd = epsilon_size)]
+  dt[, y0 := unit_fe + time_fe + x*x_trend + x2*x_trend + rnorm(sample_size*time_period, sd = epsilon_size)]
   
   #generate gtatt
   att <- CJ(G = 1:time_period, time = 1:time_period)
@@ -105,7 +109,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   #potential outcome
   dt[, y1 := y0 + tau]
   dt[, y := y1*D + y0*(1-D)]
-  dt <- dt[, .SD, .SDcols = c("time", "G", "unit", "x", "y", "s")]
+  dt <- dt[, .SD, .SDcols = c("time", "G", "unit", "x", "x2", "y", "s")]
   
   #additional -----------------
   

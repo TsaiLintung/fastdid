@@ -22,7 +22,7 @@ get_se <- function(inf_matrix, boot, biters, cluster) {
     
   } else {
     if(!is.null(cluster)){stop("clustering only available with bootstrap")}
-    inf_matrix <- inf_matrix %>% as.data.table()
+    inf_matrix <- inf_matrix  |> as.data.table()
     se <- inf_matrix[, lapply(.SD, function(x) sqrt(sum(x^2, na.rm = TRUE)/length(x)^2))] %>% as.vector() #should maybe use n-1 but did use n
     
   }

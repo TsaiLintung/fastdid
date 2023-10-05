@@ -4,8 +4,9 @@
 #'
 #' @param dt A data table containing the panel data.
 #' @param timevar The name of the time variable.
-#' @param cohortvar The name of the cohort variable.
-#' @param unitvar The name of the unit (group) variable.
+#' @param cohortvar The name of the cohort (group) variable.
+#' @param unitvar The name of the unit (id) variable.
+#' @param outcomevar The name of the outcome variable.
 #' @param control_option A character string indicating the control option for the DID estimation. Default is "both".
 #' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
@@ -13,8 +14,10 @@
 #' @param weightvar The name of the weight variable (optional).
 #' @param clustervar The name of the cluster variable (optional).
 #' @param covariatesvar A character vector containing the names of covariate variables (optional).
+#' @param copy whether to copy the dataset before processing, set to true if the original dt is to be re-used.
+#' @param validate whether to validate the dataset before processing.
 #' 
-#' @import data.table speedglm stringr magrittr collapse
+#' @import data.table speedglm stringr collapse dreamerr BMisc
 #' 
 #' @return A data table containing the estimated treatment effects and standard errors.
 #' @export
@@ -28,55 +31,96 @@
 #'
 #' @keywords difference-in-differences fast computation panel data estimation
 fastdid <- function(dt,
-                    timevar, cohortvar, unitvar,
+                    timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", 
                     boot=FALSE, biters = 1000,
-                    weightvar=NULL,clustervar=NULL,covariatesvar = c()
+                    weightvar=NULL,clustervar=NULL,covariatesvar = NULL,
+                    copy = FALSE, validate = TRUE
                     ){
   
   
   # validation arguments --------------------------------------------------------
   
+  if(copy){dt <- copy(dt)}
   
-  # preprocess -------------------------------------------------------------------
+  if(!is.data.table(dt)) stop("rawdata must be a data.table")
   
-  #make the dt conform to innocolus assumptions of fastdid
+  dt_names <- names(dt)
+  name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
+  check_arg(timevar, unitvar, cohortvar, "scalar charin", .choices = dt_names, .message = name_message)
   
- 
-  setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
+  covariate_message <- "__ARG__ must be NULL or a character vector which are all names of columns from the dataset."
+  check_arg(covariatesvar, 
+            "NULL | multi charin", .choices = dt_names, .message = covariate_message)
+  
+  checkvar_message <- "__ARG__ must be NULL or a character scalar if a name of columns from the dataset."
+  check_arg(weightvar, clustervar,
+            "NULL | scalar charin", .choices = dt_names, .message = checkvar_message)
+  
+  check_arg(control_option, "scalar charin", .choices = c("both", "never", "notyet")) #kinda bad since did's notyet include both notyet and never
+  check_arg(copy, validate, "scalar logical")
+  
+  
+  setnames(dt, c(timevar, cohortvar, unitvar, outcomevar), c("time", "G", "unit", "y"))
+
+  # validate data -----------------------------------------------------
+  
+  if(validate){
+    dt <- validate_did(dt, covariatesvar)
+  }
+  
+  # preprocess -----------------------------------------------------------
+  
+  #make dt conform to the WLOG assumptions of fastdid
   
   #change to int before sorting
+  if(!is.numeric(dt[, G])){
+    dt[, G := as.numeric(G)]
+  }
+  if(!is.numeric(dt[, time])){
+    dt[, time := as.numeric(time)] 
+  }
+  
   setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
   
-  #time offset
-  time_offset <- dt[1,time] - 1 #assume time starts at 1, first is min after sort :)
-  dt[, G := G-time_offset]
-  dt[, time := time-time_offset]
-  
-  #get info about the dataset
+  #deal with time
   time_periods <- dt[, unique(time)]
   time_size <- length(time_periods)
-  id_size <- dt[, uniqueN(unit)]
+
+  time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
+  if(time_offset != 0){
+    dt[, G := G-time_offset]
+    dt[, time := time-time_offset]
+    time_periods <- time_periods - time_offset
+  }
   
-  #the time-invariant parts (cohort, covariates, weight, cluster)
-  dt_inv <- dt[1:id_size]
-  
-  #more info about the dataset
-  cohorts <- dt_inv[, unique(G)]
-  cohort_sizes <- dt_inv[, .(cohort_size = .N) , by = G]
+  time_step <- 1 #time may not jump at 1
+  if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){
+    time_step <- time_periods[2]-time_periods[1]
+    time_periods <- (time_periods-1)/time_step+1
+    if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
+    dt[G != 1, G := (G-1)/time_step+1]
+    dt[time != 1, time := (time-1)/time_step+1]
+  }
   
   #the outcomes list for fast access later
+  id_size <- dt[, uniqueN(unit)]
   outcomes <- list()
   for(i in time_periods){
     start <- (i-1)*id_size+1
     end <- i*id_size
     outcomes[[i]] <- dt[seq(start,end), .(y)]
   }
-  
+
+  #the time-invariant parts 
+  dt_inv <- dt[1:id_size]
+  cohorts <- dt_inv[, unique(G)]
+  cohort_sizes <- dt_inv[, .(cohort_size = .N) , by = G]
+
   # the optional columns
-  if(length(covariatesvar)>0){
+  if(!is.null(covariatesvar)){
     covariates <- dt_inv[,.SD, .SDcols = covariatesvar]
-  } else {covariates <- c()}
+  } else {covariates <- NULL}
   
   if(!is.null(clustervar)){
     cluster <- dt_inv[, .SD, .SDcols = clustervar] |> unlist()
@@ -85,10 +129,6 @@ fastdid <- function(dt,
   if(!is.null(weightvar)){
     weights <- dt_inv[, .SD, .SDcols = weightvar] |> unlist()
   } else {weights <- rep(1,id_size)}
-  
-  # validate data -----------------------------------------------------
-  
-  if(any(sapply(covariates, sd) == 0)){stop("some covariates have no variation")}
   
   # main part  -------------------------------------------------
   
@@ -102,7 +142,7 @@ fastdid <- function(dt,
                              weights, dt_inv[, G],
                              result_type)
   
-  #influence function -> se
+  #get se from the influence function
   agg_se <- get_se(agg_result$inf_matrix, boot, biters, cluster)
   
   # post process -----------------------------------------------
@@ -111,22 +151,14 @@ fastdid <- function(dt,
   names(result) <- c("target", "att", "se")
   
   #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
-  result <- result |> convert_targets(result_type, time_offset, max(time_periods))
-  
-  
-  #recover the original dt
-  if(time_offset != 0){
-    dt[, time := time+time_offset]
-    dt[, G := G+time_offset]
-  }
-  setnames(dt, c("time", "G", "unit"), c(timevar, cohortvar, unitvar))
+  result <- result |> convert_targets(result_type, time_offset, time_step, max(time_periods))
   
   return(result)
   
 }
 
 convert_targets <- function(results, result_type, 
-                            time_offset, max_time){
+                            time_offset, time_step, max_time){
   
   if(result_type == "dynamic"){
     setnames(results, "target", "event_time")
@@ -134,13 +166,13 @@ convert_targets <- function(results, result_type,
   } else if (result_type == "cohort"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := abs(target)+time_offset]
+    results[, target := recover_time(abs(target), time_offset, time_step)]
     setnames(results, "target", "cohort")
     
   } else if (result_type == "calendar"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := abs(target)+time_offset]
+    results[, target := recover_time(abs(target), time_offset, time_step)]
     setnames(results, "target", "time")
     
   } else if (result_type == "group_time"){
@@ -149,8 +181,8 @@ convert_targets <- function(results, result_type,
     results[, time := (target-cohort*max_time)]
     
     #recover the time
-    results[, cohort := cohort + time_offset]
-    results[, time := time + time_offset]
+    results[, cohort := recover_time(cohort, time_offset, time_step)]
+    results[, time := recover_time(time, time_offset, time_step)]
     
     results[, target := NULL]
     
@@ -159,4 +191,8 @@ convert_targets <- function(results, result_type,
     results[, target := NULL]
   } 
   return(results)
+}
+
+recover_time <- function(time, time_offset, time_step){
+  return(((time-1)*time_step)+1+time_offset)
 }

@@ -30,8 +30,8 @@ estimate_gtatt <- function(outcomes, covariates, weights,
       did_setup[get_cohort_pos(cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
       
       #construct the 2x2 dataset
-      cohort_did <- data.table(D = did_setup, post = outcomes[[t]], pre = outcomes[[base_period]], cov = covariates)
-      cohort_did[, weights := weights] #the default weight, should allow overwrite next
+      cohort_did <- data.table(D = did_setup, post = outcomes[[t]], pre = outcomes[[base_period]], 
+                               cov = covariates, weights = weights)
       
       #estimate did
       results <- estimate_did(cohort_did, last_coef)

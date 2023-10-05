@@ -20,7 +20,9 @@ estimate_did <- function(dt_did, last_coef = NULL){
     prop_score_est <- suppressWarnings(speedglm(dt_did[,D] ~ as.matrix(dt_did[,.SD, .SDcols = covvars]), 
                                                 family = binomial(), fitted = TRUE, start = last_coef,
                                                 weights = dt_did[, weights]))
-    logit_coef <-  prop_score_est$coefficients |> nafill(fill = 0)
+    logit_coef <-  prop_score_est$coefficients 
+    logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
+    
     prop_score_fit <- fitted(prop_score_est)
     prop_score_fit <- pmin(1-1e-16, prop_score_fit)
     
@@ -51,7 +53,6 @@ estimate_did <- function(dt_did, last_coef = NULL){
   att <- weighted_treat_delta - weighted_cont_delta
   
   # influence from ipw
-  
   if(ipw){
     score_ps <- as.matrix(dt_did[, weights*(D-ps)*.SD, .SDcols = covvars]) |> reverse_col()
     hess <- vcov(prop_score_est) * n

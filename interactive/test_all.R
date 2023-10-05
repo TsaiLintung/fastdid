@@ -1,3 +1,6 @@
+rm(list = ls())
+gc()
+
 library(devtools)
 library(roxygen2)
 library(tinytest)

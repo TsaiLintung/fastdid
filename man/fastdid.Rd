@@ -9,13 +9,16 @@ fastdid(
   timevar,
   cohortvar,
   unitvar,
+  outcomevar,
   control_option = "both",
   result_type = "group_time",
   boot = FALSE,
   biters = 1000,
   weightvar = NULL,
   clustervar = NULL,
-  covariatesvar = c()
+  covariatesvar = NULL,
+  copy = FALSE,
+  validate = TRUE
 )
 }
 \arguments{
@@ -23,9 +26,11 @@ fastdid(
 
 \item{timevar}{The name of the time variable.}
 
-\item{cohortvar}{The name of the cohort variable.}
+\item{cohortvar}{The name of the cohort (group) variable.}
 
-\item{unitvar}{The name of the unit (group) variable.}
+\item{unitvar}{The name of the unit (id) variable.}
+
+\item{outcomevar}{The name of the outcome variable.}
 
 \item{control_option}{A character string indicating the control option for the DID estimation. Default is "both".}
 
