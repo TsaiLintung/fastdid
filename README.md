@@ -44,9 +44,8 @@ result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outco
 
 # Performance
 
-![time](https://imgur.com/s5v32Rw)
-
-![ram](https://imgur.com/TJqfxj6)
+![time comparison](https://imgur.com/s5v32Rw)
+![RAM comparison](https://imgur.com/TJqfxj6)
 
 # Comparison to **did**
 
