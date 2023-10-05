@@ -17,8 +17,7 @@ get_se <- function(inf_matrix, boot, biters, cluster) {
     dt_se <- rbind(boot_bot, boot_top) %>% transpose()
     names(dt_se) <- c("boot_bot", "boot_top")
 
-    dt_se[, n_adjust := (nrow(inf_matrix)-1)/colSums(inf_matrix!=0)]
-    se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))*n_adjust]
+    se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))]
     se[se < sqrt(.Machine$double.eps)*10] <- NA
     
   } else {

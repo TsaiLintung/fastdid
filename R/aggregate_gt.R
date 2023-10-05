@@ -13,7 +13,6 @@ aggregate_gt <- function(gt_result, cohort_sizes,
   setorder(group_time, time, G) #change the order to match the order in gtatt
   
   gt_inf_func <- as.matrix(gt_inf_func)
-  gt_inf_func <- gt_inf_func %*% diag(length(id_cohorts)/colSums(abs(gt_inf_func) > 0)) 
   
   if(result_type == "group_time"){
     
@@ -26,8 +25,6 @@ aggregate_gt <- function(gt_result, cohort_sizes,
     agg_sch <- get_aggregate_scheme(group_time, result_type, id_weights, id_cohorts)
     targets <- agg_sch$targets
     weights <- as.matrix(agg_sch$weights)
-    rownames(weights) <- targets
-    colnames(weights) <- names(gt_att)
     
     #influence from estimating the weights
     inf_matrix <- gt_inf_func %*% t(weights) 
@@ -56,6 +53,8 @@ get_aggregate_scheme <- function(group_time, result_type, id_weights, id_cohorts
     group_time[, target := G*(bool_to_pn(time>=G))]
   } else if (result_type == "time") {
     group_time[, target := time*(bool_to_pn(time>=G))]
+  } else if (result_type == "simple") {
+    group_time[, target := bool_to_pn(time>=G)]
   } 
   
   min_target<- group_time[, min(target)]

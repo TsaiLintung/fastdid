@@ -2,7 +2,7 @@
 
 library(did)
 
-tol <- 0.01 #allow 1% different between estimates
+tol <- 1e-2 #allow 1% different between estimates
 simdt <- sim_did(1e+03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 

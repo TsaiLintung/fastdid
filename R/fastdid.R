@@ -107,7 +107,8 @@ fastdid <- function(dt,
   
   # post process -----------------------------------------------
 
-  result <- data.table(target = agg_result$targets, att = agg_result$agg_att, se = agg_se, keep.rownames=FALSE)
+  result <- data.table(agg_result$targets, agg_result$agg_att, agg_se)
+  names(result) <- c("target", "att", "se")
   
   #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
   result <- result |> convert_targets(result_type, time_offset, max(time_periods))
@@ -153,6 +154,9 @@ convert_targets <- function(results, result_type,
     
     results[, target := NULL]
     
-  }
+  } else if (result_type == "simple") {
+    results[, type := ifelse(target >= 0, "post", "pre")]
+    results[, target := NULL]
+  } 
   return(results)
 }
