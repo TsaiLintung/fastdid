@@ -1,6 +1,7 @@
 # fastdid - fast Difference-in-Differences
 
-The **fastdid** package is a lightning-fast implementation of the staggered Difference-in-difference estimators proposed by ![https://www.sciencedirect.com/science/article/pii/S0304407620303948](Callaway and Sant'Anna 2021).
+The **fastdid** package is a lightning-fast implementation of the staggered Difference-in-difference estimators proposed by [Callaway and Sant'Anna (2021)](https://www.sciencedirect.com/science/article/pii/S0304407620303948). 
+With **fastdid*, estimating DiD designs on millions of units takes seconds, not hours. 
 
 # Installation
 
@@ -13,15 +14,17 @@ devtools::install_github("TsaiLintung/fastdid")
 
 # Getting started
 
-A basic call.
-
 ```
 library(fastdid)
 
 #generate a simulated data
 simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE)
 dt <- simdt$dt
+```
 
+A basic call.
+
+```
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time")
 ```
 
@@ -40,6 +43,10 @@ result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outco
 ```
 
 # Performance
+
+![time](https://imgur.com/s5v32Rw)
+
+![ram](https://imgur.com/TJqfxj6)
 
 # Comparison to **did**
 

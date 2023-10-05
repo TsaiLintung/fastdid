@@ -1,15 +1,15 @@
-expr,time_mean,order
-"run_did(s, t)",1.8056066,2
-"run_event_code(s, t)",4.1515718,2
-"run_dfbd(s, t)",20.3550066,2
-"run_did(s, t)",0.9717549,3
-"run_event_code(s, t)",4.1639704,3
-"run_dfbd(s, t)",18.16804,3
-"run_did(s, t)",5.9836972,4
-"run_dfbd(s, t)",20.0491516,4
-"run_event_code(s, t)",5.949934,4
-"run_event_code(s, t)",20.8564559,5
-"run_did(s, t)",136.5667076,5
-"run_dfbd(s, t)",34.1957922,5
-"run_event_code(s, t)",259.6744677,6
-"run_dfbd(s, t)",204.7181405,6
+expr,time_mean,order,package
+run_dfbd(copy(dt)),31.365388601,2,dfbd
+run_fastdid(copy(dt)),0.871048301,2,fastdid
+run_did(copy(dt)),0.608298801,2,did
+run_did(copy(dt)),0.990634701,3,did
+run_fastdid(copy(dt)),0.615423301,3,fastdid
+run_dfbd(copy(dt)),30.786021801,3,dfbd
+run_fastdid(copy(dt)),0.818234801,4,fastdid
+run_did(copy(dt)),4.914925301,4,did
+run_dfbd(copy(dt)),32.044893601,4,dfbd
+run_dfbd(copy(dt)),46.638629901,5,dfbd
+run_fastdid(copy(dt)),1.895177901,5,fastdid
+run_did(copy(dt)),131.539921501,5,did
+run_fastdid(copy(dt)),13.257454101,6,fastdid
+run_dfbd(copy(dt)),223.709973701,6,dfbd
