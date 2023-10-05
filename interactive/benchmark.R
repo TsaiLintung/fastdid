@@ -126,7 +126,7 @@ all_bm_ram |> fwrite("interactive/plots/est_ram.csv")
 
 all_bm_ram |> ggplot(aes(x = order, y = peak_ram, color = package)) + geom_point() + geom_line() +
   labs(title = "Performance comparison - peak RAM used") + 
-  xlab("unique ID (log10)") + ylab("seconds") + theme_bw()
+  xlab("unique ID (log10)") + ylab("Mbs") + theme_bw()
 
 ggsave("interactive/plots/est_ram_comp.png")
 
