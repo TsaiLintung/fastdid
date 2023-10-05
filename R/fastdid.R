@@ -1,35 +1,44 @@
-#' Fast DID Estimation
+#' Fast Staggered DID Estimation
 #'
-#' This function performs Difference-in-Differences (DID) estimation using fast computation techniques.
+#' Performs Difference-in-Differences (DID) estimation fast.
 #'
 #' @param dt A data table containing the panel data.
 #' @param timevar The name of the time variable.
 #' @param cohortvar The name of the cohort (group) variable.
 #' @param unitvar The name of the unit (id) variable.
 #' @param outcomevar The name of the outcome variable.
-#' @param control_option A character string indicating the control option for the DID estimation. Default is "both".
+#' @param control_option The control units used for the DiD estimates. Default is "both".
 #' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
 #' @param weightvar The name of the weight variable (optional).
-#' @param clustervar The name of the cluster variable (optional).
+#' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
 #' @param covariatesvar A character vector containing the names of covariate variables (optional).
-#' @param copy whether to copy the dataset before processing, set to true if the original dt is to be re-used.
+#' @param copy whether to copy the dataset before processing, set to true if the original dataset is to be re-used.
 #' @param validate whether to validate the dataset before processing.
 #' 
 #' @import data.table speedglm stringr collapse dreamerr BMisc
 #' 
-#' @return A data table containing the estimated treatment effects and standard errors.
+#' @return A data.table containing the estimated treatment effects and standard errors.
 #' @export
 #'
 #' @examples
-#' # Example usage of fastdid function
-#' result <- fastdid(data, "time", "cohort", "unit")
+#' # simulated data
+#' simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE)
+#' dt <- simdt$dt
+#' 
+#' #basic call
+#' result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time")
+#' 
+#' #control for covariates
+#' result2 <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
+#'                   covariatesvar = c("x", "x2"))
+#'                   
+#' #bootstrap and clustering
+#' result3 <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
+#'                   boot = TRUE, clustervar = "x")
 #'
-#' @seealso
-#' \code{\link{estimate_gtatt}}, \code{\link{aggregate_gt_result}}, \code{\link{get_se}}, \code{\link{convert_targets}}
-#'
-#' @keywords difference-in-differences fast computation panel data estimation
+#' @keywords difference-in-differences fast computation panel data estimation did
 fastdid <- function(dt,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", 

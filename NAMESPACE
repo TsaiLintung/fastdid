@@ -2,10 +2,10 @@
 
 export(fastdid)
 export(sim_did)
+import(BMisc)
 import(collapse)
 import(data.table)
 import(dreamerr)
 import(ggplot2)
-import(magrittr)
 import(speedglm)
 import(stringr)

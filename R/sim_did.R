@@ -1,28 +1,31 @@
 #' Simulate a Difference-in-Differences (DiD) dataset
 #'
-#' This function generates a synthetic dataset for conducting a Difference-in-Differences (DiD) analysis.
+#' Simulates a dataset for a Difference-in-Differences analysis with various customizable options.
 #'
 #' @param sample_size The number of units in the dataset.
 #' @param time_period The number of time periods in the dataset.
-#' @param untreated_prop The proportion of units that remain untreated.
-#' @param cov The type of covariate to include ("int" for integer, "no" for constant, "cont" for continuous).
-#' @param hetero The heterogeneity type for treatment effects ("all" or "dynamic").
-#' @param second_outcome Should a second outcome variable be generated?
-#' @param na The type of missing data to introduce ("none", "x", "y", or "both").
-#' @param balanced Should the dataset be balanced (whether some unit have missing observation in some period)
-#' @param seed The random seed for reproducibility.
-#' @param stratify Should treatment effect be stratified?
-#' @param treatment_assign The method of treatment assignment ("latent" or "uniform").
+#' @param untreated_prop The proportion of untreated units.
+#' @param epsilon_size The standard deviation for the error term in potential outcomes.
+#' @param cov The type of covariate to include ("no", "int", or "cont").
+#' @param hetero The type of heterogeneity in treatment effects ("all" or "dynamic").
+#' @param second_outcome Whether to include a second outcome variable.
+#' @param second_cov Whether to include a second covariate.
+#' @param na Whether to generate missing data ("none", "y", "x", or "both").
+#' @param balanced Whether to balance the dataset by random sampling.
+#' @param seed Seed for random number generation.
+#' @param stratify Whether to stratify the dataset based on a binary covariate.
+#' @param treatment_assign The method for treatment assignment ("latent" or "uniform").
 #'
-#' @return A list containing the generated dataset (dt) and treatment effect information (att).
+#' @return A list containing the simulated dataset (dt) and the treatment effect values (att).
 #'
 #' @examples
-#' sim_data <- sim_did(sample_size = 100, time_period = 5)
+#' # Simulate a DiD dataset with default settings
+#' data <- sim_did(sample_size = 100, time_period = 5)
+#'
+#' # Simulate a DiD dataset with customized settings
+#' data <- sim_did(sample_size = 200, time_period = 8, cov = "int", hetero = "dynamic")
 #'
 #' @export
-#' 
-#' 
-
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size = 0.001,
                     cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, na = "none", 
                     balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent"){

@@ -2,7 +2,7 @@
 % Please edit documentation in R/fastdid.R
 \name{fastdid}
 \alias{fastdid}
-\title{Fast DID Estimation}
+\title{Fast Staggered DID Estimation}
 \usage{
 fastdid(
   dt,
@@ -32,7 +32,7 @@ fastdid(
 
 \item{outcomevar}{The name of the outcome variable.}
 
-\item{control_option}{A character string indicating the control option for the DID estimation. Default is "both".}
+\item{control_option}{The control units used for the DiD estimates. Default is "both".}
 
 \item{result_type}{A character string indicating the type of result to be returned. Default is "group_time".}
 
@@ -42,26 +42,40 @@ fastdid(
 
 \item{weightvar}{The name of the weight variable (optional).}
 
-\item{clustervar}{The name of the cluster variable (optional).}
+\item{clustervar}{The name of the cluster variable, can only be used when boot == TRUE (optional).}
 
 \item{covariatesvar}{A character vector containing the names of covariate variables (optional).}
+
+\item{copy}{whether to copy the dataset before processing, set to true if the original dataset is to be re-used.}
+
+\item{validate}{whether to validate the dataset before processing.}
 }
 \value{
-A data table containing the estimated treatment effects and standard errors.
+A data.table containing the estimated treatment effects and standard errors.
 }
 \description{
-This function performs Difference-in-Differences (DID) estimation using fast computation techniques.
+Performs Difference-in-Differences (DID) estimation fast.
 }
 \examples{
-# Example usage of fastdid function
-result <- fastdid(data, "time", "cohort", "unit")
+# simulated data
+simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE)
+dt <- simdt$dt
 
-}
-\seealso{
-\code{\link{estimate_gtatt}}, \code{\link{aggregate_gt_result}}, \code{\link{get_se}}, \code{\link{convert_targets}}
+#basic call
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time")
+
+#control for covariates
+result2 <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
+                  covariatesvar = c("x", "x2"))
+                  
+#bootstrap and clustering
+result3 <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
+                  boot = TRUE, clustervar = "x")
+
 }
 \keyword{computation}
 \keyword{data}
+\keyword{did}
 \keyword{difference-in-differences}
 \keyword{estimation}
 \keyword{fast}
