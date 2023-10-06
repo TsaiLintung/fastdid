@@ -1,3 +1,12 @@
+install.packages("remotes")
+install.packages("did")
+install.packages("DiDforBigData")
+
+install.packages("fixest")
+
+install.packages("microbenchmark")
+install.packages("peakRAM")
+install.packages("ggplot2")
 
 rm(list = ls())
 gc()
@@ -5,14 +14,13 @@ gc()
 library(peakRAM)
 library(microbenchmark)
 library(profvis)
-library(devtools)
-
-setwd("~/GitHub/EventStudyCode")
-load_all()
+library(ggplot2)
 
 
 library(DiDforBigData)
 library(did)
+library(remotes)
+remotes::install_github("TsaiLintung/fastdid", auth_token = "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")
 
 # ------------------------------------------------------------------------------------ 
 
@@ -51,45 +59,33 @@ t <- 10
 # time benchmarks ----------------------------------------------------------------------
 
 all_bm <- data.table()
-for(order in seq(2,max_order)){
-
+for(order in seq(4,max_order)){
+  
   dt <- sim_did(10^order, t, seed = 1)[["dt"]]
   
-  if(order == 6){
-    bm_time <- microbenchmark(
-      run_fastdid(copy(dt)),
-      #run_did(s,t),
-      #run_old_event_code(s,t),
-      run_dfbd(copy(dt)),
-      times = 1, setup = gc())
-  } else {
-    bm_time <- microbenchmark(
-      run_fastdid(copy(dt)),
-      run_did(copy(dt)),
-      #run_old_event_code(s,t),
-      run_dfbd(copy(dt)),
-      times = 1, setup = gc())
-  }
-
+  bm_time <- microbenchmark(
+    run_fastdid(dt2),
+    #run_did(dt2),
+    #run_dfbd(dt2),
+    times = 1, setup = {dt2 <- copy(dt)})
+  
+  
   bm_time <- bm_time |> as.data.table()
   bm_time <- bm_time[, .(time_mean = mean(time)/10^9), by = "expr"]
-  bm_time[, order := order]
+  bm_time[, order := as.integer(order)]
   message(order)
   all_bm <- rbind(all_bm, bm_time)
 }
 
+all_bm[expr == "run_fastdid(dt2)", package := "fastdid"]
+all_bm[expr == "run_did(dt2)", package := "did"]
+all_bm[expr == "run_dfbd(dt2)", package := "dfbd"]
+
 # results --------------------------------------------------------------------------------
 
-all_bm[expr == "run_fastdid(copy(dt))", package := "fastdid"]
-all_bm[expr == "run_did(copy(dt))", package := "did"]
-all_bm[expr == "run_dfbd(copy(dt))", package := "dfbd"]
-
-all_bm |> fwrite("interactive/plots/est_time.csv")
-
 all_bm |> ggplot(aes(x = order, y = time_mean, color = package)) + geom_point() + geom_line() +
-  labs(title = "Performance comparison - computing time") + 
+  labs(title = "Performance comparison - computing time") +
   xlab("unique ID (log10)") + ylab("seconds") + theme_bw()
-
 ggsave("interactive/plots/est_time_comp.png")
 
 # RAM benchmark -------------------------------------------------
