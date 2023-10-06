@@ -1,8 +1,8 @@
 # fastdid - fast Difference-in-Differences
 
-**fastdid** is a lightning-fast implementation of [Callaway and Sant'Anna's (2021)](https://www.sciencedirect.com/science/article/pii/S0304407620303948) staggered Difference-in-Differences (DiD) estimators that speeds up the process by magnitudes. With **fastdid** You can run DiD designs for millions of units in just seconds, not hours. 
+**fastdid** is a lightning-fast implementation of [Callaway and Sant'Anna's (2021)](https://www.sciencedirect.com/science/article/pii/S0304407620303948) staggered Difference-in-Differences (DiD) estimators that speeds up the process by magnitudes. With **fastdid**, you can run DiD designs for millions of units in just seconds, not hours. 
 
-To learn more about the staggered Difference-in-differences estimators implemented, visit Callaway and Sant'Anna's [website]((https://bcallaway11.github.io/did/articles/did-basics.html)).
+To learn more about the staggered Difference-in-differences estimators implemented, visit Callaway and Sant'Anna's [website](https://bcallaway11.github.io/did/articles/did-basics.html).
 
 # Installation
 
@@ -13,9 +13,9 @@ You can install **fastdid** from GitHub (CRAN release coming soon.)
 devtools::install_github("TsaiLintung/fastdid")
 ```
 
-# Getting started
+# Usage
 
-`fastdid` is the main function provided by **fastdid**. When using `fastdid`, you need to provide the dataset (`dt`), specify names of the relevant columns (`-var`), and the type of target (aggregated) parameters (`result_type` such as `"group_time"`, `"time"`, `"dynamic"`, or `"simple"`). Here is a simple call. 
+`fastdid` is the main function provided by **fastdid**. When using `fastdid`, you need to provide the dataset (`dt`), specify names of the relevant columns (`-var`), and the type of target (aggregated) parameters (`result_type` such as `"group_time"`, `"time"`, `"dynamic"`, or `"simple"`.) Here is a simple call. 
 
 ```
 #loading the package
@@ -51,7 +51,16 @@ result <- fastdid(dt,
 
 # Performance
 
-**fastdid** is magnitudes faster than **did** and about 15x faster than the fastest alternative **DiDforBigData** for large datasets. Here is a comparison of run time for **fastdid**, **did**, and **DiDforBigData** (dfbd for short) using a panel of 10 periods and varying sample sizes.
+**fastdid** is magnitudes faster than **did**, and 15x faster than the fastest alternative **DiDforBigData** for large datasets. 
+
+```mermaid
+graph LR;
+    fastdid-->|15x faster|dfbd;
+    dfbd-->|100x faster|did;
+    did-->other;
+```
+
+Here is a comparison of run time for **fastdid**, **did**, and **DiDforBigData** (dfbd for short) using a panel of 10 periods and varying sample sizes.
 
 ![time comparison](https://i.imgur.com/s5v32Rw.png)
 
@@ -61,7 +70,7 @@ Unfortunately, the Author's computer fails to run **did** at 1 million sample. F
 
 ![RAM comparison](https://i.imgur.com/7emkgOz.png)
 
-For the benchmark, a baseline group-time ATT is estimated with no covaraites control and no bootstrap. Computing time is measured by `microbenchmark` and peak RAM by `peakRAM`.
+For the benchmark, a baseline group-time ATT is estimated with no covaraites control, no bootstrap, no explicit parallel option. Computing time is measured by `microbenchmark` and peak RAM by `peakRAM`. The 
 
 # **fastdid** and **did**
 
@@ -77,17 +86,17 @@ For standard errors, the estimates can be slightly different in certain situatio
 
 ## Interface
 
-**fastdid** should fell very similar to `att_gt`. But there are a few differences:
+**fastdid** should feel very similar to `att_gt`. But there are a few differences:
 
 Control group option: 
-| fast did | did | control group used |
+| fastdid | did | control group used |
 |-|-|-|
 | both | notyettreated | never-treated + not-yet-but-eventually-treated |
 | never| nevertreated  | never-treated |
 | notyet | | not-yet-but-eventually-treated |
 
 Aggregated parameters: `fastdid` aggregates in the same function.
-| fast did | did |
+| fastdid | did |
 |-|-|
 | group_time | no aggregation |
 |dynamic|dynamic|
@@ -103,7 +112,7 @@ Notable differences in feature includes:
 3. **fastdid** can only deal with balanced panel, no repeated cross-sections, no missing observations.
 
 
-# Future
+# Roadmap
 
 **fastdid** is still in active development, many features are planned to be added:
 
@@ -115,3 +124,7 @@ Notable differences in feature includes:
 6. drop-in interface for did
 7. Anticipation
 8. Further optimization!
+
+# Acknowledgments
+
+**fastdid** is created by Maxwell Kellogg, Lin-Tung Tsai, and Kuan-Ju Tseng
