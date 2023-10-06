@@ -1,15 +1,29 @@
 Package: fastdid
 Type: Package
-Title: Concise Summary of What the Package Does
-Version: 1.0
-Date: 2023-09-21
-Author: Your Name
-Maintainer: Your Name <your@email.com>
-Description: More about what it does (maybe more than one line).
+Title: lightning-fast staggered Difference-in-Difference estimators
+Version: 0.9
+Date: 2023-10-06
+Author@R: 
+  c(person(given = "Lin-Tung",
+           family = "Tsai",
+           role = "aut",
+    person(given = "Maxwell",
+           family = "Kellogg",
+           role = "aut"),
+    person(given = "Kuan-Ju",
+           family = "Tseng",
+           role = "aut"))
+Maintainer: Lin-Tung Tsai <tsaidondon@gmail.com>
+Description: **fastdid** is a lightning-fast implementation of Callaway and Sant'Anna's (2021)<https://www.sciencedirect.com/science/article/pii/S0304407620303948> staggered Difference-in-Differences (DiD) estimators that speeds up the process by magnitudes. With fastdid You can run DiD designs for millions of units in just seconds, not hours. 
 License: GPL (>= 2)
 Imports:
     data.table,
+    stringr,
+    BMisc,
+    collapse,
+    dreamerr,
+    speedglm,
     stringr
-Suggests: tinytest
+Suggests: ggplot2, did
 Encoding: UTF-8
 RoxygenNote: 7.2.3
