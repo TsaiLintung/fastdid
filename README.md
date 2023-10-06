@@ -63,19 +63,19 @@ Unfortunately, the Author's computer fails to run **did** at 1 million sample. F
 
 ![RAM comparison](https://i.imgur.com/7emkgOz.png)
 
-For the benchmark, a baseline group-time ATT is estimated with no covariates control, no bootstrap, no explicit parallelization. Computing time is measured by `microbenchmark` and peak RAM by `peakRAM`.
+For the benchmark, a baseline group-time ATT is estimated with no covariates control, no bootstrap, and no explicit parallelization. Computing time is measured by `microbenchmark` and peak RAM by `peakRAM`.
 
 # **fastdid** and **did**
 
-As the name suggests, **fastdid**'s goal is to be fast **did**. Besides performance, here are some comparisons between the two packages .
+As the name suggests, **fastdid**'s goal is to be fast **did**. Besides performance, here are some comparisons between the two packages.
 
 ## Estimates
 
-**fastdid**'s estimators is identical to **did**'s. As the performance gains mostly come from efficient data manipulation, the key estimation implementation are analogous. For example, 2x2 DiD (`estimate_did.R` and `DRDID::std_ipw_did_panel`), influence function from weights (`aggregate_gt.R/get_weight_influence`, `compute.aggte.R/wif`), and multiplier bootstrap (`get_se.R` and `mboot.R`).
+**fastdid**'s estimators is identical to **did**'s. As the performance gains mostly come from efficient data manipulation, the key estimation implementations are analogous. For example, 2x2 DiD (`estimate_did.R` and `DRDID::std_ipw_did_panel`), influence function from weights (`aggregate_gt.R/get_weight_influence`, `compute.aggte.R/wif`), and multiplier bootstrap (`get_se.R` and `mboot.R`).
 
 Therefore, the estimates are practically identical. For point estimates, the difference is negligible (smaller than 1e-12), and is most likely the result of [floating-point error](https://en.wikipedia.org/wiki/Floating-point_error_mitigation).
 
-For standard errors, the estimates can be slightly different in certain situations, but the difference never exceeds 1\% of **did**'s standard error estimates. The situations where estimates differ include clustering, due to randomness from bootstrap, and controlling for covariates, due to different package used for logit estimation. 
+For standard errors, the estimates can be slightly different in certain situations, but the difference never exceeds 1\% of **did**'s standard error estimates. The situations where estimates differ include clustering, due to randomness from bootstrap, and controlling for covariates, due to different packages used for logit estimation. 
 
 ## Interface
 
@@ -99,14 +99,14 @@ Aggregated parameters: `fastdid` aggregates in the same function.
 
 ## Feature
 
-Notable differences in feature includes:
-1. **fastdid** currently only offer inverse probability weights estimators for controlling for covariates (OR and DR likely to be added soon)
-2. **fastdid** only uses the time before event as base periods ("universal" in `attgt`)
-3. **fastdid** can only deal with balanced panel, no repeated cross-sections, no missing observations.
+Notable differences in feature include:
+1. **fastdid** currently only offers inverse probability weights estimators for controlling for covariates (OR and DR likely to be added soon)
+2. **fastdid** only uses the time before the event as base periods ("universal" in `attgt`)
+3. **fastdid** can only deal with balanced panels, no repeated cross-sections.
 
 # Roadmap
 
-**fastdid** is still in active development, many features are planned to be added:
+**fastdid** is still in active development. Many features are planned to be added:
 
 1. Multiple outcomes
 2. Min/max event time and balanced composition
@@ -119,4 +119,4 @@ Notable differences in feature includes:
 
 # Acknowledgments
 
-**fastdid** is created by Maxwell Kellogg, Lin-Tung Tsai, and Kuan-Ju Tseng. Contact the authors by either email
+**fastdid** is created by Maxwell Kellogg, Lin-Tung Tsai, and Kuan-Ju Tseng. 
