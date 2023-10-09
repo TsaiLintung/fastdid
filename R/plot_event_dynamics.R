@@ -9,14 +9,19 @@
 #' @param significance_level The significance level for confidence intervals (default is 0.05).
 #'
 #' @return A ggplot2 object representing the event study plot.
-#'
-#' @import ggplot2
+#' @export
 
 plot_did_dynamics <-function(dt, 
-                             graphname = "event study plot", note = "", base_time = -1, significance_level = 0.05, 
-                             stratify_offset =0.1
+                             graphname = "event study plot", note = "", base_time = -1, significance_level = 0.05#, 
+                             #stratify_offset =0.1
 ){
-
+  
+  if (!requireNamespace("ggplot2", quietly = TRUE)) {
+    warning("The ggplot2 package must be installed to use plotting functions")
+    #Either exit or do something without rgl
+    return(NULL)
+  }
+  
 
   #add the base period
   base_row <- data.table(att = 0, se = 0, event_time = base_time)
@@ -32,8 +37,8 @@ plot_did_dynamics <-function(dt,
   # }
   
   figure <- dt |> 
-    ggplot() +
-    geom_hline(yintercept = 0, linetype = 'dashed', col = 'red')
+    ggplot2::ggplot() +
+    ggplot2::geom_hline(yintercept = 0, linetype = 'dashed', col = 'red')
   
   # if("stratify" %in% names(dt)){
   #   figure <- figure + geom_line(aes(x = event_time, y = att, color = stratify)) + 
@@ -41,9 +46,9 @@ plot_did_dynamics <-function(dt,
   #     geom_errorbar(aes(x = event_time, ymin = conf_lwb, ymax = conf_upb), 
   #                   width = 0.1, linetype = "dashed")
   # } else {
-    figure <- figure + geom_line(aes(x = event_time, y = att), color = "black") + 
-    geom_point(aes(x = event_time, y = att), color = "black") +
-    geom_errorbar(aes(x = event_time, ymin = conf_lwb, ymax = conf_upb), 
+    figure <- figure + ggplot2::geom_line(ggplot2::aes(x = event_time, y = att), color = "black") + 
+      ggplot2::geom_point(ggplot2::aes(x = event_time, y = att), color = "black") +
+      ggplot2::geom_errorbar(ggplot2::aes(x = event_time, ymin = conf_lwb, ymax = conf_upb), 
                   width = 0.1, linetype = "dashed")
   # }
   
@@ -55,14 +60,14 @@ plot_did_dynamics <-function(dt,
   # }
 
   figure <- figure +
-    theme_classic() +
-    theme(legend.position = "bottom",
+    ggplot2::theme_classic() +
+    ggplot2::theme(legend.position = "bottom",
           legend.background = element_rect(linetype = "dashed", color = "black"),
           legend.box = "horizontal",
           plot.title = element_text(hjust = 0.5),
           plot.subtitle = element_text(hjust = 0.5),
           plot.caption = element_text(hjust = 0)) +
-    labs(title = graphname, subtitle = note)
+    ggplot2::labs(title = graphname, subtitle = note)
   
   return(figure)
   

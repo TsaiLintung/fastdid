@@ -62,15 +62,21 @@ simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE)
 dt <- simdt$dt
 
 #basic call
-result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time")
+result <- fastdid(dt, timevar = "time", cohortvar = "G", 
+                  unitvar = "unit", outcomevar = "y",  
+                  result_type = "group_time")
 
 #control for covariates
-result2 <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
-                  covariatesvar = c("x", "x2"))
+result2 <- fastdid(dt, timevar = "time", cohortvar = "G", 
+                   unitvar = "unit", outcomevar = "y",  
+                   result_type = "group_time",
+                   covariatesvar = c("x", "x2"))
                   
 #bootstrap and clustering
-result3 <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
-                  boot = TRUE, clustervar = "x")
+result3 <- fastdid(dt, timevar = "time", cohortvar = "G", 
+                   unitvar = "unit", outcomevar = "y",  
+                   result_type = "group_time",
+                   boot = TRUE, clustervar = "x")
 
 }
 \keyword{computation}

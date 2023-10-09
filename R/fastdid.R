@@ -17,8 +17,8 @@
 #' @param copy whether to copy the dataset before processing, set to true if the original dataset is to be re-used.
 #' @param validate whether to validate the dataset before processing.
 #' 
-#' @import data.table speedglm stringr collapse dreamerr BMisc
-#' 
+#' @import data.table speedglm stringr collapse dreamerr BMisc 
+#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm
 #' @return A data.table containing the estimated treatment effects and standard errors.
 #' @export
 #'
@@ -28,15 +28,21 @@
 #' dt <- simdt$dt
 #' 
 #' #basic call
-#' result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time")
+#' result <- fastdid(dt, timevar = "time", cohortvar = "G", 
+#'                   unitvar = "unit", outcomevar = "y",  
+#'                   result_type = "group_time")
 #' 
 #' #control for covariates
-#' result2 <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
-#'                   covariatesvar = c("x", "x2"))
+#' result2 <- fastdid(dt, timevar = "time", cohortvar = "G", 
+#'                    unitvar = "unit", outcomevar = "y",  
+#'                    result_type = "group_time",
+#'                    covariatesvar = c("x", "x2"))
 #'                   
 #' #bootstrap and clustering
-#' result3 <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
-#'                   boot = TRUE, clustervar = "x")
+#' result3 <- fastdid(dt, timevar = "time", cohortvar = "G", 
+#'                    unitvar = "unit", outcomevar = "y",  
+#'                    result_type = "group_time",
+#'                    boot = TRUE, clustervar = "x")
 #'
 #' @keywords difference-in-differences fast computation panel data estimation did
 fastdid <- function(dt,

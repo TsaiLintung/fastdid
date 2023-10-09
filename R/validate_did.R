@@ -20,7 +20,7 @@ validate_did <- function(dt, covariatesvar){
     }
     
     #check covaraites is not constant  
-    if(any(sapply(dt[1:raw_unit_size, .SD, .SDcols = covariatesvar], sd) == 0)){stop("some covariates have no variation")}
+    if(any(sapply(dt[1:raw_unit_size, .SD, .SDcols = covariatesvar], stats::sd) == 0)){stop("some covariates have no variation")}
   }
   
   #check balanced panel

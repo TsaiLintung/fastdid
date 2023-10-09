@@ -9,8 +9,7 @@ plot_did_dynamics(
   graphname = "event study plot",
   note = "",
   base_time = -1,
-  significance_level = 0.05,
-  stratify_offset = 0.1
+  significance_level = 0.05
 )
 }
 \arguments{

@@ -18,7 +18,7 @@ estimate_did <- function(dt_did, last_coef = NULL){
   #the intercept is essential
   if(ipw){
     prop_score_est <- suppressWarnings(speedglm(dt_did[,D] ~ as.matrix(dt_did[,.SD, .SDcols = covvars]), 
-                                                family = binomial(), fitted = TRUE, start = last_coef,
+                                                family = stats::binomial(), fitted = TRUE, start = last_coef,
                                                 weights = dt_did[, weights]))
     logit_coef <-  prop_score_est$coefficients 
     logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
@@ -55,7 +55,7 @@ estimate_did <- function(dt_did, last_coef = NULL){
   # influence from ipw
   if(ipw){
     score_ps <- as.matrix(dt_did[, weights*(D-ps)*.SD, .SDcols = covvars]) |> reverse_col()
-    hess <- vcov(prop_score_est) * n
+    hess <- stats::vcov(prop_score_est) * n
     asym_linear_ps <- score_ps %*% hess
     M2 <- dt_did[, .(cont_ipw_weight*(delta_y-weighted_cont_delta)*.SD), .SDcols = covvars][, lapply(.SD, mean), .SDcols = covvars] |> 
       as.matrix()|> reverse_col()

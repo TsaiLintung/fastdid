@@ -14,6 +14,11 @@ if(FALSE){
   test_all()
 }
 
+if(FALSE){
+  roxygenise()
+  build()
+  check()
+}
 
 if(FALSE){
   use_github_actions()

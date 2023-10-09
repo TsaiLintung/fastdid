@@ -29,8 +29,6 @@ aggregate_gt <- function(gt_result, cohort_sizes,
     #aggregated att
     agg_att <- weights %*% gt_att
     
-    
-    
     #get the influence from weight estimation
     #this needs to be optimized!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
     inf_weights <- sapply(asplit(weights, 1), function (x){

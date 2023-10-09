@@ -5,14 +5,14 @@ get_se <- function(inf_matrix, boot, biters, cluster) {
     top_quant <- 0.75
     bot_quant <- 0.25
     if(!is.null(cluster)){
-      cluster_n <- aggregate(cluster, by=list(cluster), length)[,2]
+      cluster_n <- stats::aggregate(cluster, by=list(cluster), length)[,2]
       inf_matrix <- fsum(inf_matrix, cluster) / cluster_n #the mean without 0 for each cluster of each setting
     }
 
     boot_results <- BMisc::multiplier_bootstrap(inf_matrix, biters = biters) %>% as.data.table()
     
-    boot_top <- boot_results[, lapply(.SD, function(x) quantile(x, top_quant, type=1, na.rm = TRUE)),]
-    boot_bot <- boot_results[, lapply(.SD, function(x) quantile(x, bot_quant, type=1, na.rm = TRUE)),]
+    boot_top <- boot_results[, lapply(.SD, function(x) stats::quantile(x, top_quant, type=1, na.rm = TRUE)),]
+    boot_bot <- boot_results[, lapply(.SD, function(x) stats::quantile(x, bot_quant, type=1, na.rm = TRUE)),]
     
     dt_se <- rbind(boot_bot, boot_top) %>% transpose()
     names(dt_se) <- c("boot_bot", "boot_top")
