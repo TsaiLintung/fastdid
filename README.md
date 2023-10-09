@@ -1,5 +1,9 @@
 # fastdid - fast Difference-in-Differences
 
+  <!-- badges: start -->
+  [![R-CMD-check](https://github.com/TsaiLintung/fastdid/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/TsaiLintung/fastdid/actions/workflows/R-CMD-check.yaml)
+  <!-- badges: end -->
+
 **fastdid** is a lightning-fast implementation of [Callaway and Sant'Anna's (2021)](https://www.sciencedirect.com/science/article/pii/S0304407620303948) staggered Difference-in-Differences (DiD) estimators. With **fastdid**, you can run DiD setup for millions of units in just seconds, not hours. 
 
 To learn more about the staggered Difference-in-differences estimators implemented, visit Callaway and Sant'Anna's [website](https://bcallaway11.github.io/did/articles/did-basics.html).
@@ -73,9 +77,7 @@ As the name suggests, **fastdid**'s goal is to be fast **did**. Besides performa
 
 **fastdid**'s estimators is identical to **did**'s. As the performance gains mostly come from efficient data manipulation, the key estimation implementations are analogous. For example, 2x2 DiD (`estimate_did.R` and `DRDID::std_ipw_did_panel`), influence function from weights (`aggregate_gt.R/get_weight_influence`, `compute.aggte.R/wif`), and multiplier bootstrap (`get_se.R` and `mboot.R`).
 
-Therefore, the estimates are practically identical. For point estimates, the difference is negligible (smaller than 1e-12), and is most likely the result of [floating-point error](https://en.wikipedia.org/wiki/Floating-point_error_mitigation).
-
-For standard errors, the estimates can be slightly different in certain situations, but the difference never exceeds 1\% of **did**'s standard error estimates. The situations where estimates differ include clustering, due to randomness from bootstrap, and controlling for covariates, due to different packages used for logit estimation. 
+Therefore, the estimates are practically identical. For point estimates, the difference is negligible (smaller than 1e-12), and is most likely the result of [floating-point error](https://en.wikipedia.org/wiki/Floating-point_error_mitigation). For standard errors, the estimates can be slightly different sometimes, but the difference never exceeds 1\% of **did**'s standard error estimates. 
 
 ## Interface
 
@@ -115,8 +117,11 @@ Notable differences in feature include:
 5. User-provided aggregation scheme
 6. drop-in interface for did
 7. Anticipation
-8. Further optimization!
+8. Varying base periods
+9. Further optimization!
 
 # Acknowledgments
 
 **fastdid** is created by Maxwell Kellogg, Lin-Tung Tsai, and Kuan-Ju Tseng. 
+
+

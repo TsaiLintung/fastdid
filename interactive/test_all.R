@@ -8,9 +8,15 @@ library(usethis)
 
 setwd("~/GitHub/EventStudyCode")
 
-roxygenise()
-load_all()
-test_all()
+if(FALSE){
+  roxygenise()
+  load_all()
+  test_all()
+}
 
 
+if(FALSE){
+  use_github_actions()
+  use_github_action_check_standard()
+}
 # test run
