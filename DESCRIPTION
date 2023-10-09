@@ -3,8 +3,7 @@ Type: Package
 Title: lightning-fast staggered Difference-in-Difference estimators
 Version: 0.9
 Date: 2023-10-06
-Author@R: 
-  c(person(given = "Lin-Tung",
+Author@R: c(person(given = "Lin-Tung",
            family = "Tsai",
            role = "aut",
     person(given = "Maxwell",
