@@ -75,13 +75,14 @@ fastdid <- function(dt,
   check_arg(control_option, "scalar charin", .choices = c("both", "never", "notyet")) #kinda bad since did's notyet include both notyet and never
   check_arg(copy, validate, "scalar logical")
   
-  
   setnames(dt, c(timevar, cohortvar, unitvar, outcomevar), c("time", "G", "unit", "y"))
 
   # validate data -----------------------------------------------------
   
+  
   if(validate){
-    dt <- validate_did(dt, covariatesvar)
+    varnames <- c("time", "G", "unit", "y", weightvar,clustervar,covariatesvar)
+    dt <- validate_did(dt, covariatesvar, varnames)
   }
   
   # preprocess -----------------------------------------------------------
