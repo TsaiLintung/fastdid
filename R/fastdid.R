@@ -65,7 +65,7 @@ fastdid <- function(dt,
   check_arg(timevar, unitvar, cohortvar, "scalar charin", .choices = dt_names, .message = name_message)
   
   covariate_message <- "__ARG__ must be NULL or a character vector which are all names of columns from the dataset."
-  check_arg(covariatesvar, 
+  check_arg(covariatesvar, outcomevar, 
             "NULL | multi charin", .choices = dt_names, .message = covariate_message)
   
   checkvar_message <- "__ARG__ must be NULL or a character scalar if a name of columns from the dataset."
@@ -75,13 +75,13 @@ fastdid <- function(dt,
   check_arg(control_option, "scalar charin", .choices = c("both", "never", "notyet")) #kinda bad since did's notyet include both notyet and never
   check_arg(copy, validate, "scalar logical")
   
-  setnames(dt, c(timevar, cohortvar, unitvar, outcomevar), c("time", "G", "unit", "y"))
+  setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
 
   # validate data -----------------------------------------------------
   
   
   if(validate){
-    varnames <- c("time", "G", "unit", "y", weightvar,clustervar,covariatesvar)
+    varnames <- c("time", "G", "unit", outcomevar,weightvar,clustervar,covariatesvar)
     dt <- validate_did(dt, covariatesvar, varnames)
   }
   
@@ -121,11 +121,16 @@ fastdid <- function(dt,
   
   #the outcomes list for fast access later
   id_size <- dt[, uniqueN(unit)]
-  outcomes <- list()
-  for(i in time_periods){
-    start <- (i-1)*id_size+1
-    end <- i*id_size
-    outcomes[[i]] <- dt[seq(start,end), .(y)]
+  
+  outcomes_list <- list()
+  for(outcol in outcomevar){
+    outcomes <- list()
+    for(i in time_periods){
+      start <- (i-1)*id_size+1
+      end <- i*id_size
+      outcomes[[i]] <- dt[seq(start,end), get(outcol)]
+    }
+    outcomes_list[[outcol]] <- outcomes
   }
 
   #the time-invariant parts 
@@ -136,7 +141,11 @@ fastdid <- function(dt,
   # the optional columns
   if(!is.null(covariatesvar)){
     covariates <- dt_inv[,.SD, .SDcols = covariatesvar]
-  } else {covariates <- NULL}
+    ipw_formula <- paste0(covariatesvar, collapse = "+")
+  } else {
+    covariates <- NULL
+    ipw_formula <- NULL
+  }
   
   if(!is.null(clustervar)){
     cluster <- dt_inv[, .SD, .SDcols = clustervar] |> unlist()
@@ -149,27 +158,37 @@ fastdid <- function(dt,
   # main part  -------------------------------------------------
   
   # attgt
-  gt_result <- estimate_gtatt(outcomes, covariates, weights,
-                              cohort_sizes,cohorts,id_size,time_periods, #info about the dt
-                              control_option)
+  gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, covariates, ipw_formula, weights,
+                                   cohort_sizes,cohorts,id_size,time_periods, #info about the dt
+                                   control_option)
   
-  # aggregate att and inf function
-  agg_result <- aggregate_gt(gt_result, cohort_sizes, 
-                             weights, dt_inv[, G],
-                             result_type)
-  
-  #get se from the influence function
-  agg_se <- get_se(agg_result$inf_matrix, boot, biters, cluster)
-  
-  # post process -----------------------------------------------
+  all_result <- data.table()
+  for(outcol in outcomevar){
+    gt_result <- gt_result_list[[outcol]]
+    
+    # aggregate att and inf function
+    agg_result <- aggregate_gt(gt_result, cohort_sizes, 
+                               weights, dt_inv[, G],
+                               result_type)
+    
+    #get se from the influence function
+    agg_se <- get_se(agg_result$inf_matrix, boot, biters, cluster)
+    
+    # post process -----------------------------------------------
+    
+    result <- data.table(agg_result$targets, agg_result$agg_att, agg_se)
+    names(result) <- c("target", "att", "se")
+    
+    #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
+    result <- result |> convert_targets(result_type, time_offset, time_step, max(time_periods))
+    result[, outcome := outcol]
+    all_result <- rbind(all_result, result)
+    
+    rm(result)
+    
+  }
 
-  result <- data.table(agg_result$targets, agg_result$agg_att, agg_se)
-  names(result) <- c("target", "att", "se")
-  
-  #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
-  result <- result |> convert_targets(result_type, time_offset, time_step, max(time_periods))
-  
-  return(result)
+  return(all_result)
   
 }
 

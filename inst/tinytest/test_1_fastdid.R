@@ -1,7 +1,7 @@
 # setup --------------------------------------------------------
 
 tol <- 1e-2 #allow 1% different between estimates
-simdt <- sim_did(1e+02, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, 
+simdt <- sim_did(1e+02, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = TRUE, seed = 1, 
                  stratify = FALSE, second_cov = TRUE)
 dt <- simdt$dt
 
@@ -24,6 +24,15 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                       boot = TRUE, clustervar = "x"),
               info = "bootstrap clustered")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = c("y", "y2"),  result_type = "group_time",
+                      boot = TRUE),
+              info = "multiple outcome")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = c("y", "y2"),  result_type = "group_time",
+                      boot = TRUE, covariatesvar = "x"),
+              info = "multiple outcome with covariates")
+
 
 # dt that needs adjustment ---------------------------
 

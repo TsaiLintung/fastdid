@@ -3,7 +3,7 @@
 library(did)
 
 tol <- 1e-2 #allow 1% different between estimates
-simdt <- sim_did(1e+03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE,
+simdt <- sim_did(1e+03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = TRUE,
                  seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
@@ -41,7 +41,6 @@ did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time"
 expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "never treated")
 rm(result, did_result)
-
 
 # covariates -------------------
 
@@ -84,5 +83,30 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "bootstrap clustered")
 rm(result, did_result)
 
+#multiple outcome ------------------------------------------
+
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = c("y", "y2"),  result_type = "group_time")
+did_result <- did::att_gt(yname = "y2",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
+                          #xformla = ~x,
+                          control_group = "notyettreated",
+                          clustervars = NULL,
+                          bstrap = FALSE)
+
+expect_equal(est_diff_ratio(result[outcome == "y2"], did_result), c(0,0), tolerance = tol,
+             info = "simple multiple outcome")
+rm(result, did_result)
+
+
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = c("y", "y2"),  result_type = "group_time",
+                  covariatesvar = "x")
+did_result <- did::att_gt(yname = "y2",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
+                          xformla = ~x,
+                          control_group = "notyettreated",
+                          clustervars = NULL,
+                          bstrap = FALSE)
+
+expect_equal(est_diff_ratio(result[outcome == "y2"], did_result), c(0,0), tolerance = tol,
+             info = "multiple outcome with covariates")
+rm(result, did_result)
 #clean up environment
 detach("package:did", unload=TRUE)

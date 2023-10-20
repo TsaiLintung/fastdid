@@ -7,7 +7,7 @@ simdt <- sim_did(1e03, 10, cov = "cont", hetero = "all", balanced = TRUE, second
 dt <- simdt$dt
 
 est_diff_ratio_agg <- function(result, did_result){
-  names(result) <- c("target", "att", "se")
+  names(result) <- c("target", "att", "se", "outcome")
   did_result_dt <- data.table(target = did_result$egt, did_att = did_result$att.egt, did_se = did_result$se.egt)
   compare <- did_result_dt |> merge(result, by = c("target"), all = TRUE) 
   att_diff_per <- compare[, sum(abs(did_att-att), na.rm = TRUE)/sum(did_att, na.rm = TRUE)]
