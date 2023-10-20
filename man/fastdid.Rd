@@ -58,7 +58,7 @@ Performs Difference-in-Differences (DID) estimation fast.
 }
 \examples{
 # simulated data
-simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE)
+simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE)
 dt <- simdt$dt
 
 #basic call
@@ -77,6 +77,12 @@ result3 <- fastdid(dt, timevar = "time", cohortvar = "G",
                    unitvar = "unit", outcomevar = "y",  
                    result_type = "group_time",
                    boot = TRUE, clustervar = "x")
+
+#estimate for multiple outcomes
+result4 <- fastdid(dt, #the dataset
+                   timevar = "time", cohortvar = "G", unitvar = "unit", 
+                   outcomevar = c("y", "y2"), #name of the outcome columns
+                   result_type = "group_time") 
 
 }
 \keyword{computation}

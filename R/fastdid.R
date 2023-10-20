@@ -18,13 +18,13 @@
 #' @param validate whether to validate the dataset before processing.
 #' 
 #' @import data.table parglm stringr collapse dreamerr BMisc 
-#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm
+#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula
 #' @return A data.table containing the estimated treatment effects and standard errors.
 #' @export
 #'
 #' @examples
 #' # simulated data
-#' simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE)
+#' simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE)
 #' dt <- simdt$dt
 #' 
 #' #basic call
@@ -43,6 +43,12 @@
 #'                    unitvar = "unit", outcomevar = "y",  
 #'                    result_type = "group_time",
 #'                    boot = TRUE, clustervar = "x")
+#'
+#' #estimate for multiple outcomes
+#' result4 <- fastdid(dt, #the dataset
+#'                    timevar = "time", cohortvar = "G", unitvar = "unit", 
+#'                    outcomevar = c("y", "y2"), #name of the outcome columns
+#'                    result_type = "group_time") 
 #'
 #' @keywords difference-in-differences fast computation panel data estimation did
 fastdid <- function(dt,

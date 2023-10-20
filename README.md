@@ -4,13 +4,13 @@
   [![R-CMD-check](https://github.com/TsaiLintung/fastdid/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/TsaiLintung/fastdid/actions/workflows/R-CMD-check.yaml)
   <!-- badges: end -->
 
-**fastdid** is a lightning-fast implementation of [Callaway and Sant'Anna's (2021)](https://www.sciencedirect.com/science/article/pii/S0304407620303948) staggered Difference-in-Differences (DiD) estimators. With **fastdid**, you can run DiD setup for millions of units in just seconds, not hours. 
+**fastdid** is a lightning-fast implementation of [Callaway and Sant'Anna's (2021)](https://www.sciencedirect.com/science/article/pii/S0304407620303948) staggered Difference-in-Differences (DiD) estimators. DiD setup for millions of units used to take hours to run. With **fastdid**, it takes seconds. 
 
 To learn more about the staggered Difference-in-differences estimators implemented, visit Callaway and Sant'Anna's [website](https://bcallaway11.github.io/did/articles/did-basics.html).
 
 # Installation
 
-You can install **fastdid** from GitHub (CRAN release coming soon.)
+You can install **fastdid** from GitHub.
 
 ```
 # install.packages("devtools")
@@ -26,7 +26,7 @@ devtools::install_github("TsaiLintung/fastdid")
 library(fastdid)
 
 #generate simulated data
-simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE)
+simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE)
 dt <- simdt$dt
 
 #calling fastdid
@@ -51,6 +51,15 @@ result <- fastdid(dt,
                   timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",
                   result_type = "group_time",
                   clustervar = "x", boot = TRUE) #add clustering by using bootstrap
+```
+
+Estimation for multiple outcomes can be done in one call by providing a vector of outcome column names (saves a lot of time when controlling for covariates since logit estimands can be recycled across outcomes). 
+
+```
+#calling fastdid
+result <- fastdid(dt, #the dataset
+                  timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = c("y", "y2"), #name of the columns
+                  result_type = "group_time") #the result type
 ```
 
 # Performance
@@ -110,18 +119,27 @@ Notable differences in feature include:
 
 **fastdid** is still in active development. Many features are planned to be added:
 
-1. Multiple outcomes
-2. Min/max event time and balanced composition
-3. DR and OR estimators
-4. Larger-than-memory data support
-5. User-provided aggregation scheme
-6. drop-in interface for did
-7. Anticipation
-8. Varying base periods
-9. Further optimization!
+- Multiple outcomes :white_check_mark:
+- Min/max event time and balanced composition
+- DR and OR estimators
+- Larger-than-memory data support
+- User-provided aggregation scheme
+- drop-in interface for did
+- Anticipation
+- Varying base periods
+- User-provided logit formula
+
+Further optimization!
+
+# Update
+
+## 0.9.1 (2023/10/20)
+
+- now supprts estimation for multiple outcomes in one go! 
+- data validation: no longer check missing values for columns not used. 
 
 # Acknowledgments
 
-**fastdid** is created by Maxwell Kellogg, Lin-Tung Tsai, and Kuan-Ju Tseng. 
+**fastdid** is created by Lin-Tung Tsai, Maxwell Kellogg,and Kuan-Ju Tseng. 
 
 
