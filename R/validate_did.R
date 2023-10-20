@@ -14,9 +14,11 @@ validate_did <- function(dt,covariatesvar,varnames){
   
   if(!is.null(covariatesvar)){
     
+    if(uniqueN(dt, by = c("unit", covariatesvar)) > raw_unit_size){
+      warning("some covariates is time-varying, fastdid only use the first observation for covariates.")
+    }
+    
     for(cov in covariatesvar){
-      #doesn't allow time varying covariates
-      if(!all(dt[, uniqueN(get(cov)) == 1, by = "unit"])){stop(cov, " is time-varying")}
       #check covaraites is not constant  
       if(fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1)stop(cov, " have no variation")
     }

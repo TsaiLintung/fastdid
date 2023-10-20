@@ -14,12 +14,19 @@ estimate_did <- function(dt_did, ipw_formula,
     if(is.null(cache_ps_fit)|is.null(cache_hess)){ #if no cache, calcuate ipw
 
       #estimate the logit
-      logit_formula <- paste0("D ~ const + ", ipw_formula)
-      prop_score_est <- suppressWarnings(speedglm(as.formula(logit_formula), 
+      logit_formula <- paste0("D ~", ipw_formula)
+      # prop_score_est <- suppressWarnings(speedglm(as.formula(logit_formula), 
+      #                                             data = dt_did,
+      #                                             family = stats::binomial(), fitted = TRUE, start = last_coef,
+      #                                             weights = dt_did[, weights]))
+      
+      prop_score_est <- suppressWarnings(parglm(as.formula(logit_formula),
                                                   data = dt_did,
-                                                  family = stats::binomial(), fitted = TRUE, start = last_coef,
-                                                  weights = dt_did[, weights]))
-      covvars <-  names(prop_score_est$coefficients)[names(prop_score_est$coefficients) != "(Intercept)"]
+                                                  family = stats::binomial(), start = last_coef,
+                                                  weights = dt_did[, weights],
+                                                  control = parglm.control(nthreads = getDTthreads())))
+      
+      covvars <-  c("const", names(prop_score_est$coefficients)[names(prop_score_est$coefficients) != "(Intercept)"])
       hess <- stats::vcov(prop_score_est) * n #for the influence function
       
       logit_coef <-  prop_score_est$coefficients 

@@ -17,7 +17,7 @@
 #' @param copy whether to copy the dataset before processing, set to true if the original dataset is to be re-used.
 #' @param validate whether to validate the dataset before processing.
 #' 
-#' @import data.table speedglm stringr collapse dreamerr BMisc 
+#' @import data.table parglm stringr collapse dreamerr BMisc 
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm
 #' @return A data.table containing the estimated treatment effects and standard errors.
 #' @export

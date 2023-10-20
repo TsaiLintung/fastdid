@@ -74,9 +74,9 @@ expect_error(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", o
 
 dt2 <- copy(dt)
 dt2[unit == 1 & time < 5, x := 3]
-expect_error(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
+expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
                      covariatesvar = "x"),
-             info = "time varying covariates is not allowed")
+             info = "time varying covariates is warned")
 
 dt2 <- copy(dt)
 dt2[unit == 1 & time == 4, time := NA]
