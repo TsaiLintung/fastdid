@@ -140,6 +140,6 @@ Further optimization!
 
 # Acknowledgments
 
-**fastdid** is created by Lin-Tung Tsai, Maxwell Kellogg,and Kuan-Ju Tseng. 
+**fastdid** is created by Lin-Tung Tsai, Maxwell Kellogg, and Kuan-Ju Tseng. 
 
 

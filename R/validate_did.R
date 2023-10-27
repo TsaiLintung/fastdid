@@ -28,9 +28,9 @@ validate_did <- function(dt,covariatesvar,varnames){
   #check balanced panel
   #check if any is dup
   if(anyDuplicated(dt[, .(unit, time)])){
-    dup <- duplicated(dt[,.(unit, time)])
-    warning(nrow(dup), " units is observed more than once in some periods, enforcing balanced panel by dropping them")
-    dt <- dt[!unit %in% dup[, unit]]
+    dup_id <- dt[duplicated(dt[,.(unit, time)]), unique(unit)]
+    warning(length(dup_id), " units is observed more than once in some periods, enforcing balanced panel by dropping them")
+    dt <- dt[!unit %in% dup_id]
   }
   
   #check if any is missing
