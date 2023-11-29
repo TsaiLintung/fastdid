@@ -9,6 +9,7 @@
 #' @param outcomevar The name of the outcome variable.
 #' @param control_option The control units used for the DiD estimates. Default is "both".
 #' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
+#' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
 #' @param weightvar The name of the weight variable (optional).
@@ -53,7 +54,7 @@
 #' @keywords difference-in-differences fast computation panel data estimation did
 fastdid <- function(dt,
                     timevar, cohortvar, unitvar, outcomevar, 
-                    control_option="both",result_type="group_time", 
+                    control_option="both",result_type="group_time", balanced_event_time = NULL,
                     boot=FALSE, biters = 1000,
                     weightvar=NULL,clustervar=NULL,covariatesvar = NULL,
                     copy = FALSE, validate = TRUE
@@ -78,8 +79,13 @@ fastdid <- function(dt,
   check_arg(weightvar, clustervar,
             "NULL | scalar charin", .choices = dt_names, .message = checkvar_message)
   
-  check_arg(control_option, "scalar charin", .choices = c("both", "never", "notyet")) #kinda bad since did's notyet include both notyet and never
+  check_arg(control_option, "scalar charin", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
   check_arg(copy, validate, "scalar logical")
+  
+  if(!is.null(balanced_event_time)){
+    if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
+    check_arg(balanced_event_time, "numeric scalar")
+  }
   
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
 
@@ -88,7 +94,7 @@ fastdid <- function(dt,
   
   if(validate){
     varnames <- c("time", "G", "unit", outcomevar,weightvar,clustervar,covariatesvar)
-    dt <- validate_did(dt, covariatesvar, varnames)
+    dt <- validate_did(dt, covariatesvar, varnames, balanced_event_time)
   }
   
   # preprocess -----------------------------------------------------------
@@ -175,7 +181,7 @@ fastdid <- function(dt,
     # aggregate att and inf function
     agg_result <- aggregate_gt(gt_result, cohort_sizes, 
                                weights, dt_inv[, G],
-                               result_type)
+                               result_type, balanced_event_time)
     
     #get se from the influence function
     agg_se <- get_se(agg_result$inf_matrix, boot, biters, cluster)

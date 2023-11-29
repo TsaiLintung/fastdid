@@ -1,6 +1,11 @@
-validate_did <- function(dt,covariatesvar,varnames){
+validate_did <- function(dt,covariatesvar,varnames, balanced_event_time){
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
+  
+  
+  if(!is.null(balanced_event_time)){
+    if(balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
+  }
   
   #doesn't allow missing value for now
   for(col in c(covariatesvar, varnames)){
@@ -29,7 +34,7 @@ validate_did <- function(dt,covariatesvar,varnames){
   #check if any is dup
   if(anyDuplicated(dt[, .(unit, time)])){
     dup_id <- dt[duplicated(dt[,.(unit, time)]), unique(unit)]
-    warning(length(dup_id), " units is observed more than once in some periods, enforcing balanced panel by dropping them")
+    stop(length(dup_id), " units is observed more than once in a period.")
     dt <- dt[!unit %in% dup_id]
   }
   

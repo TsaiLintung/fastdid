@@ -63,7 +63,7 @@ expect_warning(fastdid(dt[time != 3 | unit != 20], timevar = "time", cohortvar =
              info = "non-balanced panel, missing")
 
 extra_row <-  dt[unit == 20 & time == 3]
-expect_warning(fastdid(rbind(dt,extra_row), timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
+expect_error(fastdid(rbind(dt,extra_row), timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
              info = "non-balanced panel, extra")
 
 dt2 <- copy(dt)

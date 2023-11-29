@@ -3,7 +3,7 @@
 library(did)
 
 tol <- 1e-2 #allow 1% different between estimates
-simdt <- sim_did(1e03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, stratify = FALSE)
+simdt <- sim_did(1e03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = TRUE, seed = 1, stratify = FALSE)
 dt <- simdt$dt
 
 est_diff_ratio_agg <- function(result, did_result){
@@ -69,6 +69,23 @@ expect_equal(diffs, c(0,0), tolerance = tol,
              info = "simple group")
 rm(result, did_result)
 
-#clean up environment
+# dynamic with balanced cohort -------------------
+
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "dynamic",
+                  balanced_event_time = 4)
+did_result_gt <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
+                             #xformla = ~x,
+                             control_group = "notyettreated",
+                             clustervars = NULL,
+                             bstrap = FALSE)
+did_result <- did::aggte(did_result_gt, type = "dynamic",
+                         balance_e = 4)
+expect_equal(est_diff_ratio_agg(result, did_result), c(0,0), tolerance = tol,
+             info = "dynamic with balanced cohort")
+rm(result, did_result)
+
+
+#clean up environment -------------------------
 rm(dt, simdt, tol, est_diff_ratio_agg)
 detach("package:did", unload=TRUE)
+
