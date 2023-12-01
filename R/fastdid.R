@@ -2,7 +2,7 @@
 #'
 #' Performs Difference-in-Differences (DID) estimation fast.
 #'
-#' @param dt A data table containing the panel data.
+#' @param data A data table containing the panel data.
 #' @param timevar The name of the time variable.
 #' @param cohortvar The name of the cohort (group) variable.
 #' @param unitvar The name of the unit (id) variable.
@@ -15,7 +15,7 @@
 #' @param weightvar The name of the weight variable (optional).
 #' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
 #' @param covariatesvar A character vector containing the names of covariate variables (optional).
-#' @param copy whether to copy the dataset before processing, set to true if the original dataset is to be re-used.
+#' @param copy whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.
 #' @param validate whether to validate the dataset before processing.
 #' 
 #' @import data.table parglm stringr collapse dreamerr BMisc 
@@ -52,21 +52,24 @@
 #'                    result_type = "group_time") 
 #'
 #' @keywords difference-in-differences fast computation panel data estimation did
-fastdid <- function(dt,
+fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", balanced_event_time = NULL,
                     boot=FALSE, biters = 1000,
                     weightvar=NULL,clustervar=NULL,covariatesvar = NULL,
-                    copy = FALSE, validate = TRUE
+                    copy = TRUE, validate = TRUE
                     ){
   
   
   # validation arguments --------------------------------------------------------
   
-  if(copy){dt <- copy(dt)}
+  if(!is.data.table(dt)){
+    warning("coercing input into a data.table.")
+    dt <- as.data.table(dt)
+  } 
   
-  if(!is.data.table(dt)) stop("rawdata must be a data.table")
-  
+  if(copy){dt <- copy(data)} else {dt <- data}
+
   dt_names <- names(dt)
   name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
   check_arg(timevar, unitvar, cohortvar, "scalar charin", .choices = dt_names, .message = name_message)
@@ -111,7 +114,7 @@ fastdid <- function(dt,
   
   setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
   
-  #deal with time
+  #deal with time, coerice time to 1,2,3,4,5.......
   time_periods <- dt[, unique(time)]
   time_size <- length(time_periods)
 
@@ -131,9 +134,8 @@ fastdid <- function(dt,
     dt[time != 1, time := (time-1)/time_step+1]
   }
   
-  #the outcomes list for fast access later
+  #construct the outcomes list for fast access later
   id_size <- dt[, uniqueN(unit)]
-  
   outcomes_list <- list()
   for(outcol in outcomevar){
     outcomes <- list()

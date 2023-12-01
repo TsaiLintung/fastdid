@@ -35,7 +35,6 @@ validate_did <- function(dt,covariatesvar,varnames, balanced_event_time){
   if(anyDuplicated(dt[, .(unit, time)])){
     dup_id <- dt[duplicated(dt[,.(unit, time)]), unique(unit)]
     stop(length(dup_id), " units is observed more than once in a period.")
-    dt <- dt[!unit %in% dup_id]
   }
   
   #check if any is missing

@@ -31,6 +31,7 @@ estimate_gtatt <- function(outcomes_list, outcomevar, covariates, ipw_formula, w
         base_period <- g-1
         min_control_cohort <- ifelse(control_option == "never", Inf, max(t+1, base_period+1)) #not-yet treated / never treated in both base and "treated" period
         if(t == base_period){next} #no treatmenteffect for the base period
+        if(base_period < min(time_periods)){next} #no treatmenteffect for the first period, since base period is not observed
         if(g >= max_control_cohort){next} #no treatmenteffect for never treated or the last treated cohort (notyet)
         if(t >= max_control_cohort){next} #no control available if the last cohort is treated too
         

@@ -108,19 +108,19 @@ Aggregated parameters: `fastdid` aggregates in the same function.
 |group|group|
 |simple|simple|
 
-## Feature
+## Other
 
-Notable differences in feature include:
 1. **fastdid** currently only offers inverse probability weights estimators for controlling for covariates (OR and DR likely to be added soon)
 2. **fastdid** only uses the time before the event as base periods ("universal" in `attgt`)
 3. **fastdid** can only deal with balanced panels, no repeated cross-sections.
+4. **fastdid** currently only reports the pointwise confidence intervals, instead of the simultaneously valid confidence intervals (check section 4.1 of Callaway and Sant'Anna's (2021) for more detail)
 
 # Roadmap
 
 **fastdid** is still in active development. Many features are planned to be added:
 
 - Multiple outcomes :white_check_mark:
-- Min/max event time and balanced composition
+- Min/max event time and balanced composition :white_check_mark:
 - DR and OR estimators
 - Larger-than-memory data support
 - User-provided aggregation scheme
@@ -128,6 +128,7 @@ Notable differences in feature include:
 - Anticipation
 - Varying base periods
 - User-provided logit formula
+- Simultaneously valid confidence bands
 
 Further optimization!
 
