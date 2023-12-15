@@ -1,4 +1,4 @@
-estimate_gtatt <- function(outcomes_list, outcomevar, covariates, control_formula, control_type, weights, 
+estimate_gtatt <- function(outcomes_list, outcomevar, covariates, control_type, weights, 
                            cohort_sizes,cohorts,id_size,time_periods,
                            control_option) {
 
@@ -45,7 +45,7 @@ estimate_gtatt <- function(outcomes_list, outcomevar, covariates, control_formul
         setnames(cohort_did, c("did_setup", "V2", "V3", "weights"), c("D", "post.y", "pre.y", "weights"))
         
         #estimate did
-        result <- estimate_did(cohort_did, control_formula, control_type, last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]])
+        result <- estimate_did(cohort_did, colnames(covariates), control_type, last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]])
       
         #collect the result
         last_coef <- result$logit_coef

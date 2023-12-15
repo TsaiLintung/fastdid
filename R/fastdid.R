@@ -10,7 +10,7 @@
 #' @param control_option The control units used for the DiD estimates. Default is "both".
 #' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
 #' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL
-#' @param control_type The control option used. "ipw", "or", or "dr" TODO: expand!!
+#' @param control_type The control option used. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
 #' @param weightvar The name of the weight variable (optional).
@@ -84,6 +84,8 @@ fastdid <- function(data,
             "NULL | scalar charin", .choices = dt_names, .message = checkvar_message)
   
   check_arg(control_option, "scalar charin", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
+  check_arg(control_type, "scalar charin", .choices = c("ipw", "reg", "dr")) #kinda bad names since did's notyet include both notyet and never
+  
   check_arg(copy, validate, "scalar logical")
   
   if(!is.null(balanced_event_time)){
@@ -157,11 +159,9 @@ fastdid <- function(data,
 
   # the optional columns
   if(!is.null(covariatesvar)){
-    covariates <- dt_inv[,.SD, .SDcols = covariatesvar]
-    control_formula <- paste0(covariatesvar, collapse = "+")
+    covariates <- cbind(const = 1, dt_inv[,.SD, .SDcols = covariatesvar]) # const 
   } else {
     covariates <- NULL
-    control_formula <- NULL
   }
   
   if(!is.null(clustervar)){
@@ -175,7 +175,7 @@ fastdid <- function(data,
   # main part  -------------------------------------------------
   
   # attgt
-  gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, covariates, control_formula, control_type, weights,
+  gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, covariates, control_type, weights,
                                    cohort_sizes,cohorts,id_size,time_periods, #info about the dt
                                    control_option)
   

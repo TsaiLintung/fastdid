@@ -1,4 +1,4 @@
-estimate_did <- function(dt_did, control_formula, control_type,
+estimate_did <- function(dt_did, covnames, control_type,
                          last_coef = NULL, cache_ps_fit, cache_hess){
   
   # preprocess --------
@@ -7,14 +7,14 @@ estimate_did <- function(dt_did, control_formula, control_type,
   data_pos <-  which(dt_did[, !is.na(D)])
   dt_did <- dt_did[data_pos]
   n <- dt_did[, .N]
-
-  ipw <- control_type %in% c("ipw", "dr") & !is.null(control_formula)
-  or <- control_type %in% c("or", "dr") & !is.null(control_formula)
-  if(ipw | or){
-    dt_did[, const := 1]
-    covvars <-  c("const",str_split_1(control_formula, "\\+")) #replace "(Intercept)" with const
-    #covmatrix <-  as.matrix(dt_did[, .SD, .SDcols = covvars]) #TODO: consider just have one covmatrix in gtatt
-  } 
+  if(is.null(covnames)){
+    covvars <- NULL
+  } else {
+    covvars <- as.matrix(dt_did[,.SD, .SDcols = covnames])
+  }
+  
+  ipw <- control_type %in% c("ipw", "dr") & !is.null(covvars)
+  or <- control_type %in% c("reg", "dr") & !is.null(covvars) #OR is REG
   
   # ipw --------
   
@@ -22,13 +22,12 @@ estimate_did <- function(dt_did, control_formula, control_type,
     if(is.null(cache_ps_fit)|is.null(cache_hess)){ #if no cache, calcuate ipw
 
       #estimate the logit
-      logit_formula <- paste0("D ~", control_formula)
-      prop_score_est <- suppressWarnings(parglm(as.formula(logit_formula),
-                                                data = dt_did,
-                                                family = stats::binomial(), start = last_coef,
-                                                weights = dt_did[, weights],
-                                                control = parglm.control(nthreads = getDTthreads())))
-      
+      prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
+                                                    family = stats::binomial(), start = last_coef,
+                                                    weights = dt_did[, weights],
+                                                    control = parglm.control(nthreads = getDTthreads()),
+                                                    intercept = FALSE))
+      class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
       #const is implicitly put into the ipw formula, need to incorporate it manually
       hess <- stats::vcov(prop_score_est) * n #for the influence function
       
@@ -42,7 +41,6 @@ estimate_did <- function(dt_did, control_formula, control_type,
     } else { #when using multiple outcome, ipw cache can be reused
       hess <- cache_hess
       prop_score_fit <- cache_ps_fit
-      covvars <-  c("const", colnames(cache_hess)[colnames(cache_hess) != "(Intercept)"])
       logit_coef <- NULL #won't be needing the approximate cache
     }
     
@@ -69,25 +67,24 @@ estimate_did <- function(dt_did, control_formula, control_type,
   
   if(or){
     
+    #TODO: this should be optimized with better backend and some caching
+    
     #should change to speedlm or something  
-    or_formula <- paste0("delta_y ~", control_formula)
-    reg_coef <- stats::coef(stats::lm(as.formula(or_formula),
-                                      subset = dt_did[, D==0],
-                                      weights = dt_did[,weights],
-                                      data = dt_did))
+
+    control_bool <- dt_did[, D==0]
+    reg_coef <- stats::coef(stats::lm.wfit(x = covvars[control_bool,], y = dt_did[control_bool,delta_y],
+                                           w = dt_did[control_bool,weights]))
     
     if(anyNA(reg_coef)){
       stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
     }
     
     #the control function from outcome regression
-    dt_did[, or_delta := as.vector(tcrossprod(reg_coef, as.matrix(dt_did[,.SD, .SDcols = covvars])))]
+    dt_did[, or_delta := as.vector(tcrossprod(reg_coef, covvars))]
     
   } else {
     dt_did[, or_delta := 0]
   }
-
-  
 
   #did --------
   
@@ -98,17 +95,16 @@ estimate_did <- function(dt_did, control_formula, control_type,
   weighted_cont_delta <- dt_did[,sum(att_cont)/sum(cont_ipw_weight)]
   
   att <- weighted_treat_delta - weighted_cont_delta
-  
+
   # influence --------
 
   # influence from ipw
   if(ipw){
+
+    M2 <- colMeans(dt_did[, cont_ipw_weight*(delta_y-weighted_cont_delta-or_delta)] * covvars) 
     
-    M2 <- dt_did[, .(cont_ipw_weight*(delta_y-weighted_cont_delta-or_delta)*.SD), .SDcols = covvars][, lapply(.SD, mean), .SDcols = covvars] |> 
-      as.matrix() |> reverse_col()
-    
-    score_ps <- as.matrix(dt_did[, weights*(D-ps)*.SD, .SDcols = covvars]) 
-    asym_linear_ps <- score_ps %*% hess |> reverse_col()
+    score_ps <- dt_did[, weights*(D-ps)] * covvars 
+    asym_linear_ps <- score_ps %*% hess 
    
     #ipw for control
     inf_cont_ipw <- asym_linear_ps %*% as.matrix(M2)
@@ -117,23 +113,21 @@ estimate_did <- function(dt_did, control_formula, control_type,
   
   if(or){
     
-    M1 <- dt_did[, .(treat_ipw_weight*.SD), .SDcols = covvars][, lapply(.SD, mean), .SDcols = covvars] |> 
-      as.matrix() |> reverse_col()
-    M3 <- dt_did[, .(cont_ipw_weight*.SD), .SDcols = covvars][, lapply(.SD, mean), .SDcols = covvars] |> 
-      as.matrix() |> reverse_col()
-    
-    or_x <- as.matrix(dt_did[, weights*(1-D)*.SD, .SDcols = covvars])
-    or_ex <- as.matrix(dt_did[, weights*(1-D)*(delta_y - or_delta)*.SD, .SDcols = covvars])
-    XpX <- crossprod(or_x, as.matrix(dt_did[, .SD, .SDcols = covvars]))/n
+    M1 <- colMeans(dt_did[, treat_ipw_weight] * covvars)
+    M3 <- colMeans(dt_did[, cont_ipw_weight] * covvars) 
+
+    or_x <- dt_did[, weights*(1-D)] * covvars
+    or_ex <- dt_did[, weights*(1-D)*(delta_y - or_delta)] * covvars
+    XpX <- crossprod(or_x, covvars)/n
 
     #calculate alrw = eX (XpX)^-1 by solve XpX*alrw = ex, much faster since avoided inv
-    asym_linear_or <- t(solve(XpX, t(or_ex))) |> reverse_col()
+    asym_linear_or <- t(solve(XpX, t(or_ex)))# |> reverse_col()
     
     #or for treat
-    inf_treat_or <- - asym_linear_or %*% M1
+    inf_treat_or <- -asym_linear_or %*% M1 #a negative sign here, since or_delta is subtracted from the att
     
     #or for control
-    inf_cont_or <- - asym_linear_or %*% M3
+    inf_cont_or <- -asym_linear_or %*% M3
     
   } else {
     inf_treat_or <- 0

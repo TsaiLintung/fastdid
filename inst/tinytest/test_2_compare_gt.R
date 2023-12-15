@@ -59,17 +59,16 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
 rm(result, did_result)
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-                  control_type = "or",
+                  control_type = "reg",
                   covariatesvar = c("x", "x2"))
 did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "reg",cband = FALSE,
                           xformla = ~x+x2,
                           control_group = "notyettreated",
                           clustervars = NULL,
                           bstrap = FALSE)
-est_diff_ratio(result, did_result)
 
 expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
-             info = "covariates or")
+             info = "covariates reg")
 rm(result, did_result)
 
 
