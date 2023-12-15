@@ -10,6 +10,7 @@
 #' @param control_option The control units used for the DiD estimates. Default is "both".
 #' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
 #' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL
+#' @param control_type The control option used. "ipw", "or", or "dr" TODO: expand!!
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
 #' @param weightvar The name of the weight variable (optional).
@@ -55,7 +56,7 @@
 fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", balanced_event_time = NULL,
-                    boot=FALSE, biters = 1000,
+                    control_type = "ipw", boot=FALSE, biters = 1000,
                     weightvar=NULL,clustervar=NULL,covariatesvar = NULL,
                     copy = TRUE, validate = TRUE
                     ){
@@ -63,9 +64,9 @@ fastdid <- function(data,
   
   # validation arguments --------------------------------------------------------
   
-  if(!is.data.table(dt)){
+  if(!is.data.table(data)){
     warning("coercing input into a data.table.")
-    dt <- as.data.table(dt)
+    data <- as.data.table(data)
   } 
   
   if(copy){dt <- copy(data)} else {dt <- data}
@@ -89,6 +90,8 @@ fastdid <- function(data,
     if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
     check_arg(balanced_event_time, "numeric scalar")
   }
+  
+  #TODO: add check for control option
   
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
 
@@ -155,10 +158,10 @@ fastdid <- function(data,
   # the optional columns
   if(!is.null(covariatesvar)){
     covariates <- dt_inv[,.SD, .SDcols = covariatesvar]
-    ipw_formula <- paste0(covariatesvar, collapse = "+")
+    control_formula <- paste0(covariatesvar, collapse = "+")
   } else {
     covariates <- NULL
-    ipw_formula <- NULL
+    control_formula <- NULL
   }
   
   if(!is.null(clustervar)){
@@ -172,7 +175,7 @@ fastdid <- function(data,
   # main part  -------------------------------------------------
   
   # attgt
-  gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, covariates, ipw_formula, weights,
+  gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, covariates, control_formula, control_type, weights,
                                    cohort_sizes,cohorts,id_size,time_periods, #info about the dt
                                    control_option)
   

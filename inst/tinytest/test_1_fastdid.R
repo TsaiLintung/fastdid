@@ -11,8 +11,20 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
               info = "simple call")
 
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      control_type = "ipw",
                       covariatesvar = c("x", "x2")),
-              info = "covariates")
+              info = "covariates ipw")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      control_type = "or",
+                      covariatesvar = c("x", "x2")),
+              info = "covariates or")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      control_type = "dr",
+                      covariatesvar = c("x", "x2")),
+              info = "covariates dr")
+
 
 expect_silent(fastdid(dt[G != 3], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
               info = "missing cohort")

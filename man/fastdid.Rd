@@ -13,6 +13,7 @@ fastdid(
   control_option = "both",
   result_type = "group_time",
   balanced_event_time = NULL,
+  control_type = "ipw",
   boot = FALSE,
   biters = 1000,
   weightvar = NULL,
@@ -38,6 +39,8 @@ fastdid(
 \item{result_type}{A character string indicating the type of result to be returned. Default is "group_time".}
 
 \item{balanced_event_time}{A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL}
+
+\item{control_type}{The control option used. "ipw", "or", or "dr" TODO: expand!!}
 
 \item{boot}{Logical, indicating whether bootstrapping should be performed. Default is FALSE.}
 
