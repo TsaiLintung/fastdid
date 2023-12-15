@@ -1,4 +1,4 @@
-validate_did <- function(dt,covariatesvar,varnames, balanced_event_time){
+validate_did <- function(dt,covariatesvar,varnames, balanced_event_time, allow_unbalance_panel){
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
   
@@ -38,11 +38,13 @@ validate_did <- function(dt,covariatesvar,varnames, balanced_event_time){
   }
   
   #check if any is missing
-  unit_count <- dt[, .(count = .N), by = unit]
-  if(any(unit_count[, count < raw_time_size])){
-    mis_unit <- unit_count[count < raw_time_size]
-    warning(nrow(mis_unit), " units is missing in some periods, enforcing balanced panel by dropping them")
-    dt <- dt[!unit %in% mis_unit[, unit]]
+  if(!allow_unbalance_panel){
+    unit_count <- dt[, .(count = .N), by = unit]
+    if(any(unit_count[, count < raw_time_size])){
+      mis_unit <- unit_count[count < raw_time_size]
+      warning(nrow(mis_unit), " units is missing in some periods, enforcing balanced panel by dropping them")
+      dt <- dt[!unit %in% mis_unit[, unit]]
+    }
   }
   return(dt)
 }

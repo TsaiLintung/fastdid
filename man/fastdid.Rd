@@ -14,6 +14,7 @@ fastdid(
   result_type = "group_time",
   balanced_event_time = NULL,
   control_type = "ipw",
+  allow_unbalance_panel = FALSE,
   boot = FALSE,
   biters = 1000,
   weightvar = NULL,
@@ -40,7 +41,9 @@ fastdid(
 
 \item{balanced_event_time}{A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL}
 
-\item{control_type}{The control option used. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust}
+\item{control_type}{The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust}
+
+\item{allow_unbalance_panel}{Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE (allowing for unbalanced panel increases computing time)}
 
 \item{boot}{Logical, indicating whether bootstrapping should be performed. Default is FALSE.}
 

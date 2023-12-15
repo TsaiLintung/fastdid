@@ -45,6 +45,8 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       boot = TRUE, covariatesvar = "x"),
               info = "multiple outcome with covariates")
 
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE),
+              info = "balance panel false but dt is balance")
 
 # dt that needs adjustment ---------------------------
 
@@ -61,6 +63,17 @@ base_result2[, time := time*2 + 3]
 
 expect_equal(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"), base_result2,
              info = "time offset")
+
+# unbalanced panel ----------------------------------------------------
+
+dt2 <- copy(dt)
+keep <- sample(c(rep(TRUE, 19),FALSE), dt2[,.N], TRUE)
+dt2 <- dt2[keep]
+
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", 
+                      allow_unbalance_panel = TRUE),
+              info = "balance panel false but dt is balance")
 
 # throw error / warning at problematic dt -------------------------
 

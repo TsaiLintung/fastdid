@@ -1,6 +1,8 @@
 estimate_did_rc <- function(dt_did, covnames, control_type,
                          last_coef = NULL, cache_ps_fit, cache_hess){
   
+  #TODO: skip if not enough valid data
+  
   # preprocess --------
   
   oldn <- dt_did[, .N]
@@ -13,11 +15,12 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   
   dt_did[, inpre := as.numeric(!is.na(pre.y))]
   dt_did[, inpost := as.numeric(!is.na(post.y))]
+  n_pre <- dt_did[, sum(!is.na(pre.y))]
+  n_post <- dt_did[, sum(!is.na(post.y))]
   
   sum_weight_pre <- dt_did[, sum(inpre*weights)]
   sum_weight_post <- dt_did[, sum(inpost*weights)]
-  n_pre <- dt_did[, sum(!is.na(pre.y))]
-  n_post <- dt_did[, sum(!is.na(post.y))]
+
   
   if(is.null(covnames)){
     covvars <- NULL
@@ -40,10 +43,10 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
                                                   family = stats::binomial(), start = last_coef,
                                                   weights = dt_did[, weights*(inpre+inpost)], #when seen in both pre and post have double weight
                                                   control = parglm.control(nthreads = getDTthreads()),
-                                                  intercept = FALSE))
+                                                  intercept = FALSE)) #*(inpre+inpost)
     class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
     #const is implicitly put into the ipw formula, need to incorporate it manually
-    hess <- stats::vcov(prop_score_est) * n #for the influence function
+    hess <- stats::vcov(prop_score_est) * (n_pre+n_post) #for the influence function
     
     logit_coef <-  prop_score_est$coefficients 
     logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
@@ -55,7 +58,7 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
     dt_did[, ps := prop_score_fit]
     dt_did[, treat_ipw_weight := weights*D]
     dt_did[, cont_ipw_weight := weights*ps*(1-D)/(1-ps)]
-    
+
   } else {
     
     prop_score_fit <- rep(1,n)
@@ -103,29 +106,31 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   dt_did[, att_treat_pre := treat_ipw_weight*(pre.y-or_delta_pre)] #minus the OR adjust
   dt_did[, att_cont_pre := cont_ipw_weight*(pre.y-or_delta_pre)]
   
-  weighted_treat_post <- dt_did[,sum(att_treat_post)/sum(treat_ipw_weight*inpost)]
-  weighted_cont_post <- dt_did[,sum(att_cont_post)/sum(cont_ipw_weight*inpost)]
-  weighted_treat_pre <- dt_did[,sum(att_treat_pre)/sum(treat_ipw_weight*inpre)]
-  weighted_cont_pre <- dt_did[,sum(att_cont_pre)/sum(cont_ipw_weight*inpre)]
+  weighted_treat_post <- dt_did[,sum(att_treat_post, na.rm = TRUE)/sum(treat_ipw_weight*inpost)]
+  weighted_cont_post <- dt_did[,sum(att_cont_post, na.rm = TRUE)/sum(cont_ipw_weight*inpost)]
+  weighted_treat_pre <- dt_did[,sum(att_treat_pre, na.rm = TRUE)/sum(treat_ipw_weight*inpre)]
+  weighted_cont_pre <- dt_did[,sum(att_cont_pre, na.rm = TRUE)/sum(cont_ipw_weight*inpre)]
   
   att <- (weighted_treat_post - weighted_treat_pre) - (weighted_cont_post - weighted_cont_pre)
 
+  
   # influence --------
 
   # influence from ipw
   if(ipw){
     
     # a bit unsure about this part
-    M2_post <- colSums(dt_did[, inpost*cont_ipw_weight*(post.y-weighted_cont_post-or_delta_post)] * covvars) / sum_weight_post
-    M2_pre <- colSums(dt_did[, inpre*cont_ipw_weight*(pre.y-weighted_cont_pre-or_delta_pre)] * covvars) / sum_weight_pre
+    M2_post <- colSums(dt_did[, inpost*cont_ipw_weight*(post.y-weighted_cont_post-or_delta_post)] * covvars, na.rm = TRUE) / sum_weight_pre
+    M2_pre <- colSums(dt_did[, inpre*cont_ipw_weight*(pre.y-weighted_cont_pre-or_delta_pre)] * covvars, na.rm = TRUE) / sum_weight_post
     
     #not sure about /2
-    score_ps <- dt_did[, weights*(inpre+inpost)*(D-ps)] * covvars #weight is doubled for observed in both post and pre
+    score_ps <- dt_did[, weights*(inpre+inpost)/2*(D-ps)] * covvars #weight is doubled for observed in both post and pre
     asym_linear_ps <- score_ps %*% hess 
    
     #ipw for control
     inf_cont_ipw_post <- asym_linear_ps %*% M2_post 
     inf_cont_ipw_pre  <- asym_linear_ps %*% M2_pre
+
     
   } else {
     inf_cont_ipw_post <- 0
@@ -134,10 +139,10 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   
   if(or){
     
-    M1_post <- colSums(dt_did[, inpost*treat_ipw_weight] * covvars) / sum_weight_post
-    M1_pre <- colSums(dt_did[, inpre*treat_ipw_weight] * covvars) / sum_weight_pre
-    M3_post <- colSums(dt_did[, inpost*cont_ipw_weight] * covvars) / sum_weight_post
-    M3_pre <- colSums(dt_did[, inpre*cont_ipw_weight] * covvars) / sum_weight_pre
+    M1_post <- colSums(dt_did[, inpost*treat_ipw_weight] * covvars, na.rm = TRUE) / sum_weight_post
+    M1_pre <- colSums(dt_did[, inpre*treat_ipw_weight] * covvars, na.rm = TRUE) / sum_weight_pre
+    M3_post <- colSums(dt_did[, inpost*cont_ipw_weight] * covvars, na.rm = TRUE) / sum_weight_post
+    M3_pre <- colSums(dt_did[, inpre*cont_ipw_weight] * covvars, na.rm = TRUE) / sum_weight_pre
 
     or_x_post <- dt_did[, inpost*weights*(1-D)] * covvars
     or_x_pre <- dt_did[, inpre*weights*(1-D)] * covvars
@@ -175,16 +180,21 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   #get overall influence function
   inf_cont_post <- (inf_cont_did_post+inf_cont_ipw_post+inf_cont_or_post)/dt_did[,sum(cont_ipw_weight*inpost)/n_post]
   inf_treat_post <- (inf_treat_did_post+inf_treat_or_post)/dt_did[,sum(treat_ipw_weight*inpost)/n_post]
-  inf_func_no_na_post <- (inf_treat_post - inf_cont_post) * oldn / n_post #adjust the value such that mean over the whole id size give the right result
-  
+
   inf_cont_pre <- (inf_cont_did_pre+inf_cont_ipw_pre+inf_cont_or_pre)/dt_did[,sum(cont_ipw_weight*inpre)/n_pre]
   inf_treat_pre <- (inf_treat_did_pre+inf_treat_or_pre)/dt_did[,sum(treat_ipw_weight*inpre)/n_pre]
-  inf_func_no_na_pre <- (inf_treat_pre - inf_cont_pre) * oldn / n_pre #adjust the value such that mean over the whole id size give the right result
+
+  #post process
+
+  inf_func_no_na_post <- (inf_treat_post - inf_cont_post) * oldn / n_post #adjust the value such that mean over the whole id size give the right result
+  inf_func_no_na_post[is.na(inf_func_no_na_post)] <- 0 #fill 0 for NA part (no influce if not in this gt)
   
-  #post process (fill zeros for irrelevant ones)
+  inf_func_no_na_pre <- (inf_treat_pre - inf_cont_pre) * oldn / n_pre #adjust the value such that mean over the whole id size give the right result
+  inf_func_no_na_pre[is.na(inf_func_no_na_pre)] <- 0
+  
   inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
   inf_func[data_pos] <- inf_func_no_na_post - inf_func_no_na_pre
-  
+
   return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
               cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
 }

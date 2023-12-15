@@ -1,6 +1,6 @@
 estimate_gtatt <- function(outcomes_list, outcomevar, covariates, control_type, weights, 
                            cohort_sizes,cohorts,id_size,time_periods,
-                           control_option) {
+                           control_option, allow_unbalance_panel) {
 
   treated_cohorts <- cohorts[!is.infinite(cohorts)]
   
@@ -43,9 +43,14 @@ estimate_gtatt <- function(outcomes_list, outcomevar, covariates, control_type, 
         #construct the 2x2 dataset
         cohort_did <- data.table(did_setup, outcomes[[t]], outcomes[[base_period]], weights, covariates)
         setnames(cohort_did, c("did_setup", "V2", "V3", "weights"), c("D", "post.y", "pre.y", "weights"))
-        
+ 
         #estimate did
-        result <- estimate_did(cohort_did, colnames(covariates), control_type, last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]])
+        if(!allow_unbalance_panel){
+          result <- estimate_did(cohort_did, colnames(covariates), control_type, last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]])
+        } else {
+          result <- estimate_did_rc(cohort_did, colnames(covariates), control_type, last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]])
+        }
+       
       
         #collect the result
         last_coef <- result$logit_coef

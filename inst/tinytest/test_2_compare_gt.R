@@ -1,7 +1,7 @@
 # setup ----------------------
 
 library(did)
-
+#set.seed(1)
 tol <- 1e-2 #allow 1% different between estimates
 simdt <- sim_did(1e+03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = TRUE,
                  seed = 1, stratify = FALSE,

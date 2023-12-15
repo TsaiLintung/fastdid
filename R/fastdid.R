@@ -10,7 +10,8 @@
 #' @param control_option The control units used for the DiD estimates. Default is "both".
 #' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
 #' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL
-#' @param control_type The control option used. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust
+#' @param control_type The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust
+#' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE (allowing for unbalanced panel increases computing time)
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
 #' @param weightvar The name of the weight variable (optional).
@@ -56,7 +57,7 @@
 fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", balanced_event_time = NULL,
-                    control_type = "ipw", boot=FALSE, biters = 1000,
+                    control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
                     weightvar=NULL,clustervar=NULL,covariatesvar = NULL,
                     copy = TRUE, validate = TRUE
                     ){
@@ -86,7 +87,7 @@ fastdid <- function(data,
   check_arg(control_option, "scalar charin", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
   check_arg(control_type, "scalar charin", .choices = c("ipw", "reg", "dr")) #kinda bad names since did's notyet include both notyet and never
   
-  check_arg(copy, validate, "scalar logical")
+  check_arg(copy, validate, boot, allow_unbalance_panel, "scalar logical")
   
   if(!is.null(balanced_event_time)){
     if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
@@ -101,7 +102,7 @@ fastdid <- function(data,
   
   if(validate){
     varnames <- c("time", "G", "unit", outcomevar,weightvar,clustervar,covariatesvar)
-    dt <- validate_did(dt, covariatesvar, varnames, balanced_event_time)
+    dt <- validate_did(dt, covariatesvar, varnames, balanced_event_time, allow_unbalance_panel)
   }
   
   # preprocess -----------------------------------------------------------
@@ -116,8 +117,16 @@ fastdid <- function(data,
     dt[, time := as.numeric(time)] 
   }
   
-  setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
+  if(allow_unbalance_panel){
+    dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
+    setorder(dt_inv_raw, G)
+    dt_inv_raw[, new_unit := 1:.N] #let unit start from 1 .... N, useful for knowing which unit is missing
+    dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit")
+    dt[, unit := new_unit]
+  }
   
+  setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
+
   #deal with time, coerice time to 1,2,3,4,5.......
   time_periods <- dt[, unique(time)]
   time_size <- length(time_periods)
@@ -141,18 +150,44 @@ fastdid <- function(data,
   #construct the outcomes list for fast access later
   id_size <- dt[, uniqueN(unit)]
   outcomes_list <- list()
+  
+  #loop for multiple outcome
   for(outcol in outcomevar){
     outcomes <- list()
-    for(i in time_periods){
-      start <- (i-1)*id_size+1
-      end <- i*id_size
-      outcomes[[i]] <- dt[seq(start,end), get(outcol)]
+    
+    if(!allow_unbalance_panel){
+      for(i in time_periods){
+        start <- (i-1)*id_size+1
+        end <- i*id_size
+        outcomes[[i]] <- dt[seq(start,end), get(outcol)]
+      }
+    } else {
+      
+      for(i in time_periods){
+        #populate a outcome vector of length N with outcome data in the right place
+        #NA is data gone or missing, will be addressed in estimate_did_rc
+        outcome_period <- rep(NA, id_size)
+        data_pos <- dt[time == i, unit] #units observed in i
+        outcome_period[data_pos] <- dt[time == i, get(outcol)]
+        outcomes[[i]] <- outcome_period
+      }
+      
     }
+
     outcomes_list[[outcol]] <- outcomes
   }
 
   #the time-invariant parts 
-  dt_inv <- dt[1:id_size]
+  if(!allow_unbalance_panel){
+    dt_inv <- dt[1:id_size]
+  } else {
+    dt_inv <- dt[dt[, .I[1], by = unit]$V1]
+    setorder(dt_inv, unit) #can't move this outside
+  }
+  
+  
+
+  
   cohorts <- dt_inv[, unique(G)]
   cohort_sizes <- dt_inv[, .(cohort_size = .N) , by = G]
 
@@ -172,11 +207,11 @@ fastdid <- function(data,
   } else {weights <- rep(1,id_size)}
   
   # main part  -------------------------------------------------
-  
+
   # attgt
   gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, covariates, control_type, weights,
                                    cohort_sizes,cohorts,id_size,time_periods, #info about the dt
-                                   control_option)
+                                   control_option, allow_unbalance_panel)
   
   all_result <- data.table()
   for(outcol in outcomevar){
