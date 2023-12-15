@@ -92,8 +92,7 @@ fastdid <- function(data,
     if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
     check_arg(balanced_event_time, "numeric scalar")
   }
-  
-  #TODO: add check for control option
+
   
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
 

@@ -40,7 +40,7 @@ fastdid(
 
 \item{balanced_event_time}{A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL}
 
-\item{control_type}{The control option used. "ipw", "or", or "dr" TODO: expand!!}
+\item{control_type}{The control option used. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust}
 
 \item{boot}{Logical, indicating whether bootstrapping should be performed. Default is FALSE.}
 
