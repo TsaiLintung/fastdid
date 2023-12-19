@@ -32,7 +32,7 @@ did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time"
                           bstrap = FALSE)
 
 expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
-             info = "unbalanced method balance pacel simple")
+             info = "unbalanced method balance panel simple")
 rm(result, did_result)
 
 result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
@@ -99,11 +99,13 @@ rm(result, did_result)
 # unbalanced panel unbalanced method ------------------------------------------------------------------
 
 
-result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  
+                  result_type = "group_time",
                   control_type = "ipw",
                   covariatesvar = c("x", "x2"),
                   allow_unbalance_panel = TRUE)
-did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt2,base_period = "universal",cband = FALSE,
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt2,
+                          base_period = "universal",cband = FALSE,
                           est_method = "ipw",xformla = ~x+x2,
                           control_group = "notyettreated",
                           allow_unbalanced_panel = TRUE,
