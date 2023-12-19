@@ -193,7 +193,7 @@ fastdid <- function(data,
 
   # the optional columns
   if(!is.null(covariatesvar)){
-    covariates <- cbind(const = 1, dt_inv[,.SD, .SDcols = covariatesvar]) # const 
+    covariates <- cbind(const = -1, dt_inv[,.SD, .SDcols = covariatesvar]) # const 
   } else {
     covariates <- NULL
   }

@@ -6,16 +6,13 @@ tol <- 1e-2 #allow 1% different between estimates
 simdt <- sim_did(1e03, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = TRUE, seed = 1, stratify = FALSE,
                  second_cov = TRUE)
 dt <- simdt$dt
-
-est_diff_ratio_agg <- function(result, did_result){
-  names(result) <- c("target", "att", "se", "outcome")
-  did_result_dt <- data.table(target = did_result$egt, did_att = did_result$att.egt, did_se = did_result$se.egt)
-  compare <- did_result_dt |> merge(result, by = c("target"), all = TRUE) 
+est_diff_ratio <- function(result, did_result){
+  did_result_dt <- data.table(cohort = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)
+  compare <- did_result_dt |> merge(result, by = c("cohort", "time"), all = TRUE) 
   att_diff_per <- compare[, sum(abs(did_att-att), na.rm = TRUE)/sum(did_att, na.rm = TRUE)]
   se_diff_per <- compare[, sum(abs(did_se-se), na.rm = TRUE)/sum(did_se, na.rm = TRUE)]
   return(c(att_diff_per , se_diff_per))
 }
-
 # unbalanced ------------------------------
 
 dt2 <- copy(dt)

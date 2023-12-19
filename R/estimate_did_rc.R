@@ -48,7 +48,6 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
     #for the influence, will be cached
     hess <- stats::vcov(prop_score_est) * n #for the influence function
     
-    
     logit_coef <-  prop_score_est$coefficients 
     logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
     prop_score_fit <- fitted(prop_score_est)
@@ -81,10 +80,10 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
     control_bool_post <- dt_did[, D==0 & inpost] #control group and have obs in post period
     control_bool_pre <- dt_did[, D==0 & inpre]
     reg_coef_post <- stats::coef(stats::lm.wfit(x = covvars[control_bool_post,], y = dt_did[control_bool_post,post.y],
-                                           w = dt_did[control_bool_post,weights]))
+                                                w = dt_did[control_bool_post,weights]))
     
     reg_coef_pre <- stats::coef(stats::lm.wfit(x = covvars[control_bool_pre,], y = dt_did[control_bool_pre,pre.y],
-                                           w = dt_did[control_bool_pre,weights]))
+                                               w = dt_did[control_bool_pre,weights]))
     
     if(anyNA(reg_coef_post)|anyNA(reg_coef_pre)){
       stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
@@ -112,7 +111,7 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   dt_did[, att_cont_post := cont_ipw_weight*(post.y-or_delta_post)/mean_wcpo]
   dt_did[, att_treat_pre := treat_ipw_weight*(pre.y-or_delta_pre)/mean_wtpr] #minus the OR adjust
   dt_did[, att_cont_pre := cont_ipw_weight*(pre.y-or_delta_pre)/mean_wcpr]
-  
+
   weighted_treat_post <- dt_did[,mean(att_treat_post, na.rm = TRUE)]
   weighted_cont_post <- dt_did[,mean(att_cont_post, na.rm = TRUE)]
   weighted_treat_pre <- dt_did[,mean(att_treat_pre, na.rm = TRUE)]
@@ -147,10 +146,10 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   
   if(or){
     
-    M1_post <- colSums(dt_did[, inpost*treat_ipw_weight] * covvars, na.rm = TRUE) / sum_weight_post
-    M1_pre <- colSums(dt_did[, inpre*treat_ipw_weight] * covvars, na.rm = TRUE) / sum_weight_pre
-    M3_post <- colSums(dt_did[, inpost*cont_ipw_weight] * covvars, na.rm = TRUE) / sum_weight_post
-    M3_pre <- colSums(dt_did[, inpre*cont_ipw_weight] * covvars, na.rm = TRUE) / sum_weight_pre
+    M1_post <- colSums(dt_did[, inpost*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpo
+    M1_pre <- colSums(dt_did[, inpre*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpr
+    M3_post <- colSums(dt_did[, inpost*cont_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wcpo
+    M3_pre <- colSums(dt_did[, inpre*cont_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wcpr
 
     or_x_post <- dt_did[, inpost*weights*(1-D)] * covvars
     or_x_pre <- dt_did[, inpre*weights*(1-D)] * covvars
