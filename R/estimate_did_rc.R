@@ -73,9 +73,7 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   
   if(or){
     
-    #TODO: this should be optimized with better backend and some caching
-    
-    #should change to speedlm or something  
+    stop("or in RC should not be called right now")
 
     control_bool_post <- dt_did[, D==0 & inpost] #control group and have obs in post period
     control_bool_pre <- dt_did[, D==0 & inpre]
@@ -92,7 +90,7 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
     #the control function from outcome regression
     dt_did[, or_delta_post := as.vector(tcrossprod(reg_coef_post, covvars))]
     dt_did[, or_delta_pre := as.vector(tcrossprod(reg_coef_pre, covvars))]
-    
+
   } else {
     dt_did[, or_delta_post := 0]
     dt_did[, or_delta_pre := 0]
@@ -105,10 +103,10 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   mean_wtpo <-  dt_did[,sum(treat_ipw_weight*inpost)/n_post]
   mean_wcpr <-  dt_did[,sum(cont_ipw_weight*inpre)/n_pre]
   mean_wtpr <-  dt_did[,sum(treat_ipw_weight*inpre)/n_pre]
-  
+
   #delta y is needed for PR
   dt_did[, att_treat_post := treat_ipw_weight*(post.y-or_delta_post)/mean_wtpo] #minus the OR adjust
-  dt_did[, att_cont_post := cont_ipw_weight*(post.y-or_delta_post)/mean_wcpo]
+  dt_did[, att_cont_post :=  cont_ipw_weight*(post.y-or_delta_post)/mean_wcpo]
   dt_did[, att_treat_pre := treat_ipw_weight*(pre.y-or_delta_pre)/mean_wtpr] #minus the OR adjust
   dt_did[, att_cont_pre := cont_ipw_weight*(pre.y-or_delta_pre)/mean_wcpr]
 
@@ -118,7 +116,6 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   weighted_cont_pre <- dt_did[,mean(att_cont_pre, na.rm = TRUE)]
   
   att <- (weighted_treat_post - weighted_treat_pre) - (weighted_cont_post - weighted_cont_pre)
-
   
   # influence --------
 
@@ -145,7 +142,7 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   
   
   if(or){
-    
+    stop("or in RC should not be called right now")
     M1_post <- colSums(dt_did[, inpost*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpo
     M1_pre <- colSums(dt_did[, inpre*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpr
     M3_post <- colSums(dt_did[, inpost*cont_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wcpo
@@ -194,7 +191,6 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   inf_treat_post <- inf_treat_did_post+inf_treat_or_post
   inf_cont_pre <- inf_cont_did_pre+inf_cont_ipw_pre+inf_cont_or_pre
   inf_treat_pre <- inf_treat_did_pre+inf_treat_or_pre
-
   #post process
 
   inf_func_no_na_post <- (inf_treat_post - inf_cont_post) * oldn / n_post #adjust the value such that mean over the whole id size give the right result

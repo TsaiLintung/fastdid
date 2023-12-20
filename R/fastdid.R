@@ -11,7 +11,7 @@
 #' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
 #' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL
 #' @param control_type The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust
-#' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE (allowing for unbalanced panel increases computing time)
+#' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE 
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
 #' @param weightvar The name of the weight variable (optional).
@@ -74,19 +74,18 @@ fastdid <- function(data,
 
   dt_names <- names(dt)
   name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
-  check_arg(timevar, unitvar, cohortvar, "scalar charin", .choices = dt_names, .message = name_message)
+  check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
   
   covariate_message <- "__ARG__ must be NULL or a character vector which are all names of columns from the dataset."
-  check_arg(covariatesvar, outcomevar, 
-            "NULL | multi charin", .choices = dt_names, .message = covariate_message)
+  check_set_arg(covariatesvar, outcomevar, 
+            "NULL | multi match", .choices = dt_names, .message = covariate_message)
   
   checkvar_message <- "__ARG__ must be NULL or a character scalar if a name of columns from the dataset."
-  check_arg(weightvar, clustervar,
-            "NULL | scalar charin", .choices = dt_names, .message = checkvar_message)
+  check_set_arg(weightvar, clustervar,
+            "NULL | match", .choices = dt_names, .message = checkvar_message)
   
-  check_arg(control_option, "scalar charin", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
-  check_arg(control_type, "scalar charin", .choices = c("ipw", "reg", "dr")) #kinda bad names since did's notyet include both notyet and never
-  
+  check_set_arg(control_option, "match", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
+  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr")) 
   check_arg(copy, validate, boot, allow_unbalance_panel, "scalar logical")
   
   if(!is.null(balanced_event_time)){
@@ -94,6 +93,9 @@ fastdid <- function(data,
     check_arg(balanced_event_time, "numeric scalar")
   }
 
+  if(allow_unbalance_panel == TRUE & control_type %in% c("dr", "reg")){
+    stop("fastdid currently only supprts ipw when allowing for unbalanced panels.")
+  }
   
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
 
