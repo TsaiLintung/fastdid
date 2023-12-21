@@ -2,6 +2,6 @@
 ^.*\.Rproj$
 ^\.Rproj\.user$
 ^\.Rproj\.user$
-^interactive
+^development
 
 ^\.github$

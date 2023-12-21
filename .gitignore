@@ -36,4 +36,5 @@ vignettes/*.pdf
 *.knit.md
 
 #interactive stuff
-*interactive/
+*development/old
+*development/output

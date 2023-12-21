@@ -43,7 +43,7 @@ fastdid(
 
 \item{control_type}{The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust}
 
-\item{allow_unbalance_panel}{Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE (allowing for unbalanced panel increases computing time)}
+\item{allow_unbalance_panel}{Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE}
 
 \item{boot}{Logical, indicating whether bootstrapping should be performed. Default is FALSE.}
 

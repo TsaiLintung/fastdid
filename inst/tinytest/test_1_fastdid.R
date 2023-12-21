@@ -51,6 +51,7 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 # dt that needs adjustment ---------------------------
 
 base_result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time")
+
 expect_equal(fastdid(dt[nrow(dt):1], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"), base_result,
               info = "reversed")
 
@@ -61,7 +62,8 @@ base_result2 <- copy(base_result)
 base_result2[, cohort := cohort*2 + 3]
 base_result2[, time := time*2 + 3]
 
-expect_equal(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"), base_result2,
+expect_equal(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"), 
+             base_result2,
              info = "time offset")
 
 # unbalanced panel ----------------------------------------------------
