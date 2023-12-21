@@ -24,76 +24,34 @@ plot_did_dynamics <-function(dt,
   
 
   #add the base period
-  base_row <- data.table(att = 0, se = 0, event_time = base_time)
+  if("outcome" %in% names(dt)){
+    base_row <- data.table(att = 0, se = 0, event_time = base_time, outcome = dt[, unique(outcome)])
+  } else {
+    base_row <- data.table(att = 0, se = 0, event_time = base_time)
+  }
+  
   #dt <- dt |> add_base_row(base_row)
-  dt <- dt |> rbind(base_row)
+  dt <- dt |> rbind(base_row, fill = TRUE)
   
   dt[, conf_upb := att + qnorm(1-significance_level/2) * se]
   dt[, conf_lwb := att - qnorm(1-significance_level/2) * se]
   
-  #add some offset
-  # if("stratify" %in% names(dt)){
-  #   dt[, event_time := event_time + stratify_offset*(as.integer(stratify)-1)]
-  # }
-  
+
   figure <- dt |> 
     ggplot2::ggplot() +
     ggplot2::geom_hline(yintercept = 0, linetype = 'dashed', col = 'red')
   
-  # if("stratify" %in% names(dt)){
-  #   figure <- figure + geom_line(aes(x = event_time, y = att, color = stratify)) + 
-  #     geom_point(aes(x = event_time, y = att, color = stratify)) +
-  #     geom_errorbar(aes(x = event_time, ymin = conf_lwb, ymax = conf_upb), 
-  #                   width = 0.1, linetype = "dashed")
-  # } else {
-    figure <- figure + ggplot2::geom_line(ggplot2::aes(x = event_time, y = att), color = "black") + 
-      ggplot2::geom_point(ggplot2::aes(x = event_time, y = att), color = "black") +
-      ggplot2::geom_errorbar(ggplot2::aes(x = event_time, ymin = conf_lwb, ymax = conf_upb), 
-                  width = 0.1, linetype = "dashed")
-  # }
-  
-  # if("outcome" %in% names(dt)){
-  #   figure <- figure + facet_wrap(~ outcome, scales = "free")
-  # }
-  # if("cohort" %in% names(dt)){
-  #   figure <- figure + facet_wrap(~ cohort, scales = "free")
-  # }
+  figure <- figure + ggplot2::geom_line(ggplot2::aes(x = event_time, y = att), color = "black") + 
+    ggplot2::geom_point(ggplot2::aes(x = event_time, y = att), color = "black") +
+    ggplot2::geom_errorbar(ggplot2::aes(x = event_time, ymin = conf_lwb, ymax = conf_upb), 
+                width = 0.1, linetype = "dashed")
 
-  figure <- figure +
-    ggplot2::theme_classic() +
-    ggplot2::theme(legend.position = "bottom",
-          legend.background = element_rect(linetype = "dashed", color = "black"),
-          legend.box = "horizontal",
-          plot.title = element_text(hjust = 0.5),
-          plot.subtitle = element_text(hjust = 0.5),
-          plot.caption = element_text(hjust = 0)) +
-    ggplot2::labs(title = graphname, subtitle = note)
-  
+  if("outcome" %in% names(dt)){
+    figure <- figure + ggplot2::facet_wrap(~outcome, scales = "free")
+  }
+
+  figure <- figure + ggplot2::theme_classic()
+
   return(figure)
   
 }
-
-# add_base_row <- function(dt, base_row){
-#   
-#   col_names <- names(dt)
-#   opt_cols <- c("outcome", "stratify", "cohort")
-#   
-#   for(opt_col in opt_cols){
-#     if(opt_col %in% col_names){
-#       
-#       row_list <- list()
-#       
-#       for (col_name in dt[, unique(get(opt_col))]) {
-#         base_row_sub <- copy(base_row)
-#         base_row_sub[, c(opt_col) := col_name]
-#         row_list <- c(row_list, list(base_row_sub))
-#       }
-#       
-#     } 
-#     base_row <- rbindlist(row_list)
-#   }
-# 
-#   dt <- dt |> rbind(base_row)
-#   
-#   return(dt)
-# }

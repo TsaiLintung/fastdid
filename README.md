@@ -35,14 +35,26 @@ result <- fastdid(dt, #the dataset
                   result_type = "group_time") #the result type
 ```
 
-You can control for covariates by providing the name of the data columns. 
+You can control for covariates by providing the name of the data columns, and choose the method among doubly-robust (`"dr"`), inverse probability weight (`"ipw"`), and outcome regression (`"or"`). 
 
 ```
 result <- fastdid(dt, 
                   timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",
                   result_type = "group_time",
+                  control_option = "dr", #choose the control method
                   covaraitesvar = c("x", "x2")) #add covariates
 ```
+
+While the default is to coerce the data into a balanced panel, you can allow for unbalanced panel. Note that currently only "ipw" is available when `allow_unbalance_panel = TRUE`.
+
+```
+result <- fastdid(dt, 
+                  timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",
+                  result_type = "group_time",
+                  allow_unbalance_panel = TRUE, #allow for unbalanced panel
+                  covaraitesvar = c("x", "x2"))
+```
+
 
 Clustered standard error can be obtained from multiplier bootstrap. 
 
@@ -108,30 +120,38 @@ Aggregated parameters: `fastdid` aggregates in the same function.
 |group|group|
 |simple|simple|
 
-## Feature
+## Other
 
-Notable differences in feature include:
-1. **fastdid** currently only offers inverse probability weights estimators for controlling for covariates (OR and DR likely to be added soon)
+1. **fastdid** currently only offers inverse probability weights estimators for controlling for covariates when allowing for unbalanced panels.
 2. **fastdid** only uses the time before the event as base periods ("universal" in `attgt`)
-3. **fastdid** can only deal with balanced panels, no repeated cross-sections.
+4. **fastdid** currently only reports the pointwise confidence intervals, instead of the simultaneously valid confidence intervals (check section 4.1 of Callaway and Sant'Anna's (2021) for more detail.)
 
 # Roadmap
 
 **fastdid** is still in active development. Many features are planned to be added:
 
 - Multiple outcomes :white_check_mark:
-- Min/max event time and balanced composition
-- DR and OR estimators
+- Min/max event time and balanced composition :white_check_mark:
+- DR and OR estimators :white_check_mark:
+- Allowing for unbalanced panels :white_check_mark: (*well, not fully because DR and OR still need to be added*)
 - Larger-than-memory data support
 - User-provided aggregation scheme
 - drop-in interface for did
 - Anticipation
 - Varying base periods
-- User-provided logit formula
-
-Further optimization!
+- User-provided control formula
+- Simultaneously valid confidence bands
+- Further optimization!
 
 # Update
+
+## 0.9.2 (2023/12/20)
+
+- add support to doubly robust and outcome regression estimators
+- add support to unbalanced panels (simple and ipw only)
+- add support to balanced composition option in dynamics aggregation
+- fixed argument checking that was not working properly
+- set the default to copying the entire dataset to avoid unexpected modification of the original data (thanks @grantmcdermott for the suggestion.)
 
 ## 0.9.1 (2023/10/20)
 
@@ -140,6 +160,6 @@ Further optimization!
 
 # Acknowledgments
 
-**fastdid** is created by Lin-Tung Tsai, Maxwell Kellogg,and Kuan-Ju Tseng. 
+**fastdid** is created by Lin-Tung Tsai, Maxwell Kellogg, and Kuan-Ju Tseng. 
 
 

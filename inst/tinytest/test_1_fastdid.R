@@ -11,8 +11,20 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
               info = "simple call")
 
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      control_type = "ipw",
                       covariatesvar = c("x", "x2")),
-              info = "covariates")
+              info = "covariates ipw")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      control_type = "reg",
+                      covariatesvar = c("x", "x2")),
+              info = "covariates reg")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      control_type = "dr",
+                      covariatesvar = c("x", "x2")),
+              info = "covariates dr")
+
 
 expect_silent(fastdid(dt[G != 3], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
               info = "missing cohort")
@@ -33,10 +45,13 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       boot = TRUE, covariatesvar = "x"),
               info = "multiple outcome with covariates")
 
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE),
+              info = "balance panel false but dt is balance")
 
 # dt that needs adjustment ---------------------------
 
 base_result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time")
+
 expect_equal(fastdid(dt[nrow(dt):1], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"), base_result,
               info = "reversed")
 
@@ -47,8 +62,20 @@ base_result2 <- copy(base_result)
 base_result2[, cohort := cohort*2 + 3]
 base_result2[, time := time*2 + 3]
 
-expect_equal(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"), base_result2,
+expect_equal(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"), 
+             base_result2,
              info = "time offset")
+
+# unbalanced panel ----------------------------------------------------
+
+dt2 <- copy(dt)
+keep <- sample(c(rep(TRUE, 19),FALSE), dt2[,.N], TRUE)
+dt2 <- dt2[keep]
+
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", 
+                      allow_unbalance_panel = TRUE),
+              info = "balance panel false but dt is balance")
 
 # throw error / warning at problematic dt -------------------------
 
@@ -63,7 +90,7 @@ expect_warning(fastdid(dt[time != 3 | unit != 20], timevar = "time", cohortvar =
              info = "non-balanced panel, missing")
 
 extra_row <-  dt[unit == 20 & time == 3]
-expect_warning(fastdid(rbind(dt,extra_row), timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
+expect_error(fastdid(rbind(dt,extra_row), timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
              info = "non-balanced panel, extra")
 
 dt2 <- copy(dt)

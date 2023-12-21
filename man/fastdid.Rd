@@ -5,24 +5,27 @@
 \title{Fast Staggered DID Estimation}
 \usage{
 fastdid(
-  dt,
+  data,
   timevar,
   cohortvar,
   unitvar,
   outcomevar,
   control_option = "both",
   result_type = "group_time",
+  balanced_event_time = NULL,
+  control_type = "ipw",
+  allow_unbalance_panel = FALSE,
   boot = FALSE,
   biters = 1000,
   weightvar = NULL,
   clustervar = NULL,
   covariatesvar = NULL,
-  copy = FALSE,
+  copy = TRUE,
   validate = TRUE
 )
 }
 \arguments{
-\item{dt}{A data table containing the panel data.}
+\item{data}{A data table containing the panel data.}
 
 \item{timevar}{The name of the time variable.}
 
@@ -36,6 +39,12 @@ fastdid(
 
 \item{result_type}{A character string indicating the type of result to be returned. Default is "group_time".}
 
+\item{balanced_event_time}{A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL}
+
+\item{control_type}{The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust}
+
+\item{allow_unbalance_panel}{Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE}
+
 \item{boot}{Logical, indicating whether bootstrapping should be performed. Default is FALSE.}
 
 \item{biters}{The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.}
@@ -46,7 +55,7 @@ fastdid(
 
 \item{covariatesvar}{A character vector containing the names of covariate variables (optional).}
 
-\item{copy}{whether to copy the dataset before processing, set to true if the original dataset is to be re-used.}
+\item{copy}{whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.}
 
 \item{validate}{whether to validate the dataset before processing.}
 }

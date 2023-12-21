@@ -1,6 +1,6 @@
 aggregate_gt <- function(gt_result, cohort_sizes, 
                          id_weights, id_cohorts,
-                         result_type){
+                         result_type, balanced_event_time){
   
   gt_att <- gt_result$att
   gt_inf_func <- gt_result$inf_func
@@ -22,7 +22,7 @@ aggregate_gt <- function(gt_result, cohort_sizes,
     
   } else {
     
-    agg_sch <- get_aggregate_scheme(group_time, result_type, id_weights, id_cohorts)
+    agg_sch <- get_aggregate_scheme(group_time, result_type, id_weights, id_cohorts, balanced_event_time)
     targets <- agg_sch$targets
     weights <- as.matrix(agg_sch$weights)
     
@@ -42,39 +42,58 @@ aggregate_gt <- function(gt_result, cohort_sizes,
   return(list(inf_matrix = inf_matrix, agg_att = agg_att, targets = targets))
 }
 
-get_aggregate_scheme <- function(group_time, result_type, id_weights, id_cohorts){
+get_aggregate_scheme <- function(group_time, result_type, id_weights, id_cohorts, balanced_event_time){
+  
+  #browser()
   
   weights <- data.table()
   gt_count <- group_time[, .N]
   
   bool_to_pn <- function(x){ifelse(x, 1, -1)}
   
+  #choose the target based on aggregation type
   if (result_type == "dynamic") {
     group_time[, target := time-G]
   } else if (result_type == "group") {
-    group_time[, target := G*(bool_to_pn(time>=G))]
+    group_time[, target := G*(bool_to_pn(time>=G))] # group * treated
   } else if (result_type == "time") {
-    group_time[, target := time*(bool_to_pn(time>=G))]
+    group_time[, target := time*(bool_to_pn(time>=G))] #calendar time * treated
   } else if (result_type == "simple") {
-    group_time[, target := bool_to_pn(time>=G)]
-  } 
-  
-  min_target<- group_time[, min(target)]
-  max_target<- group_time[, max(target)]
+    group_time[, target := bool_to_pn(time>=G)] #treated / not treated
+  }  
   
   targets <- group_time[, unique(target)]
   targets <- sort(as.integer(targets))
+  
+  #for balanced cohort composition in dynamic setting
+  #a cohort us only used if it is seen for all dynamic time
+  if(result_type == "dynamic" & !is.null(balanced_event_time)){
+
+    cohorts <- group_time[, .(max_et = max(time-G),
+                              min_et = min(time-G)), by = "G"]
+    cohorts[, used := max_et >= balanced_event_time] #the max
+    if(!cohorts[, any(used)]){stop("balanced_comp_range outside avalible range")}
+    group_time[, used := G %in% cohorts[used == TRUE, G]]
+    
+    targets <- targets[targets <= balanced_event_time & targets >= cohorts[used == TRUE, min(min_et)]]
+    
+  } else{group_time[, used := TRUE]}
+  
   for(tar in targets){ #the order matters
     
-    group_time[, agg_weight := 0]
-    total_pg <- group_time[target == tar, sum(pg)]
-    group_time[, weight := ifelse(target == tar, pg/total_pg, 0)]
+    group_time[, targeted := target == tar & used]
+    
+    total_pg <- group_time[targeted == TRUE, sum(pg)] #all gt that fits in the target
+    group_time[, weight := ifelse(targeted, pg/total_pg, 0)] #weight is 0 if not a target
     target_weights <- group_time[, .(weight)] |> transpose()
+    
+    group_time[, targeted := NULL]
     
     weights <- rbind(weights, target_weights)
   }
   
-  return(list(weights = weights, targets = targets))
+  return(list(weights = weights, #a matrix of each target and gt's weight in it 
+              targets = targets)) 
 }
 
 get_weight_influence <- function(agg_weights, gt_att, id_weights, id_cohorts, group) {

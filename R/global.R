@@ -5,7 +5,9 @@ if(FALSE){
     conf_lwb conf_upb const cont_ipw_weight count delta_y element_rect
     element_text event_time pg placeholder post.y pre.y ps s se target
     tau time_fe treat_ipw_weight treat_latent type unit unit_fe weight x
-    x2 x_trend y y0 y1 y2 time outcome"
+    x2 x_trend y y0 y1 y2 time outcome V1 att_cont_post att_cont_pre att_treat_post att_treat_pre inpost
+     inpre max_et min_et new_unit or_delta or_delta_post or_delta_pre
+     targeted used"
   text <- text |> str_remove_all("\\\n") |>str_split(" ") |> unlist()
   text <- text[text!=""]
   text <- text |> str_flatten(collapse = "','")
@@ -17,4 +19,6 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
                          'const','cont_ipw_weight','count','delta_y','element_rect','element_text','event_time','pg','placeholder',
                          'post.y','pre.y','ps','s','se','target','tau','time_fe',
                          'treat_ipw_weight','treat_latent','type','unit','unit_fe','weight','x','x2',
-                         'x_trend','y','y0','y1','y2', 'time', 'weights', 'outcome'))
+                         'x_trend','y','y0','y1','y2', 'time', 'weights', 'outcome',
+                         'V1','att_cont_post','att_cont_pre','att_treat_post','att_treat_pre','inpost','inpre','max_et','min_et','new_unit','or_delta','or_delta_post','or_delta_pre','targeted','used'))
+
