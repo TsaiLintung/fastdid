@@ -3,13 +3,13 @@ validate_did <- function(dt,covariatesvar, varycovariatesvar,varnames, balanced_
   raw_time_size <- dt[, uniqueN(time)]
   
   
-  if(!is.null(balanced_event_time)){
+  if(!is.na(balanced_event_time)){
     if(balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
   
   #doesn't allow missing value for now
   for(col in varnames){
-    if(is.null(col)){next}
+    if(is.na(col)){next}
     na_obs <- whichNA(dt[[col]])
     if(length(na_obs) != 0){
       warning("missing values detected in ", col, ", removing ", length(na_obs), " observation.")
@@ -17,13 +17,15 @@ validate_did <- function(dt,covariatesvar, varycovariatesvar,varnames, balanced_
     }
   }
   
-  if(!is.null(covariatesvar) & uniqueN(dt, by = c("unit", covariatesvar)) > raw_unit_size){
+  
+  if(!allNA(covariatesvar) && uniqueN(dt, by = c("unit", covariatesvar)) > raw_unit_size){
     warning("some covariates is time-varying, fastdid only use the first observation for covariates.")
   }
   
   
-  if(!is.null(covariatesvar)|!is.null(varycovariatesvar)){
+  if(!allNA(covariatesvar)|!allNA(varycovariatesvar)){
     for(cov in c(covariatesvar, varycovariatesvar)){
+      if(is.na(cov)){next}
       #check covaraites is not constant  
       if(fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1)stop(cov, " have no variation")
     }

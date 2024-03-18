@@ -7,14 +7,14 @@ estimate_did <- function(dt_did, covnames, control_type,
   data_pos <-  which(dt_did[, !is.na(D)])
   dt_did <- dt_did[data_pos]
   n <- dt_did[, .N]
-  if(is.null(covnames)){
-    covvars <- NULL
+  if(allNA(covnames)){
+    covvars <- NA
   } else {
     covvars <- as.matrix(dt_did[,.SD, .SDcols = covnames])
   }
 
-  ipw <- control_type %in% c("ipw", "dr") & !is.null(covvars)
-  or <- control_type %in% c("reg", "dr") & !is.null(covvars) #OR is REG
+  ipw <- control_type %in% c("ipw", "dr") & !allNA(covvars)
+  or <- control_type %in% c("reg", "dr") & !allNA(covvars) #OR is REG
 
   # ipw --------
 
@@ -41,7 +41,7 @@ estimate_did <- function(dt_did, covnames, control_type,
     } else { #when using multiple outcome, ipw cache can be reused
       hess <- cache_hess
       prop_score_fit <- cache_ps_fit
-      logit_coef <- NULL #won't be needing the approximate cache
+      logit_coef <- NA #won't be needing the approximate cache
     }
 
     #get the results into the main did dt
@@ -52,8 +52,8 @@ estimate_did <- function(dt_did, covnames, control_type,
   } else {
 
     prop_score_fit <- rep(1,n)
-    logit_coef <- NULL
-    hess <- NULL
+    logit_coef <- NA
+    hess <- NA
 
     dt_did[, treat_ipw_weight := weights*D]
     dt_did[, cont_ipw_weight := weights*(1-D)]

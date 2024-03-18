@@ -25,7 +25,6 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       covariatesvar = c("x", "x2")),
               info = "covariates dr")
 
-
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                       control_type = "dr",
                       covariatesvar = c("x", "x2"), varycovariatesvar = "xvar"),

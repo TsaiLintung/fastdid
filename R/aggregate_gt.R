@@ -67,7 +67,7 @@ get_aggregate_scheme <- function(group_time, result_type, id_weights, id_cohorts
   
   #for balanced cohort composition in dynamic setting
   #a cohort us only used if it is seen for all dynamic time
-  if(result_type == "dynamic" & !is.null(balanced_event_time)){
+  if(result_type == "dynamic" & !is.na(balanced_event_time)){
 
     cohorts <- group_time[, .(max_et = max(time-G),
                               min_et = min(time-G)), by = "G"]

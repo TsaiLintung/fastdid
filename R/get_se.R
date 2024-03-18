@@ -1,10 +1,10 @@
-get_se <- function(inf_matrix, boot, biters, cluster) {
+get_se <- function(inf_matrix, boot, biters, cluster, clustervar) {
   
   if(boot){
 
     top_quant <- 0.75
     bot_quant <- 0.25
-    if(!is.null(cluster)){
+    if(!allNA(clustervar)){
       cluster_n <- stats::aggregate(cluster, by=list(cluster), length)[,2]
       inf_matrix <- fsum(inf_matrix, cluster) / cluster_n #the mean without 0 for each cluster of each setting
     }
@@ -21,7 +21,7 @@ get_se <- function(inf_matrix, boot, biters, cluster) {
     se[se < sqrt(.Machine$double.eps)*10] <- NA
     
   } else {
-    if(!is.null(cluster)){stop("clustering only available with bootstrap")}
+    if(!allNA(clustervar)){stop("clustering only available with bootstrap")}
     inf_matrix <- inf_matrix  |> as.data.table()
     se <- inf_matrix[, lapply(.SD, function(x) sqrt(sum(x^2, na.rm = TRUE)/length(x)^2))] %>% as.vector() #should maybe use n-1 but did use n
     

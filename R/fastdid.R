@@ -9,7 +9,7 @@
 #' @param outcomevar The name of the outcome variable.
 #' @param control_option The control units used for the DiD estimates. Default is "both".
 #' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
-#' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL
+#' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NA
 #' @param control_type The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust
 #' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE 
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
@@ -57,9 +57,9 @@
 #' @keywords difference-in-differences fast computation panel data estimation did
 fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
-                    control_option="both",result_type="group_time", balanced_event_time = NULL,
+                    control_option="both",result_type="group_time", balanced_event_time = NA,
                     control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
-                    weightvar=NULL,clustervar=NULL,covariatesvar = NULL,varycovariatesvar = NULL,
+                    weightvar=NA,clustervar=NA,covariatesvar = NA,varycovariatesvar = NA,
                     copy = TRUE, validate = TRUE
                     ){
   
@@ -77,19 +77,19 @@ fastdid <- function(data,
   name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
   check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
   
-  covariate_message <- "__ARG__ must be NULL or a character vector which are all names of columns from the dataset."
+  covariate_message <- "__ARG__ must be NA or a character vector which are all names of columns from the dataset."
   check_set_arg(varycovariatesvar, covariatesvar, outcomevar, 
-            "NULL | multi match", .choices = dt_names, .message = covariate_message)
+            "NA | multi match", .choices = dt_names, .message = covariate_message)
   
-  checkvar_message <- "__ARG__ must be NULL or a character scalar if a name of columns from the dataset."
+  checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
   check_set_arg(weightvar, clustervar,
-            "NULL | match", .choices = dt_names, .message = checkvar_message)
+            "NA | match", .choices = dt_names, .message = checkvar_message)
   
   check_set_arg(control_option, "match", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr")) 
   check_arg(copy, validate, boot, allow_unbalance_panel, "scalar logical")
   
-  if(!is.null(balanced_event_time)){
+  if(!is.na(balanced_event_time)){
     if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
     check_arg(balanced_event_time, "numeric scalar")
   }
@@ -98,11 +98,11 @@ fastdid <- function(data,
     stop("fastdid currently only supprts ipw when allowing for unbalanced panels.")
   }
   
-  if(allow_unbalance_panel == TRUE & !is.null(varycovariatesvar)){
+  if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
     stop("fastdid currently only supprts time varying covariates when allowing for unbalanced panels.")
   }
   
-  if(any(covariatesvar %in% varycovariatesvar)){stop("time-varying var and invariant var have overlaps.")}
+  if(any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)){stop("time-varying var and invariant var have overlaps.")}
   
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
 
@@ -200,41 +200,41 @@ fastdid <- function(data,
   cohort_sizes <- dt_inv[, .(cohort_size = .N) , by = G]
 
   # the optional columns
-  if(!is.null(covariatesvar)){
+  if(!allNA(covariatesvar)){
     covariates <- cbind(const = -1, dt_inv[,.SD, .SDcols = covariatesvar]) # const 
   } else {
-    covariates <- NULL
+    covariates <- NA
   }
   
   varycovariates <- list()
-  if(!is.null(varycovariatesvar)){
+  if(!allNA(varycovariatesvar)){
     for(i in time_periods){
       start <- (i-1)*id_size+1
       end <- i*id_size
       varycovariates[[i]] <- dt[seq(start,end), .SD, .SDcols = varycovariatesvar]
     }
   } else {
-    varycovariates <- NULL
+    varycovariates <- NA
   }
-  if(!is.null(clustervar)){
+  if(!is.na(clustervar)){
     cluster <- dt_inv[, .SD, .SDcols = clustervar] |> unlist()
-  } else {cluster <- NULL}
+  } else {cluster <- NA}
   
-  if(!is.null(weightvar)){
+  if(!is.na(weightvar)){
     weights <- dt_inv[, .SD, .SDcols = weightvar] |> unlist()
   } else {weights <- rep(1,id_size)}
 
   
-  # cluster <- ifelse(is.null(clustervar), NULL, dt_inv[, .SD, .SDcols = clustervar] |> unlist())
-  #weights <- ifelse(is.null(weightvar), rep(1,id_size), dt_inv[, .SD, .SDcols = weightvar] |> unlist())
-  # covariates <- ifelse(is.null(covariatesvar), NULL, cbind(const = -1, dt_inv[,.SD, .SDcols = covariatesvar]))
+  # cluster <- ifelse(is.na(clustervar), NA, dt_inv[, .SD, .SDcols = clustervar] |> unlist())
+  #weights <- ifelse(is.na(weightvar), rep(1,id_size), dt_inv[, .SD, .SDcols = weightvar] |> unlist())
+  # covariates <- ifelse(is.na(covariatesvar), NA, cbind(const = -1, dt_inv[,.SD, .SDcols = covariatesvar]))
   
  
   
   # main part  -------------------------------------------------
 
   # attgt
-  gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, covariates, varycovariates, control_type, weights,
+  gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, varycovariatesvar, covariatesvar, covariates, varycovariates, control_type, weights,
                                    cohort_sizes,cohorts,id_size,time_periods, #info about the dt
                                    control_option, allow_unbalance_panel)
   
@@ -248,7 +248,7 @@ fastdid <- function(data,
                                result_type, balanced_event_time)
     
     #get se from the influence function
-    agg_se <- get_se(agg_result$inf_matrix, boot, biters, cluster)
+    agg_se <- get_se(agg_result$inf_matrix, boot, biters, cluster, clustervar)
     
     # post process -----------------------------------------------
     
