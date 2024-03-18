@@ -1,4 +1,4 @@
-estimate_gtatt <- function(outcomes_list, outcomevar, covariates, control_type, weights, 
+estimate_gtatt <- function(outcomes_list, outcomevar, covariates, varycovariates, control_type, weights, 
                            cohort_sizes,cohorts,id_size,time_periods,
                            control_option, allow_unbalance_panel) {
 
@@ -40,15 +40,32 @@ estimate_gtatt <- function(outcomes_list, outcomevar, covariates, control_type, 
         did_setup[get_cohort_pos(cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
         did_setup[get_cohort_pos(cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
         
+        if(!is.null(varycovariates)){
+          precov <- varycovariates[[base_period]]
+          names(precov) <- paste0("pre_", names(precov))
+          
+          postcov <- varycovariates[[t]]-varycovariates[[base_period]]
+          names(postcov) <- paste0("post_", names(varycovariates[[t]]))
+          
+          if(is.null(covariates)){
+            covariatesdt <- cbind(const = -1, cbind(precov, postcov)) #if covariates is NULL
+          } else {
+            covariatesdt <- cbind(covariates, cbind(precov, postcov)) #if covariates is NULL
+          }
+          
+        } else {
+          covariatesdt <- covariates
+        } 
+        
         #construct the 2x2 dataset
-        cohort_did <- data.table(did_setup, outcomes[[t]], outcomes[[base_period]], weights, covariates)
+        cohort_did <- data.table(did_setup, outcomes[[t]], outcomes[[base_period]], weights, covariatesdt)
         setnames(cohort_did, c("did_setup", "V2", "V3", "weights"), c("D", "post.y", "pre.y", "weights"))
  
         #estimate did
         if(!allow_unbalance_panel){
-          result <- estimate_did(cohort_did, colnames(covariates), control_type, last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]])
+          result <- estimate_did(cohort_did, colnames(covariatesdt), control_type, last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]])
         } else {
-          result <- estimate_did_rc(cohort_did, colnames(covariates), control_type, last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]])
+          result <- estimate_did_rc(cohort_did, colnames(covariatesdt), control_type, last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]])
         }
        
       

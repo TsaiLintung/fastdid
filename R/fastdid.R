@@ -16,7 +16,8 @@
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
 #' @param weightvar The name of the weight variable (optional).
 #' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
-#' @param covariatesvar A character vector containing the names of covariate variables (optional).
+#' @param covariatesvar A character vector containing the names of time-invariant covariate variables (optional).
+#' @param varycovariatesvar A character vector containing the names of time-varying covariate variables (optional).
 #' @param copy whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.
 #' @param validate whether to validate the dataset before processing.
 #' 
@@ -58,7 +59,7 @@ fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", balanced_event_time = NULL,
                     control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
-                    weightvar=NULL,clustervar=NULL,covariatesvar = NULL,
+                    weightvar=NULL,clustervar=NULL,covariatesvar = NULL,varycovariatesvar = NULL,
                     copy = TRUE, validate = TRUE
                     ){
   
@@ -77,7 +78,7 @@ fastdid <- function(data,
   check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
   
   covariate_message <- "__ARG__ must be NULL or a character vector which are all names of columns from the dataset."
-  check_set_arg(covariatesvar, outcomevar, 
+  check_set_arg(varycovariatesvar, covariatesvar, outcomevar, 
             "NULL | multi match", .choices = dt_names, .message = covariate_message)
   
   checkvar_message <- "__ARG__ must be NULL or a character scalar if a name of columns from the dataset."
@@ -97,14 +98,20 @@ fastdid <- function(data,
     stop("fastdid currently only supprts ipw when allowing for unbalanced panels.")
   }
   
+  if(allow_unbalance_panel == TRUE & !is.null(varycovariatesvar)){
+    stop("fastdid currently only supprts time varying covariates when allowing for unbalanced panels.")
+  }
+  
+  if(any(covariatesvar %in% varycovariatesvar)){stop("time-varying var and invariant var have overlaps.")}
+  
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
 
   # validate data -----------------------------------------------------
   
   
   if(validate){
-    varnames <- c("time", "G", "unit", outcomevar,weightvar,clustervar,covariatesvar)
-    dt <- validate_did(dt, covariatesvar, varnames, balanced_event_time, allow_unbalance_panel)
+    varnames <- c("time", "G", "unit", outcomevar,weightvar,clustervar,covariatesvar, varycovariatesvar)
+    dt <- validate_did(dt, covariatesvar, varycovariatesvar, varnames, balanced_event_time, allow_unbalance_panel)
   }
   
   # preprocess -----------------------------------------------------------
@@ -151,9 +158,11 @@ fastdid <- function(data,
   
   #construct the outcomes list for fast access later
   id_size <- dt[, uniqueN(unit)]
-  outcomes_list <- list()
+  
+  # get auxiliary data ------------------------------
   
   #loop for multiple outcome
+  outcomes_list <- list()
   for(outcol in outcomevar){
     outcomes <- list()
     
@@ -186,10 +195,7 @@ fastdid <- function(data,
     dt_inv <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv, unit) #can't move this outside
   }
-  
-  
 
-  
   cohorts <- dt_inv[, unique(G)]
   cohort_sizes <- dt_inv[, .(cohort_size = .N) , by = G]
 
@@ -200,6 +206,16 @@ fastdid <- function(data,
     covariates <- NULL
   }
   
+  varycovariates <- list()
+  if(!is.null(varycovariatesvar)){
+    for(i in time_periods){
+      start <- (i-1)*id_size+1
+      end <- i*id_size
+      varycovariates[[i]] <- dt[seq(start,end), .SD, .SDcols = varycovariatesvar]
+    }
+  } else {
+    varycovariates <- NULL
+  }
   if(!is.null(clustervar)){
     cluster <- dt_inv[, .SD, .SDcols = clustervar] |> unlist()
   } else {cluster <- NULL}
@@ -207,11 +223,18 @@ fastdid <- function(data,
   if(!is.null(weightvar)){
     weights <- dt_inv[, .SD, .SDcols = weightvar] |> unlist()
   } else {weights <- rep(1,id_size)}
+
+  
+  # cluster <- ifelse(is.null(clustervar), NULL, dt_inv[, .SD, .SDcols = clustervar] |> unlist())
+  #weights <- ifelse(is.null(weightvar), rep(1,id_size), dt_inv[, .SD, .SDcols = weightvar] |> unlist())
+  # covariates <- ifelse(is.null(covariatesvar), NULL, cbind(const = -1, dt_inv[,.SD, .SDcols = covariatesvar]))
+  
+ 
   
   # main part  -------------------------------------------------
 
   # attgt
-  gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, covariates, control_type, weights,
+  gt_result_list <- estimate_gtatt(outcomes_list, outcomevar, covariates, varycovariates, control_type, weights,
                                    cohort_sizes,cohorts,id_size,time_periods, #info about the dt
                                    control_option, allow_unbalance_panel)
   

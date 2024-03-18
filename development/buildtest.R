@@ -1,4 +1,4 @@
-setwd("~/GitHub/EventStudyCode")
+setwd("~/GitHub/fastdid")
 
 library(devtools)
 library(tinytest)

@@ -27,7 +27,7 @@
 #'
 #' @export
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size = 0.001,
-                    cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, na = "none", 
+                    cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, vary_cov = FALSE, na = "none", 
                     balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent"){
   
   if(!is.na(seed)){set.seed(seed)}
@@ -91,8 +91,15 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   
   dt[, D := as.integer(time >= G)]
   
+  #add time_varying covariates
+  if(vary_cov){
+    dt[, xvar := pmin(G, time_period)*time+rnorm(sample_size*time_period, 0,1)] #should be confounding....?
+  } else {
+    dt[, xvar := 1]
+  }
+  
   #untreated potential outcomes
-  dt[, y0 := unit_fe + time_fe + x*x_trend + x2*x_trend + rnorm(sample_size*time_period, sd = epsilon_size)]
+  dt[, y0 := unit_fe + time_fe + (x+x2)*x_trend + xvar + rnorm(sample_size*time_period, sd = epsilon_size)]
   
   #generate gtatt
   att <- CJ(G = 1:time_period, time = 1:time_period)
@@ -112,7 +119,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   #potential outcome
   dt[, y1 := y0 + tau]
   dt[, y := y1*D + y0*(1-D)]
-  dt <- dt[, .SD, .SDcols = c("time", "G", "unit", "x", "x2", "y", "s")]
+  dt <- dt[, .SD, .SDcols = c("time", "G", "unit", "x", "x2", "y", "s", "xvar")]
   
   #additional -----------------
   

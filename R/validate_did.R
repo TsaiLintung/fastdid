@@ -1,4 +1,4 @@
-validate_did <- function(dt,covariatesvar,varnames, balanced_event_time, allow_unbalance_panel){
+validate_did <- function(dt,covariatesvar, varycovariatesvar,varnames, balanced_event_time, allow_unbalance_panel){
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
   
@@ -8,7 +8,7 @@ validate_did <- function(dt,covariatesvar,varnames, balanced_event_time, allow_u
   }
   
   #doesn't allow missing value for now
-  for(col in c(covariatesvar, varnames)){
+  for(col in varnames){
     if(is.null(col)){next}
     na_obs <- whichNA(dt[[col]])
     if(length(na_obs) != 0){
@@ -17,17 +17,16 @@ validate_did <- function(dt,covariatesvar,varnames, balanced_event_time, allow_u
     }
   }
   
-  if(!is.null(covariatesvar)){
-    
-    if(uniqueN(dt, by = c("unit", covariatesvar)) > raw_unit_size){
-      warning("some covariates is time-varying, fastdid only use the first observation for covariates.")
-    }
-    
-    for(cov in covariatesvar){
+  if(!is.null(covariatesvar) & uniqueN(dt, by = c("unit", covariatesvar)) > raw_unit_size){
+    warning("some covariates is time-varying, fastdid only use the first observation for covariates.")
+  }
+  
+  
+  if(!is.null(covariatesvar)|!is.null(varycovariatesvar)){
+    for(cov in c(covariatesvar, varycovariatesvar)){
       #check covaraites is not constant  
       if(fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1)stop(cov, " have no variation")
     }
-
   }
   
   #check balanced panel

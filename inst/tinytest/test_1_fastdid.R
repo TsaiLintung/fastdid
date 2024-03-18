@@ -2,7 +2,7 @@
 
 tol <- 1e-2 #allow 1% different between estimates
 simdt <- sim_did(1e+02, 10, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = TRUE, seed = 1, 
-                 stratify = FALSE, second_cov = TRUE)
+                 stratify = FALSE, second_cov = TRUE, vary_cov = TRUE)
 dt <- simdt$dt
 
 # basics ---------------------------------------------
@@ -25,6 +25,16 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       covariatesvar = c("x", "x2")),
               info = "covariates dr")
 
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      control_type = "dr",
+                      covariatesvar = c("x", "x2"), varycovariatesvar = "xvar"),
+              info = "with varying covariates dr")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      control_type = "dr",
+                      varycovariatesvar = "xvar"),
+              info = "varying covariates only dr")
 
 expect_silent(fastdid(dt[G != 3], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
               info = "missing cohort")
