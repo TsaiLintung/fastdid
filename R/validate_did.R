@@ -1,4 +1,7 @@
-validate_did <- function(dt,covariatesvar, varycovariatesvar,varnames, balanced_event_time, allow_unbalance_panel){
+validate_did <- function(dt,varnames,params){
+  
+  release(params)
+  
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
   

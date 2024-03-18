@@ -1,7 +1,8 @@
-estimate_gtatt <- function(outcomes_list, outcomevar, varycovariatesvar, covariatesvar, covariates, varycovariates, control_type, weights, 
-                           cohort_sizes,cohorts,id_size,time_periods,
-                           control_option, allow_unbalance_panel) {
+estimate_gtatt <- function(auxdata, params) {
 
+  release(auxdata)
+  release(params)
+  
   treated_cohorts <- cohorts[!is.infinite(cohorts)]
   
   if(!Inf %in% cohorts & control_option != "notyet"){

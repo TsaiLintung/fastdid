@@ -27,9 +27,9 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
     covvars <- as.matrix(dt_did[,.SD, .SDcols = covnames])
   }
   
-  ipw <- control_type %in% c("ipw", "dr") & !allNA(covvars)
-  or <- control_type %in% c("reg", "dr") & !allNA(covvars) #OR is REG
-  
+  ipw <- control_type %in% c("ipw", "dr") & !allNA(covnames)
+  or <- control_type %in% c("reg", "dr") & !allNA(covnames) #OR is REG
+
   # ipw --------
   
   if(ipw){

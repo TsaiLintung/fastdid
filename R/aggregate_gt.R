@@ -1,12 +1,15 @@
-aggregate_gt <- function(gt_result, cohort_sizes, 
-                         id_weights, id_cohorts,
-                         result_type, balanced_event_time){
+aggregate_gt <- function(gt_result, auxdata, params){
+  
+  release(auxdata)
+  release(params)
   
   gt_att <- gt_result$att
   gt_inf_func <- gt_result$inf_func
   gt <- gt_result$gt
+  id_cohorts <- dt_inv[, G]
   
-  id_dt <- data.table(weight = id_weights/sum(id_weights), G = id_cohorts)
+  
+  id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
   group_time <- gt |> merge(pg_dt, by = "G")
   
@@ -22,31 +25,39 @@ aggregate_gt <- function(gt_result, cohort_sizes,
     
   } else {
     
-    agg_sch <- get_aggregate_scheme(group_time, result_type, id_weights, id_cohorts, balanced_event_time)
+    agg_sch <- get_aggregate_scheme(group_time, result_type, weights, id_cohorts, balanced_event_time)
     targets <- agg_sch$targets
-    weights <- as.matrix(agg_sch$weights)
+    agg_weights <- as.matrix(agg_sch$agg_weights)
     
     #aggregated att
-    agg_att <- weights %*% gt_att
+    agg_att <- agg_weights %*% gt_att
     
     #get the influence from weight estimation
     #this needs to be optimized!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    inf_weights <- sapply(asplit(weights, 1), function (x){
-      get_weight_influence(x, gt_att, id_weights, id_cohorts, group_time[, .(G, time)])
+    inf_weights <- sapply(asplit(agg_weights, 1), function (x){
+      get_weight_influence(x, gt_att, weights, id_cohorts, group_time[, .(G, time)])
     })
     
     #aggregated influence function
-    inf_matrix <- (gt_inf_func %*% t(weights)) + inf_weights 
+    inf_matrix <- (gt_inf_func %*% t(agg_weights)) + inf_weights 
 
   }
-  return(list(inf_matrix = inf_matrix, agg_att = agg_att, targets = targets))
+  
+  #get se!!
+  agg_se <- get_se(inf_matrix, boot, biters, cluster, clustervar)
+  
+  # post process
+  result <- data.table(targets, agg_att, agg_se)
+  names(result) <- c("target", "att", "se")
+  
+  return(result)
 }
 
-get_aggregate_scheme <- function(group_time, result_type, id_weights, id_cohorts, balanced_event_time){
+get_aggregate_scheme <- function(group_time, result_type, weights, id_cohorts, balanced_event_time){
   
   #browser()
   
-  weights <- data.table()
+  agg_weights <- data.table()
   gt_count <- group_time[, .N]
   
   bool_to_pn <- function(x){ifelse(x, 1, -1)}
@@ -89,18 +100,18 @@ get_aggregate_scheme <- function(group_time, result_type, id_weights, id_cohorts
     
     group_time[, targeted := NULL]
     
-    weights <- rbind(weights, target_weights)
+    agg_weights <- rbind(agg_weights, target_weights)
   }
   
-  return(list(weights = weights, #a matrix of each target and gt's weight in it 
+  return(list(agg_weights = agg_weights, #a matrix of each target and gt's weight in it 
               targets = targets)) 
 }
 
-get_weight_influence <- function(agg_weights, gt_att, id_weights, id_cohorts, group) {
+get_weight_influence <- function(agg_weights, gt_att, weights, id_cohorts, group) {
 
   keepers <- which(agg_weights > 0)
   
-  id_dt <- data.table(weight = id_weights/sum(id_weights), G = id_cohorts)
+  id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
   group <- group |> merge(pg_dt, by = "G")
   
@@ -110,12 +121,12 @@ get_weight_influence <- function(agg_weights, gt_att, id_weights, id_cohorts, gr
 
   # effect of estimating weights in the numerator
   if1 <- sapply(keepers, function(k) {
-    (id_weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]) /
+    (weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]) /
       sum(group[keepers,pg])
   })
   # effect of estimating weights in the denominator
   if2 <- base::rowSums(sapply(keepers, function(k) {
-    id_weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]
+    weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]
   })) %*%
     t(group[keepers,pg]/(sum(group[keepers,pg])^2))
   # return the influence function for the weights
@@ -123,3 +134,35 @@ get_weight_influence <- function(agg_weights, gt_att, id_weights, id_cohorts, gr
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps)*10] <- 0 #fill zero 
   return(inf_weight)
 }
+
+get_se <- function(inf_matrix, boot, biters, cluster, clustervar) {
+  
+  if(boot){
+    
+    top_quant <- 0.75
+    bot_quant <- 0.25
+    if(!allNA(clustervar)){
+      cluster_n <- stats::aggregate(cluster, by=list(cluster), length)[,2]
+      inf_matrix <- fsum(inf_matrix, cluster) / cluster_n #the mean without 0 for each cluster of each setting
+    }
+    
+    boot_results <- BMisc::multiplier_bootstrap(inf_matrix, biters = biters) %>% as.data.table()
+    
+    boot_top <- boot_results[, lapply(.SD, function(x) stats::quantile(x, top_quant, type=1, na.rm = TRUE)),]
+    boot_bot <- boot_results[, lapply(.SD, function(x) stats::quantile(x, bot_quant, type=1, na.rm = TRUE)),]
+    
+    dt_se <- rbind(boot_bot, boot_top) %>% transpose()
+    names(dt_se) <- c("boot_bot", "boot_top")
+    
+    se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))]
+    se[se < sqrt(.Machine$double.eps)*10] <- NA
+    
+  } else {
+    if(!allNA(clustervar)){stop("clustering only available with bootstrap")}
+    inf_matrix <- inf_matrix  |> as.data.table()
+    se <- inf_matrix[, lapply(.SD, function(x) sqrt(sum(x^2, na.rm = TRUE)/length(x)^2))] %>% as.vector() #should maybe use n-1 but did use n
+    
+  }
+  return(unlist(se))
+}
+
