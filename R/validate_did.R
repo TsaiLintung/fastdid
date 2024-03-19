@@ -5,7 +5,6 @@ validate_did <- function(dt,varnames,params){
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
   
-  
   if(!is.na(balanced_event_time)){
     if(balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }

@@ -1,4 +1,4 @@
-estimate_did <- function(dt_did, covnames, control_type,
+estimate_did <- function(dt_did, covvars, control_type,
                          last_coef = NULL, cache_ps_fit, cache_hess){
 
   # preprocess --------
@@ -7,14 +7,15 @@ estimate_did <- function(dt_did, covnames, control_type,
   data_pos <-  which(dt_did[, !is.na(D)])
   dt_did <- dt_did[data_pos]
   n <- dt_did[, .N]
-  if(allNA(covnames)){
-    covvars <- NA
+  
+  if(is.matrix(covvars)){
+    ipw <- control_type %in% c("ipw", "dr") 
+    or <- control_type %in% c("reg", "dr")
+    covvars <- covvars[data_pos,] 
   } else {
-    covvars <- as.matrix(dt_did[,.SD, .SDcols = covnames])
+    ipw <- FALSE
+    or <- FALSE
   }
-
-  ipw <- control_type %in% c("ipw", "dr") & !allNA(covnames)
-  or <- control_type %in% c("reg", "dr") & !allNA(covnames) #OR is REG
   
   # ipw --------
 
@@ -104,6 +105,7 @@ estimate_did <- function(dt_did, covnames, control_type,
     M2 <- colMeans(dt_did[, cont_ipw_weight*(delta_y-weighted_cont_delta-or_delta)] * covvars)
 
     score_ps <- dt_did[, weights*(D-ps)] * covvars
+    
     asym_linear_ps <- score_ps %*% hess
 
     #ipw for control

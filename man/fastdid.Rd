@@ -12,14 +12,15 @@ fastdid(
   outcomevar,
   control_option = "both",
   result_type = "group_time",
-  balanced_event_time = NULL,
+  balanced_event_time = NA,
   control_type = "ipw",
   allow_unbalance_panel = FALSE,
   boot = FALSE,
   biters = 1000,
-  weightvar = NULL,
-  clustervar = NULL,
-  covariatesvar = NULL,
+  weightvar = NA,
+  clustervar = NA,
+  covariatesvar = NA,
+  varycovariatesvar = NA,
   copy = TRUE,
   validate = TRUE
 )
@@ -39,7 +40,7 @@ fastdid(
 
 \item{result_type}{A character string indicating the type of result to be returned. Default is "group_time".}
 
-\item{balanced_event_time}{A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NULL}
+\item{balanced_event_time}{A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NA}
 
 \item{control_type}{The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust}
 
@@ -53,7 +54,9 @@ fastdid(
 
 \item{clustervar}{The name of the cluster variable, can only be used when boot == TRUE (optional).}
 
-\item{covariatesvar}{A character vector containing the names of covariate variables (optional).}
+\item{covariatesvar}{A character vector containing the names of time-invariant covariate variables (optional).}
+
+\item{varycovariatesvar}{A character vector containing the names of time-varying covariate variables (optional).}
 
 \item{copy}{whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.}
 

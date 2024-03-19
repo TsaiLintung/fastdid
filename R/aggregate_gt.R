@@ -3,11 +3,11 @@ aggregate_gt <- function(gt_result, auxdata, params){
   release(auxdata)
   release(params)
   
+  #release the stuff
   gt_att <- gt_result$att
   gt_inf_func <- gt_result$inf_func
   gt <- gt_result$gt
   id_cohorts <- dt_inv[, G]
-  
   
   id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
@@ -19,12 +19,14 @@ aggregate_gt <- function(gt_result, auxdata, params){
   
   if(result_type == "group_time"){
     
+    #don't need to do anything
     targets <- group_time[, unique(G*max(time)+time)]
     inf_matrix <- gt_inf_func
     agg_att <- as.vector(gt_att)
     
   } else {
     
+    #get which gt(s) is a part of the aggregated param
     agg_sch <- get_aggregate_scheme(group_time, result_type, weights, id_cohorts, balanced_event_time)
     targets <- agg_sch$targets
     agg_weights <- as.matrix(agg_sch$agg_weights)
@@ -43,12 +45,13 @@ aggregate_gt <- function(gt_result, auxdata, params){
 
   }
   
-  #get se!!
+  #get se from influence function
   agg_se <- get_se(inf_matrix, boot, biters, cluster, clustervar)
   
   # post process
   result <- data.table(targets, agg_att, agg_se)
   names(result) <- c("target", "att", "se")
+  result[,outcome := gt_result$outname]
   
   return(result)
 }
@@ -142,14 +145,15 @@ get_se <- function(inf_matrix, boot, biters, cluster, clustervar) {
     top_quant <- 0.75
     bot_quant <- 0.25
     if(!allNA(clustervar)){
+      #take average within the cluster
       cluster_n <- stats::aggregate(cluster, by=list(cluster), length)[,2]
       inf_matrix <- fsum(inf_matrix, cluster) / cluster_n #the mean without 0 for each cluster of each setting
     }
     
     boot_results <- BMisc::multiplier_bootstrap(inf_matrix, biters = biters) %>% as.data.table()
     
-    boot_top <- boot_results[, lapply(.SD, function(x) stats::quantile(x, top_quant, type=1, na.rm = TRUE)),]
-    boot_bot <- boot_results[, lapply(.SD, function(x) stats::quantile(x, bot_quant, type=1, na.rm = TRUE)),]
+    boot_top <- boot_results[, lapply(.SD, function(x) stats::quantile(x, top_quant, type=1, na.rm = TRUE))]
+    boot_bot <- boot_results[, lapply(.SD, function(x) stats::quantile(x, bot_quant, type=1, na.rm = TRUE))]
     
     dt_se <- rbind(boot_bot, boot_top) %>% transpose()
     names(dt_se) <- c("boot_bot", "boot_top")
@@ -158,7 +162,7 @@ get_se <- function(inf_matrix, boot, biters, cluster, clustervar) {
     se[se < sqrt(.Machine$double.eps)*10] <- NA
     
   } else {
-    if(!allNA(clustervar)){stop("clustering only available with bootstrap")}
+
     inf_matrix <- inf_matrix  |> as.data.table()
     se <- inf_matrix[, lapply(.SD, function(x) sqrt(sum(x^2, na.rm = TRUE)/length(x)^2))] %>% as.vector() #should maybe use n-1 but did use n
     

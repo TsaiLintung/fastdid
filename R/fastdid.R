@@ -63,7 +63,7 @@ fastdid <- function(data,
                     copy = TRUE, validate = TRUE
                     ){
   
-  # validation arguments --------------------------------------------------------
+  # validate arguments --------------------------------------------------------
 
   dt_names <- names(dt)
   name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
@@ -94,6 +94,9 @@ fastdid <- function(data,
   if(any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)){
     stop("time-varying var and invariant var have overlaps.")
   }
+  if(!boot & !allNA(clustervar)){
+    stop("clustering only available with bootstrap")
+  }
   
   params <- gather(timevar, cohortvar, unitvar, outcomevar, 
                    control_option,result_type, balanced_event_time,
@@ -106,6 +109,7 @@ fastdid <- function(data,
     warning("coercing input into a data.table.")
     data <- as.data.table(data)
   } 
+  
   if(copy){dt <- copy(data)} else {dt <- data}
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   
@@ -127,22 +131,13 @@ fastdid <- function(data,
   # estimate attgt
   gt_result_list <- estimate_gtatt(auxdata, params)
   
-  # aggregate the result
-  all_result <- data.table()
-  for(outcol in outcomevar){
-    gt_result <- gt_result_list[[outcol]]
-    
-    # aggregate att and inf function and get se
-    result <- aggregate_gt(gt_result, auxdata, params)
-    
+  # aggregate the result by outcome
+  all_result <- rbindlist(lapply(gt_result_list, function(x){
+    result <- aggregate_gt(x, auxdata, params)
     #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
     result <- result |> convert_targets(result_type, coerce_result$time_change)
-    result[, outcome := outcol]
-    all_result <- rbind(all_result, result)
-    
-    rm(result)
-    
-  }
+    return(result)
+  }))
 
   return(all_result)
   
@@ -202,12 +197,9 @@ get_auxdata <- function(dt, params){
   
   release(params)
 
-  
-
   time_periods <- dt[, unique(time)]
   id_size <- dt[, uniqueN(unit)]
   
-  # get auxiliary data ------------------------------
   setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
   
   #construct the outcomes list for fast access later
