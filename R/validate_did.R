@@ -1,12 +1,10 @@
-validate_did <- function(dt,varnames,params){
-  
-  release(params)
-  
+validate_did <- function(dt,varnames,p){
+
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
   
-  if(!is.na(balanced_event_time)){
-    if(balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
+  if(!is.na(p$balanced_event_time)){
+    if(p$balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
   
   #doesn't allow missing value for now
@@ -20,13 +18,13 @@ validate_did <- function(dt,varnames,params){
   }
   
   
-  if(!allNA(covariatesvar) && uniqueN(dt, by = c("unit", covariatesvar)) > raw_unit_size){
+  if(!allNA(p$covariatesvar) && uniqueN(dt, by = c("unit", p$covariatesvar)) > raw_unit_size){
     warning("some covariates is time-varying, fastdid only use the first observation for covariates.")
   }
   
   
-  if(!allNA(covariatesvar)|!allNA(varycovariatesvar)){
-    for(cov in c(covariatesvar, varycovariatesvar)){
+  if(!allNA(p$covariatesvar)|!allNA(p$varycovariatesvar)){
+    for(cov in c(p$covariatesvar, p$varycovariatesvar)){
       if(is.na(cov)){next}
       #check covaraites is not constant  
       if(fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1)stop(cov, " have no variation")
@@ -41,7 +39,7 @@ validate_did <- function(dt,varnames,params){
   }
   
   #check if any is missing
-  if(!allow_unbalance_panel){
+  if(!p$allow_unbalance_panel){
     unit_count <- dt[, .(count = .N), by = unit]
     if(any(unit_count[, count < raw_time_size])){
       mis_unit <- unit_count[count < raw_time_size]

@@ -1,58 +1,55 @@
-estimate_gtatt <- function(auxdata, params) {
+estimate_gtatt <- function(aux, p) {
 
-  release(auxdata)
-  release(params)
-  
-  if(!Inf %in% cohorts & control_option != "notyet"){
+  if(!Inf %in% aux$cohorts & p$control_option != "notyet"){
     warning("no never-treated availble, switching to not-yet-treated control")
-    control_option <- "notyet"
+    p$control_option <- "notyet"
   }
   
-  treated_cohorts <- cohorts[!is.infinite(cohorts)]
-  max_control_cohort <- ifelse(control_option == "notyet", max(treated_cohorts), Inf) 
+  treated_cohorts <- aux$cohorts[!is.infinite(aux$cohorts)]
+  max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
   
   cache_ps_fit_list <- list() #for the first outcome won't be able to use cache, empty list returns null for call like cache_ps_fit[["1.3"]]
   cache_hess_list <- list()
   outcome_result_list <- list()
-  for(outcol in outcomevar){
+  for(outcol in p$outcomevar){
     
-    outcomes <- outcomes_list[[outcol]]
+    outcomes <- aux$outcomes_list[[outcol]]
     last_coef <- NULL
     gt <- data.table()
     gt_att <- c()
-    gt_inf_func <- data.table(placeholder = rep(NA, id_size)) #populate with NA
+    gt_inf_func <- data.table(placeholder = rep(NA, aux$id_size)) #populate with NA
     
-    for(t in time_periods){
-      for(g in cohorts){
+    for(t in aux$time_periods){
+      for(g in aux$cohorts){
         
         gt_name <- paste0(g, ".", t)
         
         #setup and checks
         base_period <- g-1
-        min_control_cohort <- ifelse(control_option == "never", Inf, max(t+1, base_period+1)) #not-yet treated / never treated in both base and "treated" period
+        min_control_cohort <- ifelse(p$control_option  == "never", Inf, max(t+1, base_period+1)) #not-yet treated / never treated in both base and "treated" period
         if(t == base_period){next} #no treatment effect for the base period
-        if(base_period < min(time_periods)){next} #no treatment effect for the first period, since base period is not observed
+        if(base_period < min(aux$time_periods)){next} #no treatment effect for the first period, since base period is not observed
         if(g >= max_control_cohort){next} #no treatment effect for never treated or the last treated cohort (for not yet notyet)
         if(t >= max_control_cohort){next} #no control available if the last cohort is treated too
         
         #select the control and treated cohorts
-        did_setup <- rep(NA, id_size)
-        did_setup[get_cohort_pos(cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
-        did_setup[get_cohort_pos(cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
+        did_setup <- rep(NA, aux$id_size)
+        did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
+        did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
         
         #construct the covariates matrix
-        covvars <- get_covvars(covariates, varycovariates)
+        covvars <- get_covvars(aux$covariates, aux$varycovariates)
         
         #construct the 2x2 dataset
-        cohort_did <- data.table(did_setup, outcomes[[t]], outcomes[[base_period]], weights)
-        setnames(cohort_did, c("did_setup", "V2", "V3"), c("D", "post.y", "pre.y"))
+        cohort_did <- data.table(did_setup, outcomes[[t]], outcomes[[base_period]], aux$weights)
+        names(cohort_did) <- c("D", "post.y", "pre.y", "weights")
         
         #estimate did
-        if(!allow_unbalance_panel){
-          result <- estimate_did(cohort_did, covvars, control_type, 
+        if(!p$allow_unbalance_panel){
+          result <- estimate_did(cohort_did, covvars, p$control_type, 
                                  last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]]) #cache
         } else {
-          result <- estimate_did_rc(cohort_did, covvars, control_type, 
+          result <- estimate_did_rc(cohort_did, covvars, p$control_type, 
                                     last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]]) #cache
         }
        

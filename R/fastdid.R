@@ -98,10 +98,22 @@ fastdid <- function(data,
     stop("clustering only available with bootstrap")
   }
   
-  params <- gather(timevar, cohortvar, unitvar, outcomevar, 
-                   control_option,result_type, balanced_event_time,
-                   control_type, allow_unbalance_panel , boot, biters,
-                   weightvar,clustervar,covariatesvar,varycovariatesvar)
+  p <- list(timevar = timevar,
+            cohortvar = cohortvar,
+            unitvar = unitvar,
+            outcomevar =  outcomevar,
+            weightvar = weightvar,
+            clustervar = clustervar,
+            covariatesvar = covariatesvar,
+            varycovariatesvar = varycovariatesvar,
+            control_option = control_option,
+            result_type = result_type,
+            balanced_event_time = balanced_event_time,
+            control_type = control_type,
+            allow_unbalance_panel = allow_unbalance_panel,
+            boot = boot, 
+            biters = biters)
+  
   
   # validate data -----------------------------------------------------
   
@@ -114,26 +126,26 @@ fastdid <- function(data,
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   
   if(validate){
-    varnames <- c("time", "G", "unit", outcomevar,weightvar,clustervar,covariatesvar, varycovariatesvar)
-    dt <- validate_did(dt, varnames, params)
+    varnames <- c("time", "G", "unit", outcomevar,weightvar,clustervar,covariatesvar,varycovariatesvar)
+    dt <- validate_did(dt, varnames, p)
   }
   
   # preprocess -----------------------------------------------------------
   
   #make dt conform to the WLOG assumptions of fastdid
-  coerce_result <- coerce_dt(dt, params) #also changed dt
+  coerce_result <- coerce_dt(dt, p) #also changed dt
   dt <- coerce_result$dt
   # get auxiliary data
-  auxdata <- get_auxdata(dt, params)
+  aux <- get_auxdata(dt, p)
   
   # main part  -------------------------------------------------
 
   # estimate attgt
-  gt_result_list <- estimate_gtatt(auxdata, params)
+  gt_result_list <- estimate_gtatt(aux, p)
   
   # aggregate the result by outcome
   all_result <- rbindlist(lapply(gt_result_list, function(x){
-    result <- aggregate_gt(x, auxdata, params)
+    result <- aggregate_gt(x, aux, p)
     #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
     result <- result |> convert_targets(result_type, coerce_result$time_change)
     return(result)
@@ -145,9 +157,7 @@ fastdid <- function(data,
 
 # small steps ----------------------------------------------------------------------
 
-coerce_dt <- function(dt, params){
-  
-  release(params)
+coerce_dt <- function(dt, p){
   
   #change to int before sorting
   if(!is.numeric(dt[, G])){
@@ -157,7 +167,7 @@ coerce_dt <- function(dt, params){
     dt[, time := as.numeric(time)] 
   }
   
-  if(allow_unbalance_panel){
+  if(p$allow_unbalance_panel){
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, G)
     dt_inv_raw[, new_unit := 1:.N] #let unit start from 1 .... N, useful for knowing which unit is missing
@@ -193,9 +203,7 @@ coerce_dt <- function(dt, params){
   
 }
 
-get_auxdata <- function(dt, params){
-  
-  release(params)
+get_auxdata <- function(dt, p){
 
   time_periods <- dt[, unique(time)]
   id_size <- dt[, uniqueN(unit)]
@@ -205,10 +213,10 @@ get_auxdata <- function(dt, params){
   #construct the outcomes list for fast access later
   #loop for multiple outcome
   outcomes_list <- list()
-  for(outcol in outcomevar){
+  for(outcol in p$outcomevar){
     outcomes <- list()
     
-    if(!allow_unbalance_panel){
+    if(!p$allow_unbalance_panel){
       for(i in time_periods){
         start <- (i-1)*id_size+1
         end <- i*id_size
@@ -231,7 +239,7 @@ get_auxdata <- function(dt, params){
   }
   
   #the time-invariant parts 
-  if(!allow_unbalance_panel){
+  if(!p$allow_unbalance_panel){
     dt_inv <- dt[1:id_size]
   } else {
     dt_inv <- dt[dt[, .I[1], by = unit]$V1] #the first observation
@@ -243,44 +251,50 @@ get_auxdata <- function(dt, params){
   
   # the optional columns
   varycovariates <- list()
-  if(!allNA(varycovariatesvar)){
+  if(!allNA(p$varycovariatesvar)){
     for(i in time_periods){
       start <- (i-1)*id_size+1
       end <- i*id_size
-      varycovariates[[i]] <- dt[seq(start,end), .SD, .SDcols = varycovariatesvar]
+      varycovariates[[i]] <- dt[seq(start,end), .SD, .SDcols = p$varycovariatesvar]
     }
   } else {
     varycovariates <- NA
   }
   
-  if(!allNA(covariatesvar)){
-    covariates <- cbind(const = -1, dt_inv[,.SD, .SDcols = covariatesvar])
+  if(!allNA(p$covariatesvar)){
+    covariates <- cbind(const = -1, dt_inv[,.SD, .SDcols = p$covariatesvar])
   } else {
     covariates <- NA
   }
   
-  if(!is.na(clustervar)){
-    cluster <- dt_inv[, .SD, .SDcols = clustervar] |> unlist()
+  if(!is.na(p$clustervar)){
+    cluster <- dt_inv[, .SD, .SDcols = p$clustervar] |> unlist()
   } else {
     cluster <- NA
   }
   
-  if(!is.na(weightvar)){
-    weights <- dt_inv[, .SD, .SDcols = weightvar] |> unlist()
+  if(!is.na(p$weightvar)){
+    weights <- dt_inv[, .SD, .SDcols = p$weightvar] |> unlist()
   } else {
     weights <- rep(1, id_size)
   }
   
-  auxdata <- gather(time_periods, id_size, outcomes_list, dt_inv, cohorts, cohort_sizes, 
-                    varycovariates, covariates, cluster, weights)
+  aux <- list(time_periods = time_periods,
+              id_size = id_size,
+              outcomes_list = outcomes_list,
+              dt_inv= dt_inv,
+              cohorts = cohorts,
+              cohort_sizes = cohort_sizes, 
+              varycovariates = varycovariates,
+              covariates = covariates,
+              cluster = cluster,
+              weights = weights)
   
-  return(auxdata)
+  return(aux)
   
 }
 
-convert_targets <- function(results, result_type, time_change){
-  
-  release(time_change) #from coerce_dt
+convert_targets <- function(results, result_type, t){
   
   if(result_type == "dynamic"){
     setnames(results, "target", "event_time")
@@ -288,23 +302,23 @@ convert_targets <- function(results, result_type, time_change){
   } else if (result_type == "cohort"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := recover_time(abs(target), time_offset, time_step)]
+    results[, target := recover_time(abs(target), t$time_offset, t$time_step)]
     setnames(results, "target", "cohort")
     
   } else if (result_type == "calendar"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := recover_time(abs(target), time_offset, time_step)]
+    results[, target := recover_time(abs(target), t$time_offset, t$time_step)]
     setnames(results, "target", "time")
     
   } else if (result_type == "group_time"){
     
-    results[, cohort := floor((target-1)/max_time)]
-    results[, time := (target-cohort*max_time)]
+    results[, cohort := floor((target-1)/t$max_time)]
+    results[, time := (target-cohort*t$max_time)]
     
     #recover the time
-    results[, cohort := recover_time(cohort, time_offset, time_step)]
-    results[, time := recover_time(time, time_offset, time_step)]
+    results[, cohort := recover_time(cohort, t$time_offset, t$time_step)]
+    results[, time := recover_time(time, t$time_offset, t$time_step)]
     
     results[, target := NULL]
     

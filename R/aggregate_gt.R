@@ -1,52 +1,46 @@
-aggregate_gt <- function(gt_result, auxdata, params){
+aggregate_gt <- function(gt_result, aux, p){
   
-  release(auxdata)
-  release(params)
-  
+
   #release the stuff
-  gt_att <- gt_result$att
-  gt_inf_func <- gt_result$inf_func
-  gt <- gt_result$gt
-  id_cohorts <- dt_inv[, G]
+  id_cohorts <- aux$dt_inv[, G]
   
-  id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
+  id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = id_cohorts)
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
-  group_time <- gt |> merge(pg_dt, by = "G")
+  group_time <- gt_result$gt |> merge(pg_dt, by = "G")
   
   setorder(group_time, time, G) #change the order to match the order in gtatt
   
-  gt_inf_func <- as.matrix(gt_inf_func)
+  gt_result$inf_func <- as.matrix(gt_result$inf_func)
   
-  if(result_type == "group_time"){
+  if(p$result_type == "group_time"){
     
     #don't need to do anything
     targets <- group_time[, unique(G*max(time)+time)]
-    inf_matrix <- gt_inf_func
-    agg_att <- as.vector(gt_att)
+    inf_matrix <- gt_result$inf_func
+    agg_att <- as.vector(gt_result$att)
     
   } else {
     
     #get which gt(s) is a part of the aggregated param
-    agg_sch <- get_aggregate_scheme(group_time, result_type, weights, id_cohorts, balanced_event_time)
+    agg_sch <- get_aggregate_scheme(group_time, p$result_type, aux$weights, id_cohorts, p$balanced_event_time)
     targets <- agg_sch$targets
-    agg_weights <- as.matrix(agg_sch$agg_weights)
     
     #aggregated att
-    agg_att <- agg_weights %*% gt_att
+    agg_att <- agg_sch$agg_weights %*% gt_result$att
     
     #get the influence from weight estimation
     #this needs to be optimized!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    inf_weights <- sapply(asplit(agg_weights, 1), function (x){
-      get_weight_influence(x, gt_att, weights, id_cohorts, group_time[, .(G, time)])
+    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+      get_weight_influence(x, gt_result$att, aux$weights, id_cohorts, group_time[, .(G, time)])
     })
     
     #aggregated influence function
-    inf_matrix <- (gt_inf_func %*% t(agg_weights)) + inf_weights 
-
+    inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
+    
   }
   
   #get se from influence function
-  agg_se <- get_se(inf_matrix, boot, biters, cluster, clustervar)
+  agg_se <- get_se(inf_matrix, p$boot, p$biters, aux$cluster, p$clustervar)
   
   # post process
   result <- data.table(targets, agg_att, agg_se)
@@ -106,7 +100,7 @@ get_aggregate_scheme <- function(group_time, result_type, weights, id_cohorts, b
     agg_weights <- rbind(agg_weights, target_weights)
   }
   
-  return(list(agg_weights = agg_weights, #a matrix of each target and gt's weight in it 
+  return(list(agg_weights = as.matrix(agg_weights), #a matrix of each target and gt's weight in it 
               targets = targets)) 
 }
 
