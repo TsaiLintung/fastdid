@@ -1,18 +1,17 @@
-estimate_did_rc <- function(dt_did, covnames, control_type,
+estimate_did_rc <- function(dt_did, covvars, control_type,
                          last_coef = NULL, cache_ps_fit, cache_hess){
   
   #TODO: skip if not enough valid data
   
   # preprocess --------
   
-  oldn <- dt_did[, .N]
   
-  #separate the dataset into pre and post
-
+  oldn <- dt_did[, .N]
   data_pos <-  which(dt_did[, !is.na(D)])
   dt_did <- dt_did[data_pos]
   n <- dt_did[, .N]
   
+  #separate the dataset into pre and post
   dt_did[, inpre := as.numeric(!is.na(pre.y))]
   dt_did[, inpost := as.numeric(!is.na(post.y))]
   n_pre <- dt_did[, sum(!is.na(pre.y))]
@@ -21,14 +20,14 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   sum_weight_pre <- dt_did[, sum(inpre*weights)]
   sum_weight_post <- dt_did[, sum(inpost*weights)]
   
-  if(allNA(covnames)){
-    covvars <- NA
+  if(is.matrix(covvars)){
+    ipw <- control_type %in% c("ipw", "dr") 
+    or <- control_type %in% c("reg", "dr")
+    covvars <- covvars[data_pos,] 
   } else {
-    covvars <- as.matrix(dt_did[,.SD, .SDcols = covnames])
+    ipw <- FALSE
+    or <- FALSE
   }
-  
-  ipw <- control_type %in% c("ipw", "dr") & !allNA(covnames)
-  or <- control_type %in% c("reg", "dr") & !allNA(covnames) #OR is REG
 
   # ipw --------
   
@@ -191,8 +190,8 @@ estimate_did_rc <- function(dt_did, covnames, control_type,
   inf_treat_post <- inf_treat_did_post+inf_treat_or_post
   inf_cont_pre <- inf_cont_did_pre+inf_cont_ipw_pre+inf_cont_or_pre
   inf_treat_pre <- inf_treat_did_pre+inf_treat_or_pre
+  
   #post process
-
   inf_func_no_na_post <- (inf_treat_post - inf_cont_post) * oldn / n_post #adjust the value such that mean over the whole id size give the right result
   inf_func_no_na_post[is.na(inf_func_no_na_post)] <- 0 #fill 0 for NA part (no influce if not in this gt)
   
