@@ -49,7 +49,7 @@ estimate_gtatt <- function(auxdata, params) {
         
         #estimate did
         if(!allow_unbalance_panel){
-          result <- estimate_did(cohort_did, covvars, control_type, 
+          result <- estimate_did(cohort_did, covvars, control_type, g, t, or_func,
                                  last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]]) #cache
         } else {
           result <- estimate_did_rc(cohort_did, covvars, control_type, 

@@ -1,4 +1,4 @@
-estimate_did <- function(dt_did, covvars, control_type,
+estimate_did <- function(dt_did, covvars, control_type, g, t, or_func,
                          last_coef = NULL, cache_ps_fit, cache_hess){
 
   # preprocess --------
@@ -67,21 +67,27 @@ estimate_did <- function(dt_did, covvars, control_type,
   # or --------
 
   if(or){
-
-    #TODO: this should be optimized with better backend and some caching
-
-    #should change to speedlm or something
-
+    
     control_bool <- dt_did[, D==0]
-    reg_coef <- stats::coef(stats::lm.wfit(x = covvars[control_bool,], y = dt_did[control_bool,delta_y],
-                                           w = dt_did[control_bool,weights]))
-
-    if(anyNA(reg_coef)){
-      stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
+    #TODO: this should be optimized with better backend and some caching
+    if(!is.function(or_func)){
+      #TODO: this should be optimized with better backend and some caching
+      reg_coef <- stats::coef(stats::lm.wfit(x = covvars[control_bool,], y = dt_did[control_bool,delta_y],
+                                             w = dt_did[control_bool,weights]))
+      
+      if(anyNA(reg_coef)){
+        stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
+      }
+      
+      #the control function from outcome regression
+      dt_did[, or_delta := as.vector(tcrossprod(reg_coef, covvars))]
+    } else {
+      dt_did[, or_delta := or_func(x = covvars,
+                                   y = dt_did[,delta_y],
+                                   w = dt_did[,weights],
+                                   g = g, t = t,
+                                   control_bool = control_bool)]
     }
-
-    #the control function from outcome regression
-    dt_did[, or_delta := as.vector(tcrossprod(reg_coef, covvars))]
 
   } else {
     dt_did[, or_delta := 0]

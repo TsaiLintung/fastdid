@@ -60,7 +60,7 @@ fastdid <- function(data,
                     control_option="both",result_type="group_time", balanced_event_time = NA,
                     control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
                     weightvar=NA,clustervar=NA,covariatesvar = NA,varycovariatesvar = NA,
-                    copy = TRUE, validate = TRUE
+                    copy = TRUE, validate = TRUE, or_func = NA
                     ){
   
   # validate arguments --------------------------------------------------------
@@ -101,7 +101,7 @@ fastdid <- function(data,
   params <- gather(timevar, cohortvar, unitvar, outcomevar, 
                    control_option,result_type, balanced_event_time,
                    control_type, allow_unbalance_panel , boot, biters,
-                   weightvar,clustervar,covariatesvar,varycovariatesvar)
+                   weightvar,clustervar,covariatesvar,varycovariatesvar,or_func)
   
   # validate data -----------------------------------------------------
   
