@@ -38,7 +38,7 @@ estimate_gtatt <- function(aux, p) {
         did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
         
         #construct the covariates matrix
-        covvars <- get_covvars(aux$covariates, aux$varycovariates)
+        covvars <- get_covvars(aux$covariates, aux$varycovariates, base_period, t)
         
         #construct the 2x2 dataset
         cohort_did <- data.table(did_setup, outcomes[[t]], outcomes[[base_period]], aux$weights)
@@ -82,8 +82,9 @@ get_cohort_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort
   return(start:end)
 }
 
-get_covvars <- function(covariates, varycovariates){
-  if(is.data.table(varycovariates)){
+get_covvars <- function(covariates, varycovariates, base_period, t){
+  
+  if(is.list(varycovariates)){
     
     precov <- varycovariates[[base_period]]
     names(precov) <- paste0("pre_", names(precov))

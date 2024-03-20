@@ -1,8 +1,7 @@
 estimate_did <- function(dt_did, covvars, control_type,
                          last_coef = NULL, cache_ps_fit, cache_hess){
-
+  
   # preprocess --------
-
   oldn <- dt_did[, .N]
   data_pos <-  which(dt_did[, !is.na(D)])
   dt_did <- dt_did[data_pos]
@@ -30,14 +29,20 @@ estimate_did <- function(dt_did, covvars, control_type,
                                                     intercept = FALSE))
       class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
       #const is implicitly put into the ipw formula, need to incorporate it manually
-      hess <- stats::vcov(prop_score_est) * n #for the influence function
 
       logit_coef <-  prop_score_est$coefficients
+      
+      if(anyNA(logit_coef)){
+        warning("some propensity score estimation resulted in NA coefficients, likely cause by perfect colinearity")
+      }
+      
       logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
       prop_score_fit <- fitted(prop_score_est)
       if(max(prop_score_fit) >= 1){warning(paste0("support overlap condition violated for some group_time"))}
       prop_score_fit <- pmin(1-1e-16, prop_score_fit) #for the ipw
 
+      hess <- stats::vcov(prop_score_est) * n #for the influence function
+      hess[is.na(hess)|abs(hess) > 1e10] <- 0
 
     } else { #when using multiple outcome, ipw cache can be reused
       hess <- cache_hess
@@ -142,6 +147,7 @@ estimate_did <- function(dt_did, covvars, control_type,
 
 
   #get overall influence function
+  #if(dt_did[, mean(cont_ipw_weight)] < 1e-10){warning("little/no overlap in covariates between control and treat group, estimates are unstable.")}
   inf_cont <- (inf_cont_did+inf_cont_ipw+inf_cont_or)/dt_did[, mean(cont_ipw_weight)]
   inf_treat <- (inf_treat_did+inf_treat_or)/dt_did[,mean(treat_ipw_weight)]
   inf_func_no_na <- inf_treat - inf_cont
@@ -151,7 +157,6 @@ estimate_did <- function(dt_did, covvars, control_type,
   inf_func_no_na <- inf_func_no_na * oldn / n #adjust the value such that mean over the whole id size give the right result
   inf_func[data_pos] <- inf_func_no_na
 
-  
   return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
               cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
 }

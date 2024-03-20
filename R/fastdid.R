@@ -59,7 +59,7 @@ fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", balanced_event_time = NA,
                     control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
-                    weightvar=NA,clustervar=NA,covariatesvar = NA,varycovariatesvar = NA,
+                    weightvar=NA,clustervar=NA,covariatesvar = NA, varycovariatesvar = NA,
                     copy = TRUE, validate = TRUE
                     ){
   

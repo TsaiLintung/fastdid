@@ -93,7 +93,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   
   #add time_varying covariates
   if(vary_cov){
-    dt[, xvar := pmin(G, time_period)*time+rnorm(sample_size*time_period, 0,1)] #should be confounding....?
+    dt[, xvar := pmin(G, time_period+4)*time+rnorm(sample_size*time_period, 0,30)] #should be confounding....?
   } else {
     dt[, xvar := 1]
   }
