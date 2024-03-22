@@ -16,7 +16,8 @@ dt <- simdt$dt
 
 myfunc <- function(x, #covariates
                    y, w, g, t, control_bool){
- return(rep(0, length(y))) #de
+  
+ return(beta *(x == "MALE")*(t-(g-1)))
 }
 
 fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
