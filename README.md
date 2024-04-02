@@ -19,7 +19,7 @@ devtools::install_github("TsaiLintung/fastdid")
 
 # Usage
 
-`fastdid` is the main function provided by **fastdid**. When using `fastdid`, you need to provide the dataset (`dt`), specify the names of the relevant columns (`-var`), and the type of target (aggregated) parameters (`result_type` such as `"group_time"`, `"time"`, `"dynamic"`, or `"simple"`.) Here is a simple call. 
+`fastdid` is the main function provided by **fastdid**. When using `fastdid`, you need to provide the dataset (`data`), specify the names of the relevant columns (`-var`), and the type of target (aggregated) parameters (`result_type` such as `"group_time"`, `"time"`, `"dynamic"`, or `"simple"`.) Here is a simple call. 
 
 ```
 #loading the package
@@ -30,7 +30,7 @@ simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, second_outcome = TR
 dt <- simdt$dt
 
 #calling fastdid
-result <- fastdid(dt, #the dataset
+result <- fastdid(data = dt, #the dataset
                   timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", #name of the columns
                   result_type = "group_time") #the result type
 ```
@@ -38,7 +38,7 @@ result <- fastdid(dt, #the dataset
 You can control for covariates by providing the name of the data columns, and choose the method among doubly-robust (`"dr"`), inverse probability weight (`"ipw"`), and outcome regression (`"or"`). 
 
 ```
-result <- fastdid(dt, 
+result <- fastdid(data = dt, 
                   timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",
                   result_type = "group_time",
                   control_option = "dr", #choose the control method
@@ -48,7 +48,7 @@ result <- fastdid(dt,
 While the default is to coerce the data into a balanced panel, you can allow for unbalanced panel. Note that currently only "ipw" is available when `allow_unbalance_panel = TRUE`.
 
 ```
-result <- fastdid(dt, 
+result <- fastdid(data = dt, 
                   timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",
                   result_type = "group_time",
                   allow_unbalance_panel = TRUE, #allow for unbalanced panel
@@ -59,7 +59,7 @@ result <- fastdid(dt,
 Clustered standard error can be obtained from multiplier bootstrap. 
 
 ```
-result <- fastdid(dt,
+result <- fastdid(data = dt,
                   timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",
                   result_type = "group_time",
                   clustervar = "x", boot = TRUE) #add clustering by using bootstrap
@@ -69,7 +69,7 @@ Estimation for multiple outcomes can be done in one call by providing a vector o
 
 ```
 #calling fastdid
-result <- fastdid(dt, #the dataset
+result <- fastdid(data = dt, #the dataset
                   timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = c("y", "y2"), #name of the columns
                   result_type = "group_time") #the result type
 ```
