@@ -65,6 +65,13 @@ fastdid <- function(data,
   
   # validate arguments --------------------------------------------------------
 
+  if(!is.data.table(data)){
+    warning("coercing input into a data.table.")
+    data <- as.data.table(data)
+  } 
+  
+  if(copy){dt <- copy(data)} else {dt <- data}
+  
   dt_names <- names(dt)
   name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
   check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
@@ -104,13 +111,7 @@ fastdid <- function(data,
                    weightvar,clustervar,covariatesvar,varycovariatesvar,or_func)
   
   # validate data -----------------------------------------------------
-  
-  if(!is.data.table(data)){
-    warning("coercing input into a data.table.")
-    data <- as.data.table(data)
-  } 
-  
-  if(copy){dt <- copy(data)} else {dt <- data}
+
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   
   if(validate){
