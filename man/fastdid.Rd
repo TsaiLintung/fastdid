@@ -22,7 +22,8 @@ fastdid(
   covariatesvar = NA,
   varycovariatesvar = NA,
   copy = TRUE,
-  validate = TRUE
+  validate = TRUE,
+  max_control_cohort_diff = NA
 )
 }
 \arguments{
@@ -74,24 +75,24 @@ simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, second_outcome = TR
 dt <- simdt$dt
 
 #basic call
-result <- fastdid(dt, timevar = "time", cohortvar = "G", 
+result <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
                   unitvar = "unit", outcomevar = "y",  
                   result_type = "group_time")
 
 #control for covariates
-result2 <- fastdid(dt, timevar = "time", cohortvar = "G", 
+result2 <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
                    unitvar = "unit", outcomevar = "y",  
                    result_type = "group_time",
                    covariatesvar = c("x", "x2"))
                   
 #bootstrap and clustering
-result3 <- fastdid(dt, timevar = "time", cohortvar = "G", 
+result3 <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
                    unitvar = "unit", outcomevar = "y",  
                    result_type = "group_time",
                    boot = TRUE, clustervar = "x")
 
 #estimate for multiple outcomes
-result4 <- fastdid(dt, #the dataset
+result4 <- fastdid(data = dt, #the dataset
                    timevar = "time", cohortvar = "G", unitvar = "unit", 
                    outcomevar = c("y", "y2"), #name of the outcome columns
                    result_type = "group_time") 

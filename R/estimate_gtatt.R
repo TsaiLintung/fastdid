@@ -5,8 +5,12 @@ estimate_gtatt <- function(aux, p) {
     p$control_option <- "notyet"
   }
   
+  if(!is.na(p$max_control_cohort_diff)){
+    warning("max_control_cohort_diff can only be used with not yet")
+    p$control_option <- "notyet"
+  }
+  
   treated_cohorts <- aux$cohorts[!is.infinite(aux$cohorts)]
-  max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
   
   cache_ps_fit_list <- list() #for the first outcome won't be able to use cache, empty list returns null for call like cache_ps_fit[["1.3"]]
   cache_hess_list <- list()
@@ -27,6 +31,13 @@ estimate_gtatt <- function(aux, p) {
         #setup and checks
         base_period <- g-1
         min_control_cohort <- ifelse(p$control_option  == "never", Inf, max(t+1, base_period+1)) #not-yet treated / never treated in both base and "treated" period
+        
+        if(!is.na(p$max_control_cohort_diff)){
+          max_control_cohort <- min(g+p$max_control_cohort_diff, max(treated_cohorts))
+        } else {
+          max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
+        }
+        
         if(t == base_period){next} #no treatment effect for the base period
         if(base_period < min(aux$time_periods)){next} #no treatment effect for the first period, since base period is not observed
         if(g >= max_control_cohort){next} #no treatment effect for never treated or the last treated cohort (for not yet notyet)

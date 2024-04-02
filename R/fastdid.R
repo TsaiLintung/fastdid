@@ -60,7 +60,8 @@ fastdid <- function(data,
                     control_option="both",result_type="group_time", balanced_event_time = NA,
                     control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
                     weightvar=NA,clustervar=NA,covariatesvar = NA, varycovariatesvar = NA,
-                    copy = TRUE, validate = TRUE
+                    copy = TRUE, validate = TRUE,
+                    max_control_cohort_diff = NA
                     ){
   
   # validate arguments --------------------------------------------------------
@@ -118,7 +119,8 @@ fastdid <- function(data,
             control_type = control_type,
             allow_unbalance_panel = allow_unbalance_panel,
             boot = boot, 
-            biters = biters)
+            biters = biters,
+            max_control_cohort_diff = max_control_cohort_diff)
   
   
   # validate data -----------------------------------------------------

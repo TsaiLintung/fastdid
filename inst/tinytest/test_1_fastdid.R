@@ -61,6 +61,10 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE),
               info = "balance panel false but dt is balance")
 
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
+                      max_control_cohort_diff = 2),
+              info = "balance panel false but dt is balance")
+
 # dt that needs adjustment ---------------------------
 
 base_result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time")
