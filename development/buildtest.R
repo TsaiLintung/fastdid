@@ -1,13 +1,12 @@
-setwd("~/GitHub/EventStudyCode")
+setwd("~/GitHub/fastdid")
 
 library(devtools)
 library(tinytest)
 library(roxygen2)
 
-load_all()
-
 roxygenise()
-build()
+
+load_all()
 run_test_dir()
 
 #before release

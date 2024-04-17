@@ -20,8 +20,9 @@
 #' @param copy whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.
 #' @param validate whether to validate the dataset before processing.
 #' 
-#' @import data.table parglm stringr collapse dreamerr BMisc 
+#' @import data.table parglm stringr dreamerr BMisc 
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula
+#' @importFrom collapse allNA fnrow whichNA fnunique fsum na_insert
 #' @return A data.table containing the estimated treatment effects and standard errors.
 #' @export
 #'
