@@ -1,5 +1,6 @@
-#2023-12-21
-message('loading fastdid source ver. ver: 0.9.2 (unbalanced), date: 2023-12-21')
+#2024-04-17
+message('loading fastdid source ver. ver: 0.9.2 (unbalanced), date: 2024-04-17')
+require(data.table);require(stringr);require(BMisc);require(collapse);require(dreamerr);require(parglm);
 aggregate_gt <- function(gt_result, cohort_sizes, 
                          id_weights, id_cohorts,
                          result_type, balanced_event_time){
