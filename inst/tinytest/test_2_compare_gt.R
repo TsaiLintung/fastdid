@@ -10,6 +10,7 @@ dt <- simdt$dt
 
 est_diff_ratio <- function(result, did_result){
   did_result_dt <- data.table(cohort = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)
+  did_result_dt <- did_result_dt[did_att != 0]
   compare <- did_result_dt |> merge(result, by = c("cohort", "time"), all = TRUE) 
   att_diff_per <- compare[, sum(abs(did_att-att), na.rm = TRUE)/sum(did_att, na.rm = TRUE)]
   se_diff_per <- compare[, sum(abs(did_se-se), na.rm = TRUE)/sum(did_se, na.rm = TRUE)]
@@ -85,6 +86,35 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "covariates dr")
 rm(result, did_result)
 
+# anticipation -----------------
+
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                  control_type = "dr",
+                  covariatesvar = c("x"), anticipation = 2)
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "dr",cband = FALSE,
+                          xformla = ~x,
+                          control_group = "notyettreated",
+                          clustervars = NULL,
+                          bstrap = FALSE, anticipation = 2)
+
+expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+             info = "anticipation")
+rm(result, did_result)
+
+# alternative base period -----------------
+
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                  control_type = "dr",
+                  covariatesvar = c("x"), base_period = "varying")
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "varying",est_method = "dr",cband = FALSE,
+                          xformla = ~x,
+                          control_group = "notyettreated",
+                          clustervars = NULL,
+                          bstrap = FALSE)
+
+expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+             info = "varying base period")
+rm(result, did_result)
 
 # bootstrap --------------------
 

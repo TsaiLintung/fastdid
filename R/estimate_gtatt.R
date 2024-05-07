@@ -1,16 +1,10 @@
 estimate_gtatt <- function(aux, p) {
 
+  #chcek if there is availble never-treated group
   if(!Inf %in% aux$cohorts & p$control_option != "notyet"){
     warning("no never-treated availble, switching to not-yet-treated control")
     p$control_option <- "notyet"
   }
-  
-  if(!is.na(p$max_control_cohort_diff)){
-    warning("max_control_cohort_diff can only be used with not yet")
-    p$control_option <- "notyet"
-  }
-  
-  treated_cohorts <- aux$cohorts[!is.infinite(aux$cohorts)]
   
   cache_ps_fit_list <- list() #for the first outcome won't be able to use cache, empty list returns null for call like cache_ps_fit[["1.3"]]
   cache_hess_list <- list()
@@ -27,26 +21,14 @@ estimate_gtatt <- function(aux, p) {
       for(g in aux$cohorts){
         
         gt_name <- paste0(g, ".", t)
-        
-        #setup and checks
-        base_period <- g-1
-        min_control_cohort <- ifelse(p$control_option  == "never", Inf, max(t+1, base_period+1)) #not-yet treated / never treated in both base and "treated" period
-        
-        if(!is.na(p$max_control_cohort_diff)){
-          max_control_cohort <- min(g+p$max_control_cohort_diff, max(treated_cohorts))
+        if(p$base_period == "universal"){
+          base_period <- g-1-p$anticipation
         } else {
-          max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
+          base_period <- ifelse(t>=g, g-1-p$anticipation, t-1)
         }
         
-        if(t == base_period){next} #no treatment effect for the base period
-        if(base_period < min(aux$time_periods)){next} #no treatment effect for the first period, since base period is not observed
-        if(g >= max_control_cohort){next} #no treatment effect for never treated or the last treated cohort (for not yet notyet)
-        if(t >= max_control_cohort){next} #no control available if the last cohort is treated too
-        
-        #select the control and treated cohorts
-        did_setup <- rep(NA, aux$id_size)
-        did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
-        did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
+        did_setup <- get_did_setup(g, t, base_period, aux, p)
+        if(is.null(did_setup)){next} #no gtatt if no did setup
         
         #construct the covariates matrix
         covvars <- get_covvars(aux$covariates, aux$varycovariates, base_period, t)
@@ -85,6 +67,42 @@ estimate_gtatt <- function(aux, p) {
   }
   
   return(outcome_result_list)
+}
+
+get_did_setup <- function(g, t, base_period, aux, p){
+  
+  treated_cohorts <- aux$cohorts[!is.infinite(aux$cohorts)]
+  
+  #setup and checks
+  
+  if(p$control_option == "never"){
+    min_control_cohort <- Inf
+  } else {
+    if(!is.infinite(p$min_control_cohort_diff)){
+      min_control_cohort <- max(g+p$min_control_cohort_diff, min(treated_cohorts))
+    } else {
+      min_control_cohort <- max(t, base_period)+p$anticipation+1
+    }
+  }
+
+  if(!is.infinite(p$max_control_cohort_diff)){
+    max_control_cohort <- min(g+p$max_control_cohort_diff, max(treated_cohorts))
+  } else {
+    max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
+  }
+  
+  if(t == base_period | #no treatment effect for the base period
+     base_period < min(aux$time_periods) | #no treatment effect for the first period, since base period is not observed
+     g >= max_control_cohort | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
+     t >= max_control_cohort){ #no control available if the last cohort is treated too
+    return(NULL)
+  } else {
+    #select the control and treated cohorts
+    did_setup <- rep(NA, aux$id_size)
+    did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
+    did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
+    return(did_setup)
+  }
 }
 
 get_cohort_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){

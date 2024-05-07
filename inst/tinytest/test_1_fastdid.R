@@ -63,7 +63,20 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
                       max_control_cohort_diff = 2),
-              info = "balance panel false but dt is balance")
+              info = "max control cohort diff")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
+                      min_control_cohort_diff = 4),
+              info = "min control cohort diff")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
+                      anticipation = 2),
+              info = "anticipation")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
+                      base_period = "varying"),
+              info = "baseperiod vary")
+
 
 # dt that needs adjustment ---------------------------
 
