@@ -101,6 +101,11 @@ get_did_setup <- function(g, t, base_period, aux, p){
     did_setup <- rep(NA, aux$id_size)
     did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
     did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
+    
+    if(!is.na(p$filtervar)){
+      did_setup[!aux$filters[[base_period]]] <- NA #only use units with filter == TRUE at base period
+    }
+    
     return(did_setup)
   }
 }

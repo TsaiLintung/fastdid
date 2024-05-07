@@ -77,6 +77,14 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       base_period = "varying"),
               info = "baseperiod vary")
 
+# filtervar ------------------------------------------
+
+dt2 <- copy(dt)
+dt2[, f := x>0]
+
+expect_silent(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
+                      base_period = "varying", filtervar = "f"),
+              info = "filtervar")
 
 # dt that needs adjustment ---------------------------
 

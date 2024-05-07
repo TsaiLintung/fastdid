@@ -7,6 +7,10 @@ validate_did <- function(dt,varnames,p){
     if(p$balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
   
+  if(!is.na(p$filtervar) && !is.logical(dt[[p$filtervar]])){
+    stop("filter var needs to be a logical column")
+  }
+  
   #doesn't allow missing value for now
   for(col in varnames){
     if(is.na(col)){next}
@@ -16,7 +20,6 @@ validate_did <- function(dt,varnames,p){
       dt <- dt[!na_obs]
     }
   }
-  
   
   if(!allNA(p$covariatesvar) && uniqueN(dt, by = c("unit", p$covariatesvar)) > raw_unit_size){
     warning("some covariates is time-varying, fastdid only use the first observation for covariates.")

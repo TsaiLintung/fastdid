@@ -61,7 +61,7 @@ fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", balanced_event_time = NA,
                     control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
-                    weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
+                    weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, filtervar = NA,
                     copy = TRUE, validate = TRUE,
                     max_control_cohort_diff = Inf, anticipation = 0, min_control_cohort_diff = -Inf, base_period = "universal"
                     ){
@@ -83,7 +83,7 @@ fastdid <- function(data,
             "NA | multi match", .choices = dt_names, .message = covariate_message)
   
   checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
-  check_set_arg(weightvar, clustervar,
+  check_set_arg(weightvar, clustervar, filtervar,
             "NA | match", .choices = dt_names, .message = checkvar_message)
   
   check_set_arg(control_option, "match", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
@@ -122,6 +122,7 @@ fastdid <- function(data,
             outcomevar =  outcomevar,
             weightvar = weightvar,
             clustervar = clustervar,
+            filtervar = filtervar,
             covariatesvar = covariatesvar,
             varycovariatesvar = varycovariatesvar,
             control_option = control_option,
@@ -142,7 +143,7 @@ fastdid <- function(data,
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   
   if(validate){
-    varnames <- c("time", "G", "unit", outcomevar,weightvar,clustervar,covariatesvar,varycovariatesvar)
+    varnames <- c("time", "G", "unit",outcomevar,weightvar,clustervar,covariatesvar,varycovariatesvar,filtervar)
     dt <- validate_did(dt, varnames, p)
   }
   
@@ -277,6 +278,18 @@ get_auxdata <- function(dt, p){
     varycovariates <- NA
   }
   
+  # filters
+  filters <- list()
+  if(!is.na(p$filtervar)){
+    for(i in time_periods){
+      start <- (i-1)*id_size+1
+      end <- i*id_size
+      filters[[i]] <- dt[seq(start,end), .SD, .SDcols = p$filtervar]
+    }
+  } else {
+    filters <- NA
+  }
+  
   if(!allNA(p$covariatesvar)){
     covariates <- cbind(const = -1, dt_inv[,.SD, .SDcols = p$covariatesvar])
   } else {
@@ -304,7 +317,8 @@ get_auxdata <- function(dt, p){
               varycovariates = varycovariates,
               covariates = covariates,
               cluster = cluster,
-              weights = weights)
+              weights = weights,
+              filters = filters)
   
   return(aux)
   
