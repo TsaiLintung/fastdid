@@ -1,6 +1,11 @@
-#2024-04-09
-message('loading fastdid source ver. ver: 0.9.2 (unbalanced), date: 2024-04-09')
-require(data.table);require(stringr);require(BMisc);require(collapse);require(dreamerr);require(parglm)
+#2024-05-07
+message('loading fastdid source ver. ver: 0.9.3 (timing), date: 2024-05-07')
+require(data.table);
+ require(stringr);
+ require(BMisc);
+ require(collapse);
+ require(dreamerr);
+ require(parglm);
 aggregate_gt <- function(gt_result, aux, p){
   
 
@@ -540,17 +545,11 @@ estimate_did_rc <- function(dt_did, covvars, control_type,
 
 estimate_gtatt <- function(aux, p) {
 
+  #chcek if there is availble never-treated group
   if(!Inf %in% aux$cohorts & p$control_option != "notyet"){
     warning("no never-treated availble, switching to not-yet-treated control")
     p$control_option <- "notyet"
   }
-  
-  if(!is.na(p$max_control_cohort_diff)){
-    warning("max_control_cohort_diff can only be used with not yet")
-    p$control_option <- "notyet"
-  }
-  
-  treated_cohorts <- aux$cohorts[!is.infinite(aux$cohorts)]
   
   cache_ps_fit_list <- list() #for the first outcome won't be able to use cache, empty list returns null for call like cache_ps_fit[["1.3"]]
   cache_hess_list <- list()
@@ -567,26 +566,14 @@ estimate_gtatt <- function(aux, p) {
       for(g in aux$cohorts){
         
         gt_name <- paste0(g, ".", t)
-        
-        #setup and checks
-        base_period <- g-1
-        min_control_cohort <- ifelse(p$control_option  == "never", Inf, max(t+1, base_period+1)) #not-yet treated / never treated in both base and "treated" period
-        
-        if(!is.na(p$max_control_cohort_diff)){
-          max_control_cohort <- min(g+p$max_control_cohort_diff, max(treated_cohorts))
+        if(p$base_period == "universal"){
+          base_period <- g-1-p$anticipation
         } else {
-          max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
+          base_period <- ifelse(t>=g, g-1-p$anticipation, t-1)
         }
         
-        if(t == base_period){next} #no treatment effect for the base period
-        if(base_period < min(aux$time_periods)){next} #no treatment effect for the first period, since base period is not observed
-        if(g >= max_control_cohort){next} #no treatment effect for never treated or the last treated cohort (for not yet notyet)
-        if(t >= max_control_cohort){next} #no control available if the last cohort is treated too
-        
-        #select the control and treated cohorts
-        did_setup <- rep(NA, aux$id_size)
-        did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
-        did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
+        did_setup <- get_did_setup(g, t, base_period, aux, p)
+        if(is.null(did_setup)){next} #no gtatt if no did setup
         
         #construct the covariates matrix
         covvars <- get_covvars(aux$covariates, aux$varycovariates, base_period, t)
@@ -625,6 +612,47 @@ estimate_gtatt <- function(aux, p) {
   }
   
   return(outcome_result_list)
+}
+
+get_did_setup <- function(g, t, base_period, aux, p){
+  
+  treated_cohorts <- aux$cohorts[!is.infinite(aux$cohorts)]
+  
+  #setup and checks
+  
+  if(p$control_option == "never"){
+    min_control_cohort <- Inf
+  } else {
+    if(!is.infinite(p$min_control_cohort_diff)){
+      min_control_cohort <- max(g+p$min_control_cohort_diff, min(treated_cohorts))
+    } else {
+      min_control_cohort <- max(t, base_period)+p$anticipation+1
+    }
+  }
+
+  if(!is.infinite(p$max_control_cohort_diff)){
+    max_control_cohort <- min(g+p$max_control_cohort_diff, max(treated_cohorts))
+  } else {
+    max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
+  }
+  
+  if(t == base_period | #no treatment effect for the base period
+     base_period < min(aux$time_periods) | #no treatment effect for the first period, since base period is not observed
+     g >= max_control_cohort | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
+     t >= max_control_cohort){ #no control available if the last cohort is treated too
+    return(NULL)
+  } else {
+    #select the control and treated cohorts
+    did_setup <- rep(NA, aux$id_size)
+    did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
+    did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
+    
+    if(!is.na(p$filtervar)){
+      did_setup[!aux$filters[[base_period]]] <- NA #only use units with filter == TRUE at base period
+    }
+    
+    return(did_setup)
+  }
 }
 
 get_cohort_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
@@ -679,11 +707,17 @@ get_covvars <- function(covariates, varycovariates, base_period, t){
 #' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
 #' @param covariatesvar A character vector containing the names of time-invariant covariate variables (optional).
 #' @param varycovariatesvar A character vector containing the names of time-varying covariate variables (optional).
+#' @param filtervar A logical vector that specifies which units to use (can be time varying, units will only be included in 2x2 when filtervar is TRUE is the base period)
 #' @param copy whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.
 #' @param validate whether to validate the dataset before processing.
+#' @param anticipation periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).
+#' @param min_control_cohort_diff the min cohort difference between treated and control group 
+#' @param max_control_cohort_diff the max cohort difference between treated and control group 
+#' @param base_period same as did
 #' 
-#' @import data.table parglm stringr collapse dreamerr BMisc 
+#' @import data.table parglm stringr dreamerr BMisc 
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula
+#' @importFrom collapse allNA fnrow whichNA fnunique fsum na_insert
 #' @return A data.table containing the estimated treatment effects and standard errors.
 #' @export
 #'
@@ -720,9 +754,9 @@ fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", balanced_event_time = NA,
                     control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
-                    weightvar=NA,clustervar=NA,covariatesvar = NA, varycovariatesvar = NA,
+                    weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, filtervar = NA,
                     copy = TRUE, validate = TRUE,
-                    max_control_cohort_diff = NA
+                    max_control_cohort_diff = Inf, anticipation = 0, min_control_cohort_diff = -Inf, base_period = "universal"
                     ){
   
   # validate arguments --------------------------------------------------------
@@ -742,12 +776,14 @@ fastdid <- function(data,
             "NA | multi match", .choices = dt_names, .message = covariate_message)
   
   checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
-  check_set_arg(weightvar, clustervar,
+  check_set_arg(weightvar, clustervar, filtervar,
             "NA | match", .choices = dt_names, .message = checkvar_message)
   
   check_set_arg(control_option, "match", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr")) 
+  check_set_arg(base_period, "match", .choices = c("varying", "universal"))
   check_arg(copy, validate, boot, allow_unbalance_panel, "scalar logical")
+  check_arg(max_control_cohort_diff, min_control_cohort_diff, anticipation, "scalar numeric")
   
   if(!is.na(balanced_event_time)){
     if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
@@ -766,12 +802,20 @@ fastdid <- function(data,
     stop("clustering only available with bootstrap")
   }
   
+  # coerce non-sensible option
+  
+  if((!is.infinite(max_control_cohort_diff) | !is.infinite(min_control_cohort_diff)) & control_option == "never"){
+    warning("control_cohort_diff can only be used with not yet")
+    p$control_option <- "notyet"
+  }
+  
   p <- list(timevar = timevar,
             cohortvar = cohortvar,
             unitvar = unitvar,
             outcomevar =  outcomevar,
             weightvar = weightvar,
             clustervar = clustervar,
+            filtervar = filtervar,
             covariatesvar = covariatesvar,
             varycovariatesvar = varycovariatesvar,
             control_option = control_option,
@@ -781,7 +825,10 @@ fastdid <- function(data,
             allow_unbalance_panel = allow_unbalance_panel,
             boot = boot, 
             biters = biters,
-            max_control_cohort_diff = max_control_cohort_diff)
+            max_control_cohort_diff = max_control_cohort_diff,
+            min_control_cohort_diff = min_control_cohort_diff,
+            anticipation = anticipation, 
+            base_period = base_period)
   
   
   # validate data -----------------------------------------------------
@@ -789,7 +836,7 @@ fastdid <- function(data,
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   
   if(validate){
-    varnames <- c("time", "G", "unit", outcomevar,weightvar,clustervar,covariatesvar,varycovariatesvar)
+    varnames <- c("time", "G", "unit",outcomevar,weightvar,clustervar,covariatesvar,varycovariatesvar,filtervar)
     dt <- validate_did(dt, varnames, p)
   }
   
@@ -924,6 +971,18 @@ get_auxdata <- function(dt, p){
     varycovariates <- NA
   }
   
+  # filters
+  filters <- list()
+  if(!is.na(p$filtervar)){
+    for(i in time_periods){
+      start <- (i-1)*id_size+1
+      end <- i*id_size
+      filters[[i]] <- dt[seq(start,end), .SD, .SDcols = p$filtervar]
+    }
+  } else {
+    filters <- NA
+  }
+  
   if(!allNA(p$covariatesvar)){
     covariates <- cbind(const = -1, dt_inv[,.SD, .SDcols = p$covariatesvar])
   } else {
@@ -951,7 +1010,8 @@ get_auxdata <- function(dt, p){
               varycovariates = varycovariates,
               covariates = covariates,
               cluster = cluster,
-              weights = weights)
+              weights = weights,
+              filters = filters)
   
   return(aux)
   
@@ -1017,7 +1077,7 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
                          'const','cont_ipw_weight','count','delta_y','element_rect','element_text','event_time','pg','placeholder',
                          'post.y','pre.y','ps','s','se','target','tau','time_fe',
                          'treat_ipw_weight','treat_latent','type','unit','unit_fe','weight','x','x2',
-                         'x_trend','y','y0','y1','y2', 'time', 'weights', 'outcome',
+                         'x_trend','y','y0','y1','y2', 'time', 'weights', 'outcome', "G", "D",
                          'V1','att_cont_post','att_cont_pre','att_treat_post','att_treat_pre','inpost','inpre','max_et','min_et','new_unit','or_delta','or_delta_post','or_delta_pre','targeted','used'))
 
 
@@ -1245,6 +1305,10 @@ validate_did <- function(dt,varnames,p){
     if(p$balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
   
+  if(!is.na(p$filtervar) && !is.logical(dt[[p$filtervar]])){
+    stop("filter var needs to be a logical column")
+  }
+  
   #doesn't allow missing value for now
   for(col in varnames){
     if(is.na(col)){next}
@@ -1254,7 +1318,6 @@ validate_did <- function(dt,varnames,p){
       dt <- dt[!na_obs]
     }
   }
-  
   
   if(!allNA(p$covariatesvar) && uniqueN(dt, by = c("unit", p$covariatesvar)) > raw_unit_size){
     warning("some covariates is time-varying, fastdid only use the first observation for covariates.")

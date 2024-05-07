@@ -65,7 +65,7 @@ result <- fastdid(data = dt,
                   clustervar = "x", boot = TRUE) #add clustering by using bootstrap
 ```
 
-Estimation for multiple outcomes can be done in one call by providing a vector of outcome column names (saves a lot of time when controlling for covariates since logit estimands can be recycled across outcomes). 
+Estimation for multiple outcomes can be done in one call by providing a vector of outcome column names (saves a lot of time when controlling for covariates since logit estimates can be recycled across outcomes). 
 
 ```
 #calling fastdid
@@ -122,9 +122,9 @@ Aggregated parameters: `fastdid` aggregates in the same function.
 
 ## Other
 
-1. **fastdid** currently only offers inverse probability weights estimators for controlling for covariates when allowing for unbalanced panels.
-2. **fastdid** only uses the time before the event as base periods ("universal" in `attgt`)
-4. **fastdid** currently only reports the pointwise confidence intervals, instead of the simultaneously valid confidence intervals (check section 4.1 of Callaway and Sant'Anna's (2021) for more detail.)
+1. **fastdid** only offers inverse probability weights estimators for controlling for covariates when allowing for unbalanced panels.
+2. **fastdid** use universal base periods as default. 
+4. **fastdid** only reports the pointwise confidence intervals, instead of the simultaneously valid confidence intervals (check section 4.1 of Callaway and Sant'Anna's (2021) for more detail.)
 
 # Roadmap
 
@@ -134,16 +134,25 @@ Aggregated parameters: `fastdid` aggregates in the same function.
 - Min/max event time and balanced composition :white_check_mark:
 - DR and OR estimators :white_check_mark:
 - Allowing for unbalanced panels :white_check_mark: (*well, not fully because DR and OR still need to be added*)
-- Larger-than-memory data support
+- Anticipation :white_check_mark:
+- Varying base periods :white_check_mark:
 - User-provided aggregation scheme
-- drop-in interface for did
-- Anticipation
-- Varying base periods
 - User-provided control formula
-- Simultaneously valid confidence bands
-- Further optimization!
+- simultaneously valid confidence bands
+- Further optimization
+
+# Source version
+
+Since **fastdid** is not on CRAN yet, it needs to be converted to R scripts to be used in some restricted environments. This can be done with `development/build_source.R`. After changing the working directory, the script will produce `development/fastdid_VERNAME.R`, which can be sourced to mimic the functionalities of the package.
 
 # Update
+
+## 0.9.3 (2024/5/7)
+
+- add anticipation and varying base period option
+- add min and max control cohort difference
+- add time-varying control ([reference](https://arxiv.org/abs/2202.02903))
+- add filtervar 
 
 ## 0.9.2 (2023/12/20)
 

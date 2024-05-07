@@ -18,9 +18,13 @@
 #' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
 #' @param covariatesvar A character vector containing the names of time-invariant covariate variables (optional).
 #' @param varycovariatesvar A character vector containing the names of time-varying covariate variables (optional).
+#' @param filtervar A logical vector that specifies which units to use (can be time varying, units will only be included in 2x2 when filtervar is TRUE is the base period)
 #' @param copy whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.
 #' @param validate whether to validate the dataset before processing.
 #' @param anticipation periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).
+#' @param min_control_cohort_diff the min cohort difference between treated and control group 
+#' @param max_control_cohort_diff the max cohort difference between treated and control group 
+#' @param base_period same as did
 #' 
 #' @import data.table parglm stringr dreamerr BMisc 
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula

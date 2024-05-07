@@ -21,9 +21,13 @@ fastdid(
   clustervar = NA,
   covariatesvar = NA,
   varycovariatesvar = NA,
+  filtervar = NA,
   copy = TRUE,
   validate = TRUE,
-  max_control_cohort_diff = NA
+  max_control_cohort_diff = Inf,
+  anticipation = 0,
+  min_control_cohort_diff = -Inf,
+  base_period = "universal"
 )
 }
 \arguments{
@@ -59,9 +63,19 @@ fastdid(
 
 \item{varycovariatesvar}{A character vector containing the names of time-varying covariate variables (optional).}
 
+\item{filtervar}{A logical vector that specifies which units to use (can be time varying, units will only be included in 2x2 when filtervar is TRUE is the base period)}
+
 \item{copy}{whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.}
 
 \item{validate}{whether to validate the dataset before processing.}
+
+\item{max_control_cohort_diff}{the max cohort difference between treated and control group}
+
+\item{anticipation}{periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).}
+
+\item{min_control_cohort_diff}{the min cohort difference between treated and control group}
+
+\item{base_period}{same as did}
 }
 \value{
 A data.table containing the estimated treatment effects and standard errors.

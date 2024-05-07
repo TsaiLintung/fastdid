@@ -15,6 +15,7 @@
 #' @param seed Seed for random number generation.
 #' @param stratify Whether to stratify the dataset based on a binary covariate.
 #' @param treatment_assign The method for treatment assignment ("latent" or "uniform").
+#' @param vary_cov include time-varying covariates
 #'
 #' @return A list containing the simulated dataset (dt) and the treatment effect values (att).
 #'

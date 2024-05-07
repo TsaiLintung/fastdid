@@ -38,6 +38,8 @@ sim_did(
 
 \item{second_cov}{Whether to include a second covariate.}
 
+\item{vary_cov}{include time-varying covariates}
+
 \item{na}{Whether to generate missing data ("none", "y", "x", or "both").}
 
 \item{balanced}{Whether to balance the dataset by random sampling.}
