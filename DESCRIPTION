@@ -21,7 +21,7 @@ Imports:
     stringr,
     BMisc,
     collapse,
-    dreamerr,
+    dreamerr (>= 1.4.0),
     parglm
 Suggests: ggplot2, did
 Encoding: UTF-8
