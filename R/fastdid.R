@@ -114,7 +114,7 @@ fastdid <- function(data,
   }
   
   # coerce non-sensible option
-  
+  if(!is.na(clustervar) && unitvar == clustervar){clustervar <- NA} #cluster on id anyway, would cause error otherwise
   if((!is.infinite(max_control_cohort_diff) | !is.infinite(min_control_cohort_diff)) & control_option == "never"){
     warning("control_cohort_diff can only be used with not yet")
     p$control_option <- "notyet"
@@ -156,6 +156,11 @@ fastdid <- function(data,
   #make dt conform to the WLOG assumptions of fastdid
   coerce_result <- coerce_dt(dt, p) #also changed dt
   dt <- coerce_result$dt
+  
+  if(nrow(dt) == 0){
+    stop("no data after coercing the dataset")
+  }
+  
   # get auxiliary data
   aux <- get_auxdata(dt, p)
   

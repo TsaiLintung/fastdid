@@ -154,6 +154,8 @@ Since **fastdid** is not on CRAN yet, it needs to be converted to R scripts to b
 - add time-varying control ([reference](https://arxiv.org/abs/2202.02903))
 - add filtervar 
 
+0.9.3.1 (2024/5/24): fix the bug with `univar == clustervar` (TODO: address problems with name-changing and collision)
+
 ## 0.9.2 (2023/12/20)
 
 - add support to doubly robust and outcome regression estimators
