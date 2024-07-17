@@ -19,8 +19,6 @@ plot_did_dynamics(
 \item{note}{A character string for adding additional notes or comments to the plot (default is empty).}
 
 \item{significance_level}{The significance level for confidence intervals (default is 0.05).}
-
-\item{base_time}{The time point representing the base period (default is -1).}
 }
 \value{
 A ggplot2 object representing the event study plot.

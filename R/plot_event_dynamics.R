@@ -5,7 +5,6 @@
 #' @param dt A data table containing the results of the DiD analysis. It should include columns for 'att' (average treatment effect), 'se' (standard error), and 'event_time' (time points).
 #' @param graphname A character string specifying the title of the plot (default is "event study plot").
 #' @param note A character string for adding additional notes or comments to the plot (default is empty).
-#' @param base_time The time point representing the base period (default is -1).
 #' @param significance_level The significance level for confidence intervals (default is 0.05).
 #'
 #' @return A ggplot2 object representing the event study plot.
