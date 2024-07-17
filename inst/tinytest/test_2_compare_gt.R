@@ -30,6 +30,19 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "simple")
 rm(result, did_result)
 
+# simple notyet only ----------------------
+
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", control_option = "notyet")
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt[!is.infinite(G)],base_period = "universal",est_method = "ipw",cband = FALSE,
+                          #xformla = ~x,
+                          control_group = "notyettreated",
+                          clustervars = NULL,
+                          bstrap = FALSE)
+
+expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+             info = "notyet")
+rm(result, did_result)
+
 # never -------------------
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",

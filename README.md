@@ -155,6 +155,7 @@ Since **fastdid** is not on CRAN yet, it needs to be converted to R scripts to b
 - add filtervar 
 
 0.9.3.1 (2024/5/24): fix the bug with `univar == clustervar` (TODO: address problems with name-changing and collision)
+0.9.3.2 (2024/7/17): fix group_time result when using `control_type = "notyet"` and make the base period in plots adapt to anticipation.
 
 ## 0.9.2 (2023/12/20)
 

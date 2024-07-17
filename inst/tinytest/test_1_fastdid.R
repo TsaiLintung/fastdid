@@ -77,6 +77,11 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       base_period = "varying"),
               info = "baseperiod vary")
 
+#plot
+expect_silent(plot_did_dynamics(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "dynamic")),
+              info = "simple plot")
+
+
 # filtervar ------------------------------------------
 
 dt2 <- copy(dt)

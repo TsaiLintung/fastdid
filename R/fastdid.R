@@ -225,6 +225,7 @@ coerce_dt <- function(dt, p){
   return(list(dt = dt,
               time_change = list(time_step = time_step,
                             max_time = max(time_periods),
+                            last_treated_cohort = ifelse(p$control_option == "notyet", dt[!is.infinite(G),max(G)], dt[,max(G)]),
                             time_offset = time_offset)))
   
 }
@@ -352,8 +353,10 @@ convert_targets <- function(results, result_type, t){
     
   } else if (result_type == "group_time"){
     
-    results[, cohort := floor((target-1)/t$max_time)]
-    results[, time := (target-cohort*t$max_time)]
+    max_avail_time <- min(t$max_time, t$last_treated_cohort-1)
+    
+    results[, cohort := floor((target-1)/max_avail_time)]
+    results[, time := (target-cohort*max_avail_time)]
     
     #recover the time
     results[, cohort := recover_time(cohort, t$time_offset, t$time_step)]

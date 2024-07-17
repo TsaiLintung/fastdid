@@ -12,7 +12,7 @@
 #' @export
 
 plot_did_dynamics <-function(dt, 
-                             graphname = "event study plot", note = "", base_time = -1, significance_level = 0.05#, 
+                             graphname = "event study plot", note = "", significance_level = 0.05#, 
                              #stratify_offset =0.1
 ){
   
@@ -22,7 +22,12 @@ plot_did_dynamics <-function(dt,
     return(NULL)
   }
   
-
+  
+  #find the base_period
+  et_range <- min(dt[, event_time]):max(dt[, event_time])
+  base_time <- et_range[!et_range %in% dt[, unique(event_time)]]
+  if(length(base_time)!=1){stop("missing more then one period")}
+  
   #add the base period
   if("outcome" %in% names(dt)){
     base_row <- data.table(att = 0, se = 0, event_time = base_time, outcome = dt[, unique(outcome)])

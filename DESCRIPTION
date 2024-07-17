@@ -25,4 +25,4 @@ Imports:
     parglm
 Suggests: ggplot2, did
 Encoding: UTF-8
-RoxygenNote: 7.3.1
+RoxygenNote: 7.3.2
