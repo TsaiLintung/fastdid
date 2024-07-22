@@ -69,86 +69,25 @@ fastdid <- function(data,
                     copy = TRUE, validate = TRUE,
                     max_control_cohort_diff = Inf, anticipation = 0, min_control_cohort_diff = -Inf, base_period = "universal"
                     ){
-  
-  # validate arguments --------------------------------------------------------
 
+  # validation --------------------------------------------------------
+  
   if(!is.data.table(data)){
     warning("coercing input into a data.table.")
     data <- as.data.table(data)
   } 
   if(copy){dt <- copy(data)} else {dt <- data}
+
+  # validate arguments
+  p <- as.list(environment()) #collect everything besides data
+  p$data <- NULL
+  validate_argument(p, names(data))
   
-  dt_names <- names(dt)
-  name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
-  check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
-  
-  covariate_message <- "__ARG__ must be NA or a character vector which are all names of columns from the dataset."
-  check_set_arg(varycovariatesvar, covariatesvar, outcomevar, 
-            "NA | multi match", .choices = dt_names, .message = covariate_message)
-  
-  checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
-  check_set_arg(weightvar, clustervar, filtervar,
-            "NA | match", .choices = dt_names, .message = checkvar_message)
-  
-  check_set_arg(control_option, "match", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
-  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr")) 
-  check_set_arg(base_period, "match", .choices = c("varying", "universal"))
-  check_arg(copy, validate, boot, allow_unbalance_panel, "scalar logical")
-  check_arg(max_control_cohort_diff, min_control_cohort_diff, anticipation, "scalar numeric")
-  
-  if(!is.na(balanced_event_time)){
-    if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
-    check_arg(balanced_event_time, "numeric scalar")
-  }
-  if(allow_unbalance_panel == TRUE & control_type %in% c("dr", "reg")){
-    stop("fastdid currently only supprts ipw when allowing for unbalanced panels.")
-  }
-  if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
-    stop("fastdid currently only supprts time varying covariates when allowing for unbalanced panels.")
-  }
-  if(any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)){
-    stop("time-varying var and invariant var have overlaps.")
-  }
-  if(!boot & !allNA(clustervar)){
-    stop("clustering only available with bootstrap")
-  }
-  
-  # coerce non-sensible option
-  if(!is.na(clustervar) && unitvar == clustervar){clustervar <- NA} #cluster on id anyway, would cause error otherwise
-  if((!is.infinite(max_control_cohort_diff) | !is.infinite(min_control_cohort_diff)) & control_option == "never"){
-    warning("control_cohort_diff can only be used with not yet")
-    p$control_option <- "notyet"
-  }
-  
-  p <- list(timevar = timevar,
-            cohortvar = cohortvar,
-            unitvar = unitvar,
-            outcomevar =  outcomevar,
-            weightvar = weightvar,
-            clustervar = clustervar,
-            filtervar = filtervar,
-            covariatesvar = covariatesvar,
-            varycovariatesvar = varycovariatesvar,
-            control_option = control_option,
-            result_type = result_type,
-            balanced_event_time = balanced_event_time,
-            control_type = control_type,
-            allow_unbalance_panel = allow_unbalance_panel,
-            boot = boot, 
-            biters = biters,
-            max_control_cohort_diff = max_control_cohort_diff,
-            min_control_cohort_diff = min_control_cohort_diff,
-            anticipation = anticipation, 
-            base_period = base_period)
-  
-  
-  # validate data -----------------------------------------------------
-  
+  # validate data 
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
-  
   if(validate){
-    varnames <- c("time", "G", "unit",outcomevar,weightvar,clustervar,covariatesvar,varycovariatesvar,filtervar)
-    dt <- validate_did(dt, varnames, p)
+    varnames <- c("time", "G", "unit", outcomevar, weightvar, clustervar, covariatesvar, varycovariatesvar, filtervar)
+    dt <- validate_dt(dt, varnames, p)
   }
   
   # preprocess -----------------------------------------------------------
@@ -182,6 +121,8 @@ fastdid <- function(data,
 }
 
 # small steps ----------------------------------------------------------------------
+
+
 
 coerce_dt <- function(dt, p){
   
@@ -225,7 +166,6 @@ coerce_dt <- function(dt, p){
   return(list(dt = dt,
               time_change = list(time_step = time_step,
                             max_time = max(time_periods),
-                            last_treated_cohort = ifelse(p$control_option == "notyet", dt[!is.infinite(G),max(G)], dt[,max(G)]),
                             time_offset = time_offset)))
   
 }
@@ -353,10 +293,8 @@ convert_targets <- function(results, result_type, t){
     
   } else if (result_type == "group_time"){
     
-    max_avail_time <- min(t$max_time, t$last_treated_cohort-1)
-    
-    results[, cohort := floor((target-1)/max_avail_time)]
-    results[, time := (target-cohort*max_avail_time)]
+    results[, cohort := as.numeric(str_split_i(target, "\\.", 1))]
+    results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
     
     #recover the time
     results[, cohort := recover_time(cohort, t$time_offset, t$time_step)]

@@ -10,5 +10,4 @@ load_all()
 run_test_dir()
 
 #before release
-build()
 check()

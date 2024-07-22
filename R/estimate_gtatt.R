@@ -55,6 +55,7 @@ estimate_gtatt <- function(aux, p) {
         #assign cache for next outcome
         if(is.null(cache_ps_fit_list[[gt_name]])){cache_ps_fit_list[[gt_name]] <- result$cache_ps_fit}
         if(is.null(cache_hess_list[[gt_name]])){cache_hess_list[[gt_name]] <- result$cache_hess}
+        
         rm(result)
         
       }
@@ -67,6 +68,7 @@ estimate_gtatt <- function(aux, p) {
   }
   
   return(outcome_result_list)
+  
 }
 
 get_did_setup <- function(g, t, base_period, aux, p){
@@ -94,7 +96,8 @@ get_did_setup <- function(g, t, base_period, aux, p){
   if(t == base_period | #no treatment effect for the base period
      base_period < min(aux$time_periods) | #no treatment effect for the first period, since base period is not observed
      g >= max_control_cohort | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
-     t >= max_control_cohort){ #no control available if the last cohort is treated too
+     t >= max_control_cohort | #no control available if the last cohort is treated too
+     min_control_cohort > max_control_cohort){ #no control avalilble, most likely due to anticipation
     return(NULL)
   } else {
     #select the control and treated cohorts

@@ -9,13 +9,12 @@ aggregate_gt <- function(gt_result, aux, p){
   group_time <- gt_result$gt |> merge(pg_dt, by = "G")
   
   setorder(group_time, time, G) #change the order to match the order in gtatt
-  
   gt_result$inf_func <- as.matrix(gt_result$inf_func)
   
   if(p$result_type == "group_time"){
-    
+
     #don't need to do anything
-    targets <- group_time[, unique(G*max(time)+time)]
+    targets <- group_time[, paste0(G, ".", time)]
     inf_matrix <- gt_result$inf_func
     agg_att <- as.vector(gt_result$att)
     
