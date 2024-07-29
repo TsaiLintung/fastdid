@@ -61,6 +61,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
   
   gt_inf_func[,placeholder := NULL]  
   names(gt_att) <- names(gt_inf_func)
+  gt_inf_func <- as.matrix(gt_inf_func)
   
   return(list(
     est = list(gt = gt, att = gt_att, inf_func = gt_inf_func),

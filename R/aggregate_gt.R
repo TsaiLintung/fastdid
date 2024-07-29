@@ -3,65 +3,64 @@ aggregate_gt <- function(all_gt_result, aux, p){
 }
 
 aggregate_gt_outcome <- function(gt_result, aux, p){
-  
 
-  #release the stuff
-  id_cohorts <- aux$dt_inv[, G]
+  agg_sch <- get_aggregate_scheme(gt_result, aux, p)
   
-  id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = id_cohorts)
-  pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
-  group_time <- gt_result$gt |> merge(pg_dt, by = "G")
-  
-  setorder(group_time, time, G) #change the order to match the order in gtatt
-  gt_result$inf_func <- as.matrix(gt_result$inf_func)
-  
-  if(p$result_type == "group_time"){
-
-    #don't need to do anything
-    targets <- group_time[, paste0(G, ".", time)]
-    inf_matrix <- gt_result$inf_func
-    agg_att <- as.vector(gt_result$att)
-    
-  } else {
-    
-    #get which gt(s) is a part of the aggregated param
-    agg_sch <- get_aggregate_scheme(group_time, p$result_type, aux$weights, id_cohorts, p$balanced_event_time)
-    targets <- agg_sch$targets
-    
-    #aggregated att
-    agg_att <- agg_sch$agg_weights %*% gt_result$att
-    
-    #get the influence from weight estimation
-    #this needs to be optimized!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-      get_weight_influence(x, gt_result$att, aux$weights, id_cohorts, group_time[, .(G, time)])
-    })
-    
-    #aggregated influence function
-    inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
-    
-  }
-  
-  #get se from influence function
-  agg_se <- get_se(inf_matrix, p$boot, p$biters, aux$cluster, p$clustervar)
+  #get att and se
+  agg_att <- get_agg_att(gt_result, agg_sch, p)
+  inf_matrix <- get_agg_inf(gt_result, agg_sch, aux, p)
+  agg_se <- get_se(inf_matrix, aux, p)
   
   # post process
-  result <- data.table(targets, agg_att, agg_se)
+  result <- data.table(agg_sch$targets, agg_att, agg_se)
   names(result) <- c("target", "att", "se")
   result[,outcome := gt_result$outname]
   
   return(result)
 }
 
-get_aggregate_scheme <- function(group_time, result_type, weights, id_cohorts, balanced_event_time){
+get_agg_inf <- function(gt_result, agg_sch, aux, p){
   
-  #browser()
+  if(p$result_type == "group_time"){return(gt_result$inf_func)}
   
+  inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+    get_weight_influence(x, gt_result$att, aux$weights, aux$dt_inv[, G], agg_sch$group_time[, .(G, time)])
+  })
+  
+  #aggregated influence function
+  inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
+  return(inf_matrix)
+}
+
+get_agg_att <- function(gt_result, agg_sch, p){
+  if(p$result_type == "group_time"){
+    return(as.vector(gt_result$att))
+  } else {
+    return(agg_sch$agg_weights %*% gt_result$att)
+  }
+}
+
+get_aggregate_scheme <- function(gt_result, aux, p){
+  
+  #setup stuff
+  weights <- aux$weights
+  id_cohorts <- aux$dt_inv[, G]
+  result_type <- p$result_type
   agg_weights <- data.table()
-  gt_count <- group_time[, .N]
-  
   bool_to_pn <- function(x){ifelse(x, 1, -1)}
   
+  #create group_time
+  id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
+  pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
+  group_time <- gt_result$gt |> merge(pg_dt, by = "G")
+  setorder(group_time, time, G) #change the order to match the order in gtatt
+  gt_count <- group_time[, .N]
+
+  #nothing to do
+  if(result_type == "group_time"){
+    return(list(targets = group_time[, paste0(G, ".", time)]))
+  }
+    
   #choose the target based on aggregation type
   if (result_type == "dynamic") {
     group_time[, target := time-G]
@@ -78,15 +77,15 @@ get_aggregate_scheme <- function(group_time, result_type, weights, id_cohorts, b
   
   #for balanced cohort composition in dynamic setting
   #a cohort us only used if it is seen for all dynamic time
-  if(result_type == "dynamic" & !is.na(balanced_event_time)){
+  if(result_type == "dynamic" & !is.na(p$balanced_event_time)){
 
     cohorts <- group_time[, .(max_et = max(time-G),
                               min_et = min(time-G)), by = "G"]
-    cohorts[, used := max_et >= balanced_event_time] #the max
+    cohorts[, used := max_et >= p$balanced_event_time] #the max
     if(!cohorts[, any(used)]){stop("balanced_comp_range outside avalible range")}
     group_time[, used := G %in% cohorts[used == TRUE, G]]
     
-    targets <- targets[targets <= balanced_event_time & targets >= cohorts[used == TRUE, min(min_et)]]
+    targets <- targets[targets <= p$balanced_event_time & targets >= cohorts[used == TRUE, min(min_et)]]
     
   } else{group_time[, used := TRUE]}
   
@@ -104,8 +103,11 @@ get_aggregate_scheme <- function(group_time, result_type, weights, id_cohorts, b
   }
   
   return(list(agg_weights = as.matrix(agg_weights), #a matrix of each target and gt's weight in it 
-              targets = targets)) 
+              targets = targets,
+              group_time = group_time))
 }
+
+
 
 get_weight_influence <- function(agg_weights, gt_att, weights, id_cohorts, group) {
 
@@ -135,19 +137,21 @@ get_weight_influence <- function(agg_weights, gt_att, weights, id_cohorts, group
   return(inf_weight)
 }
 
-get_se <- function(inf_matrix, boot, biters, cluster, clustervar) {
+get_se <- function(inf_matrix, aux, p) {
   
-  if(boot){
+  if(p$boot){
+    
+    cluster <- aux$cluster
     
     top_quant <- 0.75
     bot_quant <- 0.25
-    if(!allNA(clustervar)){
+    if(!allNA(p$clustervar)){
       #take average within the cluster
       cluster_n <- stats::aggregate(cluster, by=list(cluster), length)[,2]
       inf_matrix <- fsum(inf_matrix, cluster) / cluster_n #the mean without 0 for each cluster of each setting
     }
     
-    boot_results <- BMisc::multiplier_bootstrap(inf_matrix, biters = biters) %>% as.data.table()
+    boot_results <- BMisc::multiplier_bootstrap(inf_matrix, biters = p$biters) %>% as.data.table()
     
     boot_top <- boot_results[, lapply(.SD, function(x) stats::quantile(x, top_quant, type=1, na.rm = TRUE))]
     boot_bot <- boot_results[, lapply(.SD, function(x) stats::quantile(x, bot_quant, type=1, na.rm = TRUE))]

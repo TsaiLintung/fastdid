@@ -374,7 +374,7 @@ estimate_did_rc <- function(dt_did, covvars, p,
   
   inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
   inf_func[data_pos] <- inf_func_no_na_post - inf_func_no_na_pre
-  
+
   return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
               cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
 }
