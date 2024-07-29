@@ -1,17 +1,18 @@
-estimate_gtatt <- function(aux, p) {
-
-  #chcek if there is availble never-treated group
-  if(!Inf %in% aux$cohorts & p$control_option != "notyet"){
-    warning("no never-treated availble, switching to not-yet-treated control")
-    p$control_option <- "notyet"
-  }
-  
-  cache_ps_fit_list <- list() #for the first outcome won't be able to use cache, empty list returns null for call like cache_ps_fit[["1.3"]]
-  cache_hess_list <- list()
-  outcome_result_list <- list()
+estimate_gtatt <- function(aux, p){
+  caches <- list(ps = NULL, hess = NULL)
+  outcome_results <- list()
   for(outcol in p$outcomevar){
-    
-    outcomes <- aux$outcomes_list[[outcol]]
+    y <- aux$outcomes_list[[outcol]]
+    out_result <- estimate_gtatt_outcome(y, aux, p, caches)
+    out_result$est$outname <- outcol
+    outcome_results[[outcol]] <- out_result$est
+    caches <- out_result$caches
+  }
+  return(outcome_results)
+}
+
+estimate_gtatt_outcome <- function(y, aux, p, caches) {
+
     last_coef <- NULL
     gt <- data.table()
     gt_att <- c()
@@ -20,55 +21,60 @@ estimate_gtatt <- function(aux, p) {
     for(t in aux$time_periods){
       for(g in aux$cohorts){
         
-        gt_name <- paste0(g, ".", t)
-        if(p$base_period == "universal"){
-          base_period <- g-1-p$anticipation
-        } else {
-          base_period <- ifelse(t>=g, g-1-p$anticipation, t-1)
-        }
+        # preparation -----------------------
         
+        gt_name <- paste0(g,".",t)
+        
+        #determine the 2x2
+        base_period <- get_base_period(g,t,p)
         did_setup <- get_did_setup(g, t, base_period, aux, p)
         if(is.null(did_setup)){next} #no gtatt if no did setup
         
-        #construct the covariates matrix
+        #covariates matrix
         covvars <- get_covvars(aux$covariates, aux$varycovariates, base_period, t)
         
-        #construct the 2x2 dataset
-        cohort_did <- data.table(did_setup, outcomes[[t]], outcomes[[base_period]], aux$weights)
+        #the 2x2 dataset
+        cohort_did <- data.table(did_setup, y[[t]], y[[base_period]], aux$weights)
         names(cohort_did) <- c("D", "post.y", "pre.y", "weights")
         
-        #estimate did
-        if(!p$allow_unbalance_panel){
-          result <- estimate_did(cohort_did, covvars, p$control_type, 
-                                 last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]]) #cache
-        } else {
-          result <- estimate_did_rc(cohort_did, covvars, p$control_type, 
-                                    last_coef, cache_ps_fit_list[[gt_name]], cache_hess_list[[gt_name]]) #cache
-        }
-       
+        # estimate --------------------
+        
+        result <- estimate_did(dt_did = cohort_did, covvars, p, 
+                               last_coef, caches$ps[[gt_name]], caches$hess[[gt_name]])
+        
+        # post process --------------------
+        
         #collect the result
-        last_coef <- result$logit_coef #for faster convergence in next iter
         gt <- rbind(gt, data.table(G = g, time = t)) #the sequence matters for the weights
         gt_att <- c(gt_att, att = result$att)
         gt_inf_func[[gt_name]] <- result$inf_func
         
-        #assign cache for next outcome
-        if(is.null(cache_ps_fit_list[[gt_name]])){cache_ps_fit_list[[gt_name]] <- result$cache_ps_fit}
-        if(is.null(cache_hess_list[[gt_name]])){cache_hess_list[[gt_name]] <- result$cache_hess}
+        #caches
+        last_coef <- result$logit_coef #for faster convergence in next iter
+        if(is.null(caches$ps[[gt_name]])){caches$ps[[gt_name]] <- result$cache_ps_fit}
+        if(is.null(caches$hess[[gt_name]])){caches$hess[[gt_name]] <- result$cache_hess}
         
         rm(result)
         
       }
     }
-    
-    gt_inf_func[,placeholder := NULL]
-    names(gt_att) <- names(gt_inf_func)
-    outcome_result_list[[outcol]] <- list(att = gt_att, inf_func = gt_inf_func, gt = gt, outname = outcol)
+  
+  gt_inf_func[,placeholder := NULL]  
+  names(gt_att) <- names(gt_inf_func)
+  
+  return(list(
+    est = list(gt = gt, att = gt_att, inf_func = gt_inf_func),
+    caches = caches
+  ))    
+}
 
+get_base_period <- function(g,t,p){
+  if(p$base_period == "universal"){
+    base_period <- g-1-p$anticipation
+  } else {
+    base_period <- ifelse(t>=g, g-1-p$anticipation, t-1)
   }
-  
-  return(outcome_result_list)
-  
+  return(base_period)
 }
 
 get_did_setup <- function(g, t, base_period, aux, p){

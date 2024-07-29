@@ -122,6 +122,12 @@ coerce_dt <- function(dt, p){
   if(!is.numeric(dt[, time])){
     dt[, time := as.numeric(time)] 
   }
+
+  #chcek if there is availble never-treated group
+  if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){
+    warning("no never-treated availble, switching to not-yet-treated control")
+    p$control_option <- "notyet"
+  }
   
   if(p$allow_unbalance_panel){
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
