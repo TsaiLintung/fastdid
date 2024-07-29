@@ -77,52 +77,41 @@ fastdid <- function(data,
     data <- as.data.table(data)
   } 
   if(copy){dt <- copy(data)} else {dt <- data}
-
+  
   # validate arguments
   p <- as.list(environment()) #collect everything besides data
   p$data <- NULL
-  validate_argument(p, names(data))
-  
-  # validate data 
+  p$dt <- NULL
+  validate_argument(dt, p)
+
+  # validate and throw away not legal data 
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
-  if(validate){
-    varnames <- c("time", "G", "unit", outcomevar, weightvar, clustervar, covariatesvar, varycovariatesvar, filtervar)
-    dt <- validate_dt(dt, varnames, p)
-  }
+  dt <- validate_dt(dt, p)
   
   # preprocess -----------------------------------------------------------
   
   #make dt conform to the WLOG assumptions of fastdid
   coerce_result <- coerce_dt(dt, p) #also changed dt
   dt <- coerce_result$dt
-  
-  if(nrow(dt) == 0){
-    stop("no data after coercing the dataset")
-  }
+  p <- coerce_result$p
   
   # get auxiliary data
   aux <- get_auxdata(dt, p)
   
   # main part  -------------------------------------------------
 
-  # estimate attgt
   gt_result_list <- estimate_gtatt(aux, p)
-  
-  # aggregate the result by outcome
-  all_result <- rbindlist(lapply(gt_result_list, function(x){
-    result <- aggregate_gt(x, aux, p)
-    #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
-    result <- result |> convert_targets(result_type, coerce_result$time_change)
-    return(result)
-  }))
 
+  all_result <- aggregate_gt(gt_result_list, aux, p)
+  
+  #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
+  all_result <- convert_targets(all_result, p) 
+  
   return(all_result)
   
 }
 
 # small steps ----------------------------------------------------------------------
-
-
 
 coerce_dt <- function(dt, p){
   
@@ -163,10 +152,15 @@ coerce_dt <- function(dt, p){
     dt[time != 1, time := (time-1)/time_step+1]
   }
   
-  return(list(dt = dt,
-              time_change = list(time_step = time_step,
-                            max_time = max(time_periods),
-                            time_offset = time_offset)))
+  #add the information to p
+  p$time_step = time_step
+  p$time_offset = time_offset
+  
+  if(nrow(dt) == 0){
+    stop("no data after coercing the dataset")
+  }
+  
+  return(list(dt = dt, p = p))
   
 }
 
@@ -274,21 +268,23 @@ get_auxdata <- function(dt, p){
   
 }
 
-convert_targets <- function(results, result_type, t){
+convert_targets <- function(results, p){
   
+  result_type <- p$result_type
+
   if(result_type == "dynamic"){
     setnames(results, "target", "event_time")
     
   } else if (result_type == "cohort"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := recover_time(abs(target), t$time_offset, t$time_step)]
+    results[, target := recover_time(abs(target), p$time_offset, p$time_step)]
     setnames(results, "target", "cohort")
     
   } else if (result_type == "calendar"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := recover_time(abs(target), t$time_offset, t$time_step)]
+    results[, target := recover_time(abs(target), p$time_offset, p$time_step)]
     setnames(results, "target", "time")
     
   } else if (result_type == "group_time"){
@@ -297,8 +293,8 @@ convert_targets <- function(results, result_type, t){
     results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
     
     #recover the time
-    results[, cohort := recover_time(cohort, t$time_offset, t$time_step)]
-    results[, time := recover_time(time, t$time_offset, t$time_step)]
+    results[, cohort := recover_time(cohort, p$time_offset, p$time_step)]
+    results[, time := recover_time(time, p$time_offset, p$time_step)]
     
     results[, target := NULL]
     

@@ -1,4 +1,8 @@
-aggregate_gt <- function(gt_result, aux, p){
+aggregate_gt <- function(all_gt_result, aux, p){
+  rbindlist(lapply(all_gt_result, aggregate_gt_outcome, aux, p))
+}
+
+aggregate_gt_outcome <- function(gt_result, aux, p){
   
 
   #release the stuff

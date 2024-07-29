@@ -1,10 +1,16 @@
-validate_argument <- function(p, dt_names){
-
+validate_argument <- function(dt, p){
+  
+  if(!p$validate){
+    return(NULL)
+  }
+  
+  dt_names <- names(dt)
+  
   #release p
   for(name in names(p)){
     assign(name, p[[name]])
   }
-  
+
   name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
   check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
   
@@ -47,8 +53,10 @@ validate_argument <- function(p, dt_names){
   }
 }
 
-validate_dt <- function(dt,varnames,p){
+validate_dt <- function(dt, p){
 
+  varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
+  
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
   
@@ -99,5 +107,7 @@ validate_dt <- function(dt,varnames,p){
       dt <- dt[!unit %in% mis_unit[, unit]]
     }
   }
+
   return(dt)
+
 }
