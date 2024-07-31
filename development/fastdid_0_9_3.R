@@ -1,5 +1,5 @@
-#2024-05-07
-message('loading fastdid source ver. ver: 0.9.3 (timing), date: 2024-05-07')
+#2024-07-31
+message('loading fastdid source ver. ver: 0.9.3 (timing), date: 2024-07-31')
 require(data.table);
  require(stringr);
  require(BMisc);
@@ -17,13 +17,12 @@ aggregate_gt <- function(gt_result, aux, p){
   group_time <- gt_result$gt |> merge(pg_dt, by = "G")
   
   setorder(group_time, time, G) #change the order to match the order in gtatt
-  
   gt_result$inf_func <- as.matrix(gt_result$inf_func)
   
   if(p$result_type == "group_time"){
-    
+
     #don't need to do anything
-    targets <- group_time[, unique(G*max(time)+time)]
+    targets <- group_time[, paste0(G, ".", time)]
     inf_matrix <- gt_result$inf_func
     agg_att <- as.vector(gt_result$att)
     
@@ -172,169 +171,6 @@ get_se <- function(inf_matrix, boot, biters, cluster, clustervar) {
   return(unlist(se))
 }
 
-
-estimate_did <- function(dt_did, covvars, control_type,
-                         last_coef = NULL, cache_ps_fit, cache_hess){
-  
-  # preprocess --------
-  oldn <- dt_did[, .N]
-  data_pos <-  which(dt_did[, !is.na(D)])
-  dt_did <- dt_did[data_pos]
-  n <- dt_did[, .N]
-  
-  if(is.matrix(covvars)){
-    ipw <- control_type %in% c("ipw", "dr") 
-    or <- control_type %in% c("reg", "dr")
-    covvars <- covvars[data_pos,] 
-  } else {
-    ipw <- FALSE
-    or <- FALSE
-  }
-  
-  # ipw --------
-
-  if(ipw){
-    if(is.null(cache_ps_fit)|is.null(cache_hess)){ #if no cache, calcuate ipw
-
-      #estimate the logit
-      prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
-                                                    family = stats::binomial(), start = last_coef,
-                                                    weights = dt_did[, weights],
-                                                    control = parglm.control(nthreads = getDTthreads()),
-                                                    intercept = FALSE))
-      class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
-      #const is implicitly put into the ipw formula, need to incorporate it manually
-
-      logit_coef <-  prop_score_est$coefficients
-      
-      if(anyNA(logit_coef)){
-        warning("some propensity score estimation resulted in NA coefficients, likely cause by perfect colinearity")
-      }
-      
-      logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
-      prop_score_fit <- fitted(prop_score_est)
-      if(max(prop_score_fit) >= 1){warning(paste0("support overlap condition violated for some group_time"))}
-      prop_score_fit <- pmin(1-1e-16, prop_score_fit) #for the ipw
-
-      hess <- stats::vcov(prop_score_est) * n #for the influence function
-      hess[is.na(hess)|abs(hess) > 1e10] <- 0
-
-    } else { #when using multiple outcome, ipw cache can be reused
-      hess <- cache_hess
-      prop_score_fit <- cache_ps_fit
-      logit_coef <- NA #won't be needing the approximate cache
-    }
-
-    #get the results into the main did dt
-    dt_did[, ps := prop_score_fit]
-    dt_did[, treat_ipw_weight := weights*D]
-    dt_did[, cont_ipw_weight := weights*ps*(1-D)/(1-ps)]
-
-  } else {
-
-    prop_score_fit <- rep(1,n)
-    logit_coef <- NA
-    hess <- NA
-
-    dt_did[, treat_ipw_weight := weights*D]
-    dt_did[, cont_ipw_weight := weights*(1-D)]
-
-  }
-
-  #delta y is needed for PR
-  dt_did[, delta_y := post.y-pre.y]
-
-  # or --------
-
-  if(or){
-
-    #TODO: this should be optimized with better backend and some caching
-
-    #should change to speedlm or something
-
-    control_bool <- dt_did[, D==0]
-    reg_coef <- stats::coef(stats::lm.wfit(x = covvars[control_bool,], y = dt_did[control_bool,delta_y],
-                                           w = dt_did[control_bool,weights]))
-
-    if(anyNA(reg_coef)){
-      stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
-    }
-
-    #the control function from outcome regression
-    dt_did[, or_delta := as.vector(tcrossprod(reg_coef, covvars))]
-
-  } else {
-    dt_did[, or_delta := 0]
-  }
-
-  #did --------
-
-  dt_did[, att_treat := treat_ipw_weight*(delta_y-or_delta)] #minus the OR adjust
-  dt_did[, att_cont := cont_ipw_weight*(delta_y-or_delta)]
-
-  weighted_treat_delta <- dt_did[,sum(att_treat)/sum(treat_ipw_weight)]
-  weighted_cont_delta <- dt_did[,sum(att_cont)/sum(cont_ipw_weight)]
-
-  att <- weighted_treat_delta - weighted_cont_delta
-  
-  # influence --------
-
-  # influence from ipw
-  if(ipw){
-
-    M2 <- colMeans(dt_did[, cont_ipw_weight*(delta_y-weighted_cont_delta-or_delta)] * covvars)
-
-    score_ps <- dt_did[, weights*(D-ps)] * covvars
-    
-    asym_linear_ps <- score_ps %*% hess
-
-    #ipw for control
-    inf_cont_ipw <- asym_linear_ps %*% as.matrix(M2)
-
-  } else {inf_cont_ipw <- 0}
-
-  if(or){
-
-    M1 <- colMeans(dt_did[, treat_ipw_weight] * covvars)
-    M3 <- colMeans(dt_did[, cont_ipw_weight] * covvars)
-
-    or_x <- dt_did[, weights*(1-D)] * covvars
-    or_ex <- dt_did[, weights*(1-D)*(delta_y - or_delta)] * covvars
-    XpX <- crossprod(or_x, covvars)/n
-
-    #calculate alrw = eX (XpX)^-1 by solve XpX*alrw = ex, much faster since avoided inv
-    asym_linear_or <- t(solve(XpX, t(or_ex)))# |> reverse_col()
-
-    #or for treat
-    inf_treat_or <- -asym_linear_or %*% M1 #a negative sign here, since or_delta is subtracted from the att
-
-    #or for control
-    inf_cont_or <- -asym_linear_or %*% M3
-
-  } else {
-    inf_treat_or <- 0
-    inf_cont_or <- 0
-  }
-
-  # influence from did
-  inf_cont_did <- dt_did[, att_cont - cont_ipw_weight*weighted_cont_delta]
-  inf_treat_did <-  dt_did[, (att_treat - treat_ipw_weight*weighted_treat_delta)]
-
-
-  #get overall influence function
-  #if(dt_did[, mean(cont_ipw_weight)] < 1e-10){warning("little/no overlap in covariates between control and treat group, estimates are unstable.")}
-  inf_cont <- (inf_cont_did+inf_cont_ipw+inf_cont_or)/dt_did[, mean(cont_ipw_weight)]
-  inf_treat <- (inf_treat_did+inf_treat_or)/dt_did[,mean(treat_ipw_weight)]
-  inf_func_no_na <- inf_treat - inf_cont
-
-  #post process (fill zeros for irrelevant ones)
-  inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
-  inf_func_no_na <- inf_func_no_na * oldn / n #adjust the value such that mean over the whole id size give the right result
-  inf_func[data_pos] <- inf_func_no_na
-
-  return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
-              cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
-}
 
 estimate_did_rc <- function(dt_did, covvars, control_type,
                          last_coef = NULL, cache_ps_fit, cache_hess){
@@ -543,6 +379,169 @@ estimate_did_rc <- function(dt_did, covvars, control_type,
               cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
 }
 
+estimate_did <- function(dt_did, covvars, control_type,
+                         last_coef = NULL, cache_ps_fit, cache_hess){
+  
+  # preprocess --------
+  oldn <- dt_did[, .N]
+  data_pos <-  which(dt_did[, !is.na(D)])
+  dt_did <- dt_did[data_pos]
+  n <- dt_did[, .N]
+  
+  if(is.matrix(covvars)){
+    ipw <- control_type %in% c("ipw", "dr") 
+    or <- control_type %in% c("reg", "dr")
+    covvars <- covvars[data_pos,] 
+  } else {
+    ipw <- FALSE
+    or <- FALSE
+  }
+  
+  # ipw --------
+
+  if(ipw){
+    if(is.null(cache_ps_fit)|is.null(cache_hess)){ #if no cache, calcuate ipw
+
+      #estimate the logit
+      prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
+                                                    family = stats::binomial(), start = last_coef,
+                                                    weights = dt_did[, weights],
+                                                    control = parglm.control(nthreads = getDTthreads()),
+                                                    intercept = FALSE))
+      class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
+      #const is implicitly put into the ipw formula, need to incorporate it manually
+
+      logit_coef <-  prop_score_est$coefficients
+      
+      if(anyNA(logit_coef)){
+        warning("some propensity score estimation resulted in NA coefficients, likely cause by perfect colinearity")
+      }
+      
+      logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
+      prop_score_fit <- fitted(prop_score_est)
+      if(max(prop_score_fit) >= 1){warning(paste0("support overlap condition violated for some group_time"))}
+      prop_score_fit <- pmin(1-1e-16, prop_score_fit) #for the ipw
+
+      hess <- stats::vcov(prop_score_est) * n #for the influence function
+      hess[is.na(hess)|abs(hess) > 1e10] <- 0
+
+    } else { #when using multiple outcome, ipw cache can be reused
+      hess <- cache_hess
+      prop_score_fit <- cache_ps_fit
+      logit_coef <- NA #won't be needing the approximate cache
+    }
+
+    #get the results into the main did dt
+    dt_did[, ps := prop_score_fit]
+    dt_did[, treat_ipw_weight := weights*D]
+    dt_did[, cont_ipw_weight := weights*ps*(1-D)/(1-ps)]
+
+  } else {
+
+    prop_score_fit <- rep(1,n)
+    logit_coef <- NA
+    hess <- NA
+
+    dt_did[, treat_ipw_weight := weights*D]
+    dt_did[, cont_ipw_weight := weights*(1-D)]
+
+  }
+
+  #delta y is needed for PR
+  dt_did[, delta_y := post.y-pre.y]
+
+  # or --------
+
+  if(or){
+
+    #TODO: this should be optimized with better backend and some caching
+
+    #should change to speedlm or something
+
+    control_bool <- dt_did[, D==0]
+    reg_coef <- stats::coef(stats::lm.wfit(x = covvars[control_bool,], y = dt_did[control_bool,delta_y],
+                                           w = dt_did[control_bool,weights]))
+
+    if(anyNA(reg_coef)){
+      stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
+    }
+
+    #the control function from outcome regression
+    dt_did[, or_delta := as.vector(tcrossprod(reg_coef, covvars))]
+
+  } else {
+    dt_did[, or_delta := 0]
+  }
+
+  #did --------
+
+  dt_did[, att_treat := treat_ipw_weight*(delta_y-or_delta)] #minus the OR adjust
+  dt_did[, att_cont := cont_ipw_weight*(delta_y-or_delta)]
+
+  weighted_treat_delta <- dt_did[,sum(att_treat)/sum(treat_ipw_weight)]
+  weighted_cont_delta <- dt_did[,sum(att_cont)/sum(cont_ipw_weight)]
+
+  att <- weighted_treat_delta - weighted_cont_delta
+  
+  # influence --------
+
+  # influence from ipw
+  if(ipw){
+
+    M2 <- colMeans(dt_did[, cont_ipw_weight*(delta_y-weighted_cont_delta-or_delta)] * covvars)
+
+    score_ps <- dt_did[, weights*(D-ps)] * covvars
+    
+    asym_linear_ps <- score_ps %*% hess
+
+    #ipw for control
+    inf_cont_ipw <- asym_linear_ps %*% as.matrix(M2)
+
+  } else {inf_cont_ipw <- 0}
+
+  if(or){
+
+    M1 <- colMeans(dt_did[, treat_ipw_weight] * covvars)
+    M3 <- colMeans(dt_did[, cont_ipw_weight] * covvars)
+
+    or_x <- dt_did[, weights*(1-D)] * covvars
+    or_ex <- dt_did[, weights*(1-D)*(delta_y - or_delta)] * covvars
+    XpX <- crossprod(or_x, covvars)/n
+
+    #calculate alrw = eX (XpX)^-1 by solve XpX*alrw = ex, much faster since avoided inv
+    asym_linear_or <- t(solve(XpX, t(or_ex)))# |> reverse_col()
+
+    #or for treat
+    inf_treat_or <- -asym_linear_or %*% M1 #a negative sign here, since or_delta is subtracted from the att
+
+    #or for control
+    inf_cont_or <- -asym_linear_or %*% M3
+
+  } else {
+    inf_treat_or <- 0
+    inf_cont_or <- 0
+  }
+
+  # influence from did
+  inf_cont_did <- dt_did[, att_cont - cont_ipw_weight*weighted_cont_delta]
+  inf_treat_did <-  dt_did[, (att_treat - treat_ipw_weight*weighted_treat_delta)]
+
+
+  #get overall influence function
+  #if(dt_did[, mean(cont_ipw_weight)] < 1e-10){warning("little/no overlap in covariates between control and treat group, estimates are unstable.")}
+  inf_cont <- (inf_cont_did+inf_cont_ipw+inf_cont_or)/dt_did[, mean(cont_ipw_weight)]
+  inf_treat <- (inf_treat_did+inf_treat_or)/dt_did[,mean(treat_ipw_weight)]
+  inf_func_no_na <- inf_treat - inf_cont
+
+  #post process (fill zeros for irrelevant ones)
+  inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
+  inf_func_no_na <- inf_func_no_na * oldn / n #adjust the value such that mean over the whole id size give the right result
+  inf_func[data_pos] <- inf_func_no_na
+
+  return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
+              cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
+}
+
 estimate_gtatt <- function(aux, p) {
 
   #chcek if there is availble never-treated group
@@ -600,6 +599,7 @@ estimate_gtatt <- function(aux, p) {
         #assign cache for next outcome
         if(is.null(cache_ps_fit_list[[gt_name]])){cache_ps_fit_list[[gt_name]] <- result$cache_ps_fit}
         if(is.null(cache_hess_list[[gt_name]])){cache_hess_list[[gt_name]] <- result$cache_hess}
+        
         rm(result)
         
       }
@@ -612,6 +612,7 @@ estimate_gtatt <- function(aux, p) {
   }
   
   return(outcome_result_list)
+  
 }
 
 get_did_setup <- function(g, t, base_period, aux, p){
@@ -639,7 +640,8 @@ get_did_setup <- function(g, t, base_period, aux, p){
   if(t == base_period | #no treatment effect for the base period
      base_period < min(aux$time_periods) | #no treatment effect for the first period, since base period is not observed
      g >= max_control_cohort | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
-     t >= max_control_cohort){ #no control available if the last cohort is treated too
+     t >= max_control_cohort | #no control available if the last cohort is treated too
+     min_control_cohort > max_control_cohort){ #no control avalilble, most likely due to anticipation
     return(NULL)
   } else {
     #select the control and treated cohorts
@@ -758,86 +760,25 @@ fastdid <- function(data,
                     copy = TRUE, validate = TRUE,
                     max_control_cohort_diff = Inf, anticipation = 0, min_control_cohort_diff = -Inf, base_period = "universal"
                     ){
-  
-  # validate arguments --------------------------------------------------------
 
+  # validation --------------------------------------------------------
+  
   if(!is.data.table(data)){
     warning("coercing input into a data.table.")
     data <- as.data.table(data)
   } 
   if(copy){dt <- copy(data)} else {dt <- data}
+
+  # validate arguments
+  p <- as.list(environment()) #collect everything besides data
+  p$data <- NULL
+  validate_argument(p, names(data))
   
-  dt_names <- names(dt)
-  name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
-  check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
-  
-  covariate_message <- "__ARG__ must be NA or a character vector which are all names of columns from the dataset."
-  check_set_arg(varycovariatesvar, covariatesvar, outcomevar, 
-            "NA | multi match", .choices = dt_names, .message = covariate_message)
-  
-  checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
-  check_set_arg(weightvar, clustervar, filtervar,
-            "NA | match", .choices = dt_names, .message = checkvar_message)
-  
-  check_set_arg(control_option, "match", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
-  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr")) 
-  check_set_arg(base_period, "match", .choices = c("varying", "universal"))
-  check_arg(copy, validate, boot, allow_unbalance_panel, "scalar logical")
-  check_arg(max_control_cohort_diff, min_control_cohort_diff, anticipation, "scalar numeric")
-  
-  if(!is.na(balanced_event_time)){
-    if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
-    check_arg(balanced_event_time, "numeric scalar")
-  }
-  if(allow_unbalance_panel == TRUE & control_type %in% c("dr", "reg")){
-    stop("fastdid currently only supprts ipw when allowing for unbalanced panels.")
-  }
-  if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
-    stop("fastdid currently only supprts time varying covariates when allowing for unbalanced panels.")
-  }
-  if(any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)){
-    stop("time-varying var and invariant var have overlaps.")
-  }
-  if(!boot & !allNA(clustervar)){
-    stop("clustering only available with bootstrap")
-  }
-  
-  # coerce non-sensible option
-  
-  if((!is.infinite(max_control_cohort_diff) | !is.infinite(min_control_cohort_diff)) & control_option == "never"){
-    warning("control_cohort_diff can only be used with not yet")
-    p$control_option <- "notyet"
-  }
-  
-  p <- list(timevar = timevar,
-            cohortvar = cohortvar,
-            unitvar = unitvar,
-            outcomevar =  outcomevar,
-            weightvar = weightvar,
-            clustervar = clustervar,
-            filtervar = filtervar,
-            covariatesvar = covariatesvar,
-            varycovariatesvar = varycovariatesvar,
-            control_option = control_option,
-            result_type = result_type,
-            balanced_event_time = balanced_event_time,
-            control_type = control_type,
-            allow_unbalance_panel = allow_unbalance_panel,
-            boot = boot, 
-            biters = biters,
-            max_control_cohort_diff = max_control_cohort_diff,
-            min_control_cohort_diff = min_control_cohort_diff,
-            anticipation = anticipation, 
-            base_period = base_period)
-  
-  
-  # validate data -----------------------------------------------------
-  
+  # validate data 
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
-  
   if(validate){
-    varnames <- c("time", "G", "unit",outcomevar,weightvar,clustervar,covariatesvar,varycovariatesvar,filtervar)
-    dt <- validate_did(dt, varnames, p)
+    varnames <- c("time", "G", "unit", outcomevar, weightvar, clustervar, covariatesvar, varycovariatesvar, filtervar)
+    dt <- validate_dt(dt, varnames, p)
   }
   
   # preprocess -----------------------------------------------------------
@@ -845,6 +786,11 @@ fastdid <- function(data,
   #make dt conform to the WLOG assumptions of fastdid
   coerce_result <- coerce_dt(dt, p) #also changed dt
   dt <- coerce_result$dt
+  
+  if(nrow(dt) == 0){
+    stop("no data after coercing the dataset")
+  }
+  
   # get auxiliary data
   aux <- get_auxdata(dt, p)
   
@@ -866,6 +812,8 @@ fastdid <- function(data,
 }
 
 # small steps ----------------------------------------------------------------------
+
+
 
 coerce_dt <- function(dt, p){
   
@@ -1036,8 +984,8 @@ convert_targets <- function(results, result_type, t){
     
   } else if (result_type == "group_time"){
     
-    results[, cohort := floor((target-1)/t$max_time)]
-    results[, time := (target-cohort*t$max_time)]
+    results[, cohort := as.numeric(str_split_i(target, "\\.", 1))]
+    results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
     
     #recover the time
     results[, cohort := recover_time(cohort, t$time_offset, t$time_step)]
@@ -1058,27 +1006,16 @@ recover_time <- function(time, time_offset, time_step){
 
 NULL
 
-if(FALSE){
-  text <- ". agg_weight att att_cont att_treat attgt cohort cohort_size
-    conf_lwb conf_upb const cont_ipw_weight count delta_y element_rect
-    element_text event_time pg placeholder post.y pre.y ps s se target
-    tau time_fe treat_ipw_weight treat_latent type unit unit_fe weight x
-    x2 x_trend y y0 y1 y2 time outcome V1 att_cont_post att_cont_pre att_treat_post att_treat_pre inpost
-     inpre max_et min_et new_unit or_delta or_delta_post or_delta_pre
-     targeted used"
-  text <- text |> str_remove_all("\\\n") |>str_split(" ") |> unlist()
-  text <- text[text!=""]
-  text <- text |> str_flatten(collapse = "','")
-  text <- paste0("c('", text, "')")
-}
-
 # quiets concerns of R CMD check re: the .'s that appear in pipelines and data.table variables
 utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','cohort','cohort_size','conf_lwb','conf_upb',
                          'const','cont_ipw_weight','count','delta_y','element_rect','element_text','event_time','pg','placeholder',
                          'post.y','pre.y','ps','s','se','target','tau','time_fe',
                          'treat_ipw_weight','treat_latent','type','unit','unit_fe','weight','x','x2',
-                         'x_trend','y','y0','y1','y2', 'time', 'weights', 'outcome', "G", "D",
-                         'V1','att_cont_post','att_cont_pre','att_treat_post','att_treat_pre','inpost','inpre','max_et','min_et','new_unit','or_delta','or_delta_post','or_delta_pre','targeted','used'))
+                         'x_trend','y','y0','y1','y2', 'time', 'weights', 'outcome', "G", "D", 'xvar',
+                         'V1','att_cont_post','att_cont_pre','att_treat_post','att_treat_pre','inpost','inpre','max_et','min_et','new_unit','or_delta','or_delta_post','or_delta_pre','targeted','used',
+                         "timevar", "cohortvar", "unitvar", "outcomevar", "control_option", "result_type", "balanced_event_time", "control_type",
+                         "allow_unbalance_panel", "boot", "biters", "weightvar", "clustervar", "covariatesvar", "varycovariatesvar", "filtervar",
+                         "copy", "validate", "max_control_cohort_diff", "anticipation", "min_control_cohort_diff", "base_period"))
 
 
 #' Create an event study plot for Difference-in-Differences (DiD) analysis.
@@ -1088,14 +1025,13 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
 #' @param dt A data table containing the results of the DiD analysis. It should include columns for 'att' (average treatment effect), 'se' (standard error), and 'event_time' (time points).
 #' @param graphname A character string specifying the title of the plot (default is "event study plot").
 #' @param note A character string for adding additional notes or comments to the plot (default is empty).
-#' @param base_time The time point representing the base period (default is -1).
 #' @param significance_level The significance level for confidence intervals (default is 0.05).
 #'
 #' @return A ggplot2 object representing the event study plot.
 #' @export
 
 plot_did_dynamics <-function(dt, 
-                             graphname = "event study plot", note = "", base_time = -1, significance_level = 0.05#, 
+                             graphname = "event study plot", note = "", significance_level = 0.05#, 
                              #stratify_offset =0.1
 ){
   
@@ -1105,7 +1041,12 @@ plot_did_dynamics <-function(dt,
     return(NULL)
   }
   
-
+  
+  #find the base_period
+  et_range <- min(dt[, event_time]):max(dt[, event_time])
+  base_time <- et_range[!et_range %in% dt[, unique(event_time)]]
+  if(length(base_time)!=1){stop("missing more then one period")}
+  
   #add the base period
   if("outcome" %in% names(dt)){
     base_row <- data.table(att = 0, se = 0, event_time = base_time, outcome = dt[, unique(outcome)])
@@ -1156,6 +1097,7 @@ plot_did_dynamics <-function(dt,
 #' @param seed Seed for random number generation.
 #' @param stratify Whether to stratify the dataset based on a binary covariate.
 #' @param treatment_assign The method for treatment assignment ("latent" or "uniform").
+#' @param vary_cov include time-varying covariates
 #'
 #' @return A list containing the simulated dataset (dt) and the treatment effect values (att).
 #'
@@ -1296,7 +1238,56 @@ reverse_col <- function(x){
   return(x[,ncol(x):1])
 }
 
-validate_did <- function(dt,varnames,p){
+validate_argument <- function(p, dt_names){
+
+  #release p
+  for(name in names(p)){
+    assign(name, p[[name]])
+  }
+  
+  name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
+  check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
+  
+  covariate_message <- "__ARG__ must be NA or a character vector which are all names of columns from the dataset."
+  check_set_arg(varycovariatesvar, covariatesvar, outcomevar, 
+                "NA | multi match", .choices = dt_names, .message = covariate_message)
+  
+  checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
+  check_set_arg(weightvar, clustervar, filtervar,
+                "NA | match", .choices = dt_names, .message = checkvar_message)
+  
+  check_set_arg(control_option, "match", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
+  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr")) 
+  check_set_arg(base_period, "match", .choices = c("varying", "universal"))
+  check_arg(copy, validate, boot, allow_unbalance_panel, "scalar logical")
+  check_arg(max_control_cohort_diff, min_control_cohort_diff, anticipation, "scalar numeric")
+  
+  if(!is.na(balanced_event_time)){
+    if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
+    check_arg(balanced_event_time, "numeric scalar")
+  }
+  if(allow_unbalance_panel == TRUE & control_type %in% c("dr", "reg")){
+    stop("fastdid currently only supprts ipw when allowing for unbalanced panels.")
+  }
+  if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
+    stop("fastdid currently only supprts time varying covariates when allowing for unbalanced panels.")
+  }
+  if(any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)){
+    stop("time-varying var and invariant var have overlaps.")
+  }
+  if(!boot & !allNA(clustervar)){
+    stop("clustering only available with bootstrap")
+  }
+  
+  # coerce non-sensible option
+  if(!is.na(clustervar) && unitvar == clustervar){clustervar <- NA} #cluster on id anyway, would cause error otherwise
+  if((!is.infinite(max_control_cohort_diff) | !is.infinite(min_control_cohort_diff)) & control_option == "never"){
+    warning("control_cohort_diff can only be used with not yet")
+    p$control_option <- "notyet"
+  }
+}
+
+validate_dt <- function(dt,varnames,p){
 
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
