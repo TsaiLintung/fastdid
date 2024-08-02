@@ -45,6 +45,11 @@ expect_silent(fastdid(dt[G != 3], timevar = "time", cohortvar = "G", unitvar = "
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
               info = "alternative alpha")
 
+dt2 <- copy(dt)
+setnames(dt2, c("time", "G", "unit"), c("t", "g", "u"))
+expect_silent(fastdid(dt2, timevar = "t", cohortvar = "g", unitvar = "u",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
+              info = "other column names")
+
 # bootstrap part ------------------------
 
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",

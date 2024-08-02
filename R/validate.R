@@ -53,6 +53,7 @@ validate_argument <- function(dt, p){
 validate_dt <- function(dt, p){
 
   varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
+  varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar)]
   
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]

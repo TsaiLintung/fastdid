@@ -1,4 +1,5 @@
 library(did)
+library(fastdid)
 
 rm(list = ls());gc()
 
@@ -6,8 +7,8 @@ data(mpdta)
 mpdta$x <- rnorm(nrow(mpdta))
 
 #the unbalanced panel OR influence function calculation (DRDID::drdid_rc.R, 230, should be post - pre - or), since control function is subtracted
-#simultaneous valid band, should subset t>g  before getting the new critical value? (compute.aggte 376-383)
 
+# did ---------
 
 # repeated cross section with 
 out <- att_gt(yname="lemp",
@@ -46,3 +47,9 @@ for(est in c("dr", "ipw", "reg")){
     rm(out, agg)
   }
 }
+
+# fastdid ------------
+mpdta <- as.data.table(mpdta)
+setnames(mpdta, "first.treat", "firsttreat")
+result <- fastdid(mpdta, timevar = "year", cohortvar = "firsttreat", unitvar = "countyreal",outcomevar = "lemp",  result_type = "simple",
+                  allow_unbalance_panel = FALSE, covariatesvar = "x")

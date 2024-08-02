@@ -85,8 +85,10 @@ fastdid <- function(data,
   validate_argument(dt, p)
 
   # validate and throw away not legal data 
+  
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   dt <- validate_dt(dt, p)
+  
   
   # preprocess -----------------------------------------------------------
   
