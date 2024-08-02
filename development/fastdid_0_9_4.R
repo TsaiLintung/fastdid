@@ -22,9 +22,9 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   # post process
   result <- data.table(agg_sch$targets, agg_att, agg_se_result$se)
   names(result) <- c("target", "att", "se")
-  result[,outcome := gt_result$outname]
-  result[,att_ciub := att+se*agg_se_result$crit_val]
-  result[,att_cilb := att-se*agg_se_result$crit_val]
+  result[,`:=`(outcome = gt_result$outname,
+              att_ciub = att+se*agg_se_result$crit_val,
+              att_cilb = att-se*agg_se_result$crit_val)]
   
   return(result)
 }
@@ -37,7 +37,6 @@ get_agg_sch <- function(gt_result, aux, p){
   id_cohorts <- aux$dt_inv[, G]
   result_type <- p$result_type
   agg_weights <- data.table()
-  bool_to_pn <- function(x){ifelse(x, 1, -1)}
   
   #create group_time
   id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
@@ -52,18 +51,18 @@ get_agg_sch <- function(gt_result, aux, p){
   }
   
   #choose the target based on aggregation type
+  group_time[, post := as.numeric(ifelse(time >= G, 1, -1))]
   if (result_type == "dynamic") {
     group_time[, target := time-G]
   } else if (result_type == "group") {
-    group_time[, target := G*(bool_to_pn(time>=G))] # group * treated
+    group_time[, target := G*post] # group * treated
   } else if (result_type == "time") {
-    group_time[, target := time*(bool_to_pn(time>=G))] #calendar time * treated
+    group_time[, target := time*post] #calendar time * treated
   } else if (result_type == "simple") {
-    group_time[, target := bool_to_pn(time>=G)] #treated / not treated
+    group_time[, target := post] #treated / not treated
   }  
   
-  targets <- group_time[, unique(target)]
-  targets <- sort(as.integer(targets))
+  targets <- sort(group_time[, unique(target)])
   
   #for balanced cohort composition in dynamic setting
   #a cohort us only used if it is seen for all dynamic time
@@ -202,7 +201,7 @@ get_se <- function(inf_matrix, aux, p) {
 }
 
 
-estimate_did <- function(dt_did, covvars, p, last_coef, cache_ps_fit, cache_hess){
+estimate_did <- function(dt_did, covvars, p, last_coef, cache){
   
   #estimate did
   param <- as.list(environment())
@@ -215,7 +214,7 @@ estimate_did <- function(dt_did, covvars, p, last_coef, cache_ps_fit, cache_hess
 }
 
 estimate_did_bp <- function(dt_did, covvars, p,
-                         last_coef = NULL, cache_ps_fit, cache_hess){
+                         last_coef = NULL, cache){
   
   # preprocess --------
   oldn <- dt_did[, .N]
@@ -235,8 +234,7 @@ estimate_did_bp <- function(dt_did, covvars, p,
   # ipw --------
 
   if(ipw){
-    if(is.null(cache_ps_fit)|is.null(cache_hess)){ #if no cache, calcuate ipw
-
+    if(is.null(cache)){ #if no cache, calcuate ipw
       #estimate the logit
       prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
                                                     family = stats::binomial(), start = last_coef,
@@ -259,10 +257,12 @@ estimate_did_bp <- function(dt_did, covvars, p,
 
       hess <- stats::vcov(prop_score_est) * n #for the influence function
       hess[is.na(hess)|abs(hess) > 1e10] <- 0
+      
+      cache <- list(hess = hess, ps = prop_score_fit)
 
     } else { #when using multiple outcome, ipw cache can be reused
-      hess <- cache_hess
-      prop_score_fit <- cache_ps_fit
+      hess <- cache$hess
+      prop_score_fit <- cache$ps
       logit_coef <- NA #won't be needing the approximate cache
     }
 
@@ -378,7 +378,7 @@ estimate_did_bp <- function(dt_did, covvars, p,
 }
 
 estimate_did_rc <- function(dt_did, covvars, p,
-                            last_coef = NULL, cache_ps_fit, cache_hess){
+                            last_coef = NULL, cache){
   
   #TODO: skip if not enough valid data
   
@@ -586,7 +586,7 @@ estimate_did_rc <- function(dt_did, covvars, p,
 
 
 estimate_gtatt <- function(aux, p){
-  caches <- list(ps = NULL, hess = NULL)
+  caches <- list()
   outcome_results <- list()
   for(outcol in p$outcomevar){
     y <- aux$outcomes_list[[outcol]]
@@ -618,7 +618,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         if(is.null(did_setup)){next} #no gtatt if no did setup
         
         #covariates matrix
-        covvars <- get_covvars(aux$covariates, aux$varycovariates, base_period, t)
+        covvars <- get_covvars(base_period, t, aux, p)
         
         #the 2x2 dataset
         cohort_did <- data.table(did_setup, y[[t]], y[[base_period]], aux$weights)
@@ -627,7 +627,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         # estimate --------------------
         
         result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, 
-                               last_coef, caches$ps[[gt_name]], caches$hess[[gt_name]]),
+                               last_coef, caches[[gt_name]]),
                            error = function(e){stop("DiD estimation failed for group-", recover_time(g, p$time_offset, p$time_step) , 
                                                     " time-", recover_time(t, p$time_offset, p$time_step), ": ", e)})
         
@@ -640,8 +640,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         
         #caches
         last_coef <- result$logit_coef #for faster convergence in next iter
-        if(is.null(caches$ps[[gt_name]])){caches$ps[[gt_name]] <- result$cache_ps_fit}
-        if(is.null(caches$hess[[gt_name]])){caches$hess[[gt_name]] <- result$cache_hess}
+        if(is.null(caches[[gt_name]])){caches[[gt_name]] <- result$cache_fit}
         
         rm(result)
         
@@ -652,10 +651,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
   names(gt_att) <- names(gt_inf_func)
   gt_inf_func <- as.matrix(gt_inf_func)
   
-  return(list(
-    est = list(gt = gt, att = gt_att, inf_func = gt_inf_func),
-    caches = caches
-  ))    
+  return(list(est = list(gt = gt, att = gt_att, inf_func = gt_inf_func), caches = caches))    
 }
 
 get_base_period <- function(g,t,p){
@@ -679,15 +675,19 @@ get_did_setup <- function(g, t, base_period, aux, p){
   }
   max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
   
-  #experimental stuff
-  if(!is.infinite(p$exper$max_control_cohort_diff)){
+  #experimental
+  if(!is.null(p$exper$max_control_cohort_diff)){
     max_control_cohort <- min(g+p$exper$max_control_cohort_diff, max(treated_cohorts))
   } 
-  if(!is.infinite(p$exper$min_control_cohort_diff)){
+  if(!is.null(p$exper$min_control_cohort_diff)){
     min_control_cohort <- max(g+p$exper$min_control_cohort_diff, min(treated_cohorts))
   } 
-  if(t-g > p$exper$max_dynamic | t-g < p$exper$min_dynamic){return(NULL)}
-  
+  if((!is.null(p$exper$max_dynami))){
+    if(t-g > p$exper$max_dynamic){return(NULL)}
+  }
+  if(!is.null(p$exper$min_dynami)){
+    if(t-g < p$exper$min_dynamic){return(NULL)}
+  }
   
   # invalid gt
   if(t == base_period | #no treatment effect for the base period
@@ -703,7 +703,6 @@ get_did_setup <- function(g, t, base_period, aux, p){
   did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
   did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
   
-  
   if(!is.na(p$exper$filtervar)){
     did_setup[!aux$filters[[base_period]]] <- NA #only use units with filter == TRUE at base period
   }
@@ -717,29 +716,28 @@ get_cohort_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort
   return(start:end)
 }
 
-get_covvars <- function(covariates, varycovariates, base_period, t){
+get_covvars <- function(base_period, t, aux, p){
   
-  if(is.list(varycovariates)){
+  if(all(is.na(p$covariatesvar)) & all(is.na(p$varycovariatesvar))){return(NA)}
+  covvars <- data.table()
+  
+  #add time-varying covariates
+  if(!all(is.na(p$varycovariatesvar))){
     
-    precov <- varycovariates[[base_period]]
+    precov <- aux$varycovariates[[base_period]]
     names(precov) <- paste0("pre_", names(precov))
-    postcov <- varycovariates[[t]]-varycovariates[[base_period]]
-    names(postcov) <- paste0("post_", names(varycovariates[[t]]))
-    
-    if(is.data.table(covariates)){
-      covvars <- cbind(covariates, cbind(precov, postcov)) #if covariates is na
-    } else {
-      covvars <- cbind(const = -1, cbind(precov, postcov)) #if covariates is na
-    }
-    covvars <- as.matrix(covvars)
-    
-  } else {
-    if(is.data.table(covariates)){
-      covvars <- as.matrix(covariates) #will be NA if covariatesvar have nothing
-    } else {
-      covvars <- NA
-    }
+    postcov <- aux$varycovariates[[t]]-aux$varycovariates[[base_period]]
+    names(postcov) <- paste0("post_", names(aux$varycovariates[[t]]))
+    covvars <- cbind(covvars, cbind(precov, postcov))
   }
+  
+  #add time-invariant covariates
+  if(!all(is.na(p$covariatesvar))){
+    covvars <- cbind(aux$covariates, covvars)
+  }
+  
+  #add constant
+  covvars <- as.matrix(cbind(const = -1, covvars))
   return(covvars)
 }
 
@@ -747,7 +745,7 @@ get_covvars <- function(covariates, varycovariates, base_period, t){
 #'
 #' Performs Difference-in-Differences (DID) estimation fast.
 #'
-#' @param data A data table containing the panel data.
+#' @param data A data.table containing the panel data.
 #' @param timevar The name of the time variable.
 #' @param cohortvar The name of the cohort (group) variable.
 #' @param unitvar The name of the unit (id) variable.
@@ -759,9 +757,9 @@ get_covvars <- function(covariates, varycovariates, base_period, t){
 #' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE 
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
-#' @param cband Logical, indicate whether to use uniform confidence band or just point-wise, defulat is FALSE (use point-wise)
+#' @param cband Logical, indicate whether to use uniform confidence band or point-wise, defulat is FALSE (use point-wise)
 #' @param alpha The significance level, default is 0.05
-#' @param weightvar The name of the weight variable (optional).
+#' @param weightvar The name of the weight variable, if not specified will cluster on unit level (optional).
 #' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
 #' @param covariatesvar A character vector containing the names of time-invariant covariate variables (optional).
 #' @param varycovariatesvar A character vector containing the names of time-varying covariate variables (optional).
@@ -813,12 +811,7 @@ fastdid <- function(data,
                     weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
-                    exper = list(
-                      max_control_cohort_diff = Inf,
-                      min_control_cohort_diff = -Inf,
-                      max_dynamic = Inf,
-                      min_dynamic = -Inf,
-                      filtervar = NA)){
+                    exper = list(filtervar = NA)){
 
   # validation --------------------------------------------------------
   
@@ -835,8 +828,10 @@ fastdid <- function(data,
   validate_argument(dt, p)
 
   # validate and throw away not legal data 
+  
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   dt <- validate_dt(dt, p)
+  
   
   # preprocess -----------------------------------------------------------
   
@@ -991,7 +986,7 @@ get_auxdata <- function(dt, p){
   }
   
   if(!allNA(p$covariatesvar)){
-    covariates <- cbind(const = -1, dt_inv[,.SD, .SDcols = p$covariatesvar])
+    covariates <- dt_inv[,.SD, .SDcols = p$covariatesvar]
   } else {
     covariates <- NA
   }
@@ -1076,7 +1071,7 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
                          'V1','att_cont_post','att_cont_pre','att_treat_post','att_treat_pre','inpost','inpre','max_et','min_et','new_unit','or_delta','or_delta_post','or_delta_pre','targeted','used',
                          "timevar", "cohortvar", "unitvar", "outcomevar", "control_option", "result_type", "balanced_event_time", "control_type",
                          "allow_unbalance_panel", "boot", "biters", "weightvar", "clustervar", "covariatesvar", "varycovariatesvar", "filtervar",
-                         "copy", "validate", "max_control_cohort_diff", "anticipation", "min_control_cohort_diff", "base_period"))
+                         "copy", "validate", "max_control_cohort_diff", "anticipation", "min_control_cohort_diff", "base_period", "post", "att_ciub", "att_cilb", "cband", "alpha"))
 
 
 #' Create an event study plot for Difference-in-Differences (DiD) analysis.
@@ -1340,14 +1335,16 @@ validate_argument <- function(dt, p){
     stop("clustering and uniform confidence interval only available with bootstrap")
   }
   
-  # coerce non-sensible option
-  if(!is.na(clustervar) && unitvar == clustervar){clustervar <- NA} #cluster on id anyway, would cause error otherwise
-
+  # varname collision
+  varnames <- unlist(p[str_subset(names(p), "var")])
+  varnames <- varnames[!is.na(varnames)]
+  if(any(duplicated(varnames))){stop("-var arguments can not have duplicated names. (no need to specicify cluster on unit-level, it is automatically done.)")}
 }
 
 validate_dt <- function(dt, p){
 
   varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
+  varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar)]
   
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
