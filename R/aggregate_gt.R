@@ -14,9 +14,9 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   # post process
   result <- data.table(agg_sch$targets, agg_att, agg_se_result$se)
   names(result) <- c("target", "att", "se")
-  result[,outcome := gt_result$outname]
-  result[,att_ciub := att+se*agg_se_result$crit_val]
-  result[,att_cilb := att-se*agg_se_result$crit_val]
+  result[,`:=`(outcome = gt_result$outname,
+              att_ciub = att+se*agg_se_result$crit_val,
+              att_cilb = att-se*agg_se_result$crit_val)]
   
   return(result)
 }
@@ -29,7 +29,6 @@ get_agg_sch <- function(gt_result, aux, p){
   id_cohorts <- aux$dt_inv[, G]
   result_type <- p$result_type
   agg_weights <- data.table()
-  bool_to_pn <- function(x){ifelse(x, 1, -1)}
   
   #create group_time
   id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
@@ -44,18 +43,18 @@ get_agg_sch <- function(gt_result, aux, p){
   }
   
   #choose the target based on aggregation type
+  group_time[, post := as.numeric(ifelse(time >= G, 1, -1))]
   if (result_type == "dynamic") {
     group_time[, target := time-G]
   } else if (result_type == "group") {
-    group_time[, target := G*(bool_to_pn(time>=G))] # group * treated
+    group_time[, target := G*post] # group * treated
   } else if (result_type == "time") {
-    group_time[, target := time*(bool_to_pn(time>=G))] #calendar time * treated
+    group_time[, target := time*post] #calendar time * treated
   } else if (result_type == "simple") {
-    group_time[, target := bool_to_pn(time>=G)] #treated / not treated
+    group_time[, target := post] #treated / not treated
   }  
   
-  targets <- group_time[, unique(target)]
-  targets <- sort(as.integer(targets))
+  targets <- sort(group_time[, unique(target)])
   
   #for balanced cohort composition in dynamic setting
   #a cohort us only used if it is seen for all dynamic time

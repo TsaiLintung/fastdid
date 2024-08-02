@@ -6,12 +6,9 @@ library(microbenchmark)
 library(peakRAM)
 library(profvis)
 
-setwd("~/GitHub/EventStudyCode")
-
 data.table::setDTthreads(0)
 
 load_all()
-load_all("~/GitHub/did")
 
 # setup ------------------------------------------------------------------------------------ 
 

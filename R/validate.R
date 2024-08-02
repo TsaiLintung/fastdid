@@ -44,9 +44,10 @@ validate_argument <- function(dt, p){
     stop("clustering and uniform confidence interval only available with bootstrap")
   }
   
-  # coerce non-sensible option
-  if(!is.na(clustervar) && unitvar == clustervar){clustervar <- NA} #cluster on id anyway, would cause error otherwise
-
+  # varname collision
+  varnames <- unlist(p[str_subset(names(p), "var")])
+  varnames <- varnames[!is.na(varnames)]
+  if(any(duplicated(varnames))){stop("-var arguments can not have duplicated names. (no need to specicify cluster on unit-level, it is automatically done.)")}
 }
 
 validate_dt <- function(dt, p){

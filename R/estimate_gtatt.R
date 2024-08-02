@@ -1,5 +1,5 @@
 estimate_gtatt <- function(aux, p){
-  caches <- list(ps = NULL, hess = NULL)
+  caches <- list()
   outcome_results <- list()
   for(outcol in p$outcomevar){
     y <- aux$outcomes_list[[outcol]]
@@ -31,7 +31,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         if(is.null(did_setup)){next} #no gtatt if no did setup
         
         #covariates matrix
-        covvars <- get_covvars(aux$covariates, aux$varycovariates, base_period, t)
+        covvars <- get_covvars(base_period, t, aux, p)
         
         #the 2x2 dataset
         cohort_did <- data.table(did_setup, y[[t]], y[[base_period]], aux$weights)
@@ -40,7 +40,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         # estimate --------------------
         
         result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, 
-                               last_coef, caches$ps[[gt_name]], caches$hess[[gt_name]]),
+                               last_coef, caches[[gt_name]]),
                            error = function(e){stop("DiD estimation failed for group-", recover_time(g, p$time_offset, p$time_step) , 
                                                     " time-", recover_time(t, p$time_offset, p$time_step), ": ", e)})
         
@@ -53,8 +53,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         
         #caches
         last_coef <- result$logit_coef #for faster convergence in next iter
-        if(is.null(caches$ps[[gt_name]])){caches$ps[[gt_name]] <- result$cache_ps_fit}
-        if(is.null(caches$hess[[gt_name]])){caches$hess[[gt_name]] <- result$cache_hess}
+        if(is.null(caches[[gt_name]])){caches[[gt_name]] <- result$cache_fit}
         
         rm(result)
         
@@ -65,10 +64,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
   names(gt_att) <- names(gt_inf_func)
   gt_inf_func <- as.matrix(gt_inf_func)
   
-  return(list(
-    est = list(gt = gt, att = gt_att, inf_func = gt_inf_func),
-    caches = caches
-  ))    
+  return(list(est = list(gt = gt, att = gt_att, inf_func = gt_inf_func), caches = caches))    
 }
 
 get_base_period <- function(g,t,p){
@@ -92,15 +88,19 @@ get_did_setup <- function(g, t, base_period, aux, p){
   }
   max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
   
-  #experimental stuff
-  if(!is.infinite(p$exper$max_control_cohort_diff)){
+  #experimental
+  if(!is.null(p$exper$max_control_cohort_diff)){
     max_control_cohort <- min(g+p$exper$max_control_cohort_diff, max(treated_cohorts))
   } 
-  if(!is.infinite(p$exper$min_control_cohort_diff)){
+  if(!is.null(p$exper$min_control_cohort_diff)){
     min_control_cohort <- max(g+p$exper$min_control_cohort_diff, min(treated_cohorts))
   } 
-  if(t-g > p$exper$max_dynamic | t-g < p$exper$min_dynamic){return(NULL)}
-  
+  if((!is.null(p$exper$max_dynami))){
+    if(t-g > p$exper$max_dynamic){return(NULL)}
+  }
+  if(!is.null(p$exper$min_dynami)){
+    if(t-g < p$exper$min_dynamic){return(NULL)}
+  }
   
   # invalid gt
   if(t == base_period | #no treatment effect for the base period
@@ -116,7 +116,6 @@ get_did_setup <- function(g, t, base_period, aux, p){
   did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
   did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
   
-  
   if(!is.na(p$exper$filtervar)){
     did_setup[!aux$filters[[base_period]]] <- NA #only use units with filter == TRUE at base period
   }
@@ -130,28 +129,27 @@ get_cohort_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort
   return(start:end)
 }
 
-get_covvars <- function(covariates, varycovariates, base_period, t){
+get_covvars <- function(base_period, t, aux, p){
   
-  if(is.list(varycovariates)){
+  if(all(is.na(p$covariatesvar)) & all(is.na(p$varycovariatesvar))){return(NA)}
+  covvars <- data.table()
+  
+  #add time-varying covariates
+  if(!all(is.na(p$varycovariatesvar))){
     
-    precov <- varycovariates[[base_period]]
+    precov <- aux$varycovariates[[base_period]]
     names(precov) <- paste0("pre_", names(precov))
-    postcov <- varycovariates[[t]]-varycovariates[[base_period]]
-    names(postcov) <- paste0("post_", names(varycovariates[[t]]))
-    
-    if(is.data.table(covariates)){
-      covvars <- cbind(covariates, cbind(precov, postcov)) #if covariates is na
-    } else {
-      covvars <- cbind(const = -1, cbind(precov, postcov)) #if covariates is na
-    }
-    covvars <- as.matrix(covvars)
-    
-  } else {
-    if(is.data.table(covariates)){
-      covvars <- as.matrix(covariates) #will be NA if covariatesvar have nothing
-    } else {
-      covvars <- NA
-    }
+    postcov <- aux$varycovariates[[t]]-aux$varycovariates[[base_period]]
+    names(postcov) <- paste0("post_", names(aux$varycovariates[[t]]))
+    covvars <- cbind(covvars, cbind(precov, postcov))
   }
+  
+  #add time-invariant covariates
+  if(!all(is.na(p$covariatesvar))){
+    covvars <- cbind(aux$covariates, covvars)
+  }
+  
+  #add constant
+  covvars <- as.matrix(cbind(const = -1, covvars))
   return(covvars)
 }

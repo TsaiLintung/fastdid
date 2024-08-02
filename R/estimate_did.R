@@ -1,4 +1,4 @@
-estimate_did <- function(dt_did, covvars, p, last_coef, cache_ps_fit, cache_hess){
+estimate_did <- function(dt_did, covvars, p, last_coef, cache){
   
   #estimate did
   param <- as.list(environment())
@@ -11,7 +11,7 @@ estimate_did <- function(dt_did, covvars, p, last_coef, cache_ps_fit, cache_hess
 }
 
 estimate_did_bp <- function(dt_did, covvars, p,
-                         last_coef = NULL, cache_ps_fit, cache_hess){
+                         last_coef = NULL, cache){
   
   # preprocess --------
   oldn <- dt_did[, .N]
@@ -31,8 +31,7 @@ estimate_did_bp <- function(dt_did, covvars, p,
   # ipw --------
 
   if(ipw){
-    if(is.null(cache_ps_fit)|is.null(cache_hess)){ #if no cache, calcuate ipw
-
+    if(is.null(cache)){ #if no cache, calcuate ipw
       #estimate the logit
       prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
                                                     family = stats::binomial(), start = last_coef,
@@ -55,10 +54,12 @@ estimate_did_bp <- function(dt_did, covvars, p,
 
       hess <- stats::vcov(prop_score_est) * n #for the influence function
       hess[is.na(hess)|abs(hess) > 1e10] <- 0
+      
+      cache <- list(hess = hess, ps = prop_score_fit)
 
     } else { #when using multiple outcome, ipw cache can be reused
-      hess <- cache_hess
-      prop_score_fit <- cache_ps_fit
+      hess <- cache$hess
+      prop_score_fit <- cache$ps
       logit_coef <- NA #won't be needing the approximate cache
     }
 
@@ -174,7 +175,7 @@ estimate_did_bp <- function(dt_did, covvars, p,
 }
 
 estimate_did_rc <- function(dt_did, covvars, p,
-                            last_coef = NULL, cache_ps_fit, cache_hess){
+                            last_coef = NULL, cache){
   
   #TODO: skip if not enough valid data
   

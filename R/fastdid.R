@@ -2,7 +2,7 @@
 #'
 #' Performs Difference-in-Differences (DID) estimation fast.
 #'
-#' @param data A data table containing the panel data.
+#' @param data A data.table containing the panel data.
 #' @param timevar The name of the time variable.
 #' @param cohortvar The name of the cohort (group) variable.
 #' @param unitvar The name of the unit (id) variable.
@@ -14,9 +14,9 @@
 #' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE 
 #' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
-#' @param cband Logical, indicate whether to use uniform confidence band or just point-wise, defulat is FALSE (use point-wise)
+#' @param cband Logical, indicate whether to use uniform confidence band or point-wise, defulat is FALSE (use point-wise)
 #' @param alpha The significance level, default is 0.05
-#' @param weightvar The name of the weight variable (optional).
+#' @param weightvar The name of the weight variable, if not specified will cluster on unit level (optional).
 #' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
 #' @param covariatesvar A character vector containing the names of time-invariant covariate variables (optional).
 #' @param varycovariatesvar A character vector containing the names of time-varying covariate variables (optional).
@@ -68,12 +68,7 @@ fastdid <- function(data,
                     weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
-                    exper = list(
-                      max_control_cohort_diff = Inf,
-                      min_control_cohort_diff = -Inf,
-                      max_dynamic = Inf,
-                      min_dynamic = -Inf,
-                      filtervar = NA)){
+                    exper = list(filtervar = NA)){
 
   # validation --------------------------------------------------------
   
@@ -246,7 +241,7 @@ get_auxdata <- function(dt, p){
   }
   
   if(!allNA(p$covariatesvar)){
-    covariates <- cbind(const = -1, dt_inv[,.SD, .SDcols = p$covariatesvar])
+    covariates <- dt_inv[,.SD, .SDcols = p$covariatesvar]
   } else {
     covariates <- NA
   }

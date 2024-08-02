@@ -27,12 +27,11 @@ fastdid(
   validate = TRUE,
   anticipation = 0,
   base_period = "universal",
-  exper = list(max_control_cohort_diff = Inf, min_control_cohort_diff = -Inf, max_dynamic
-    = Inf, min_dynamic = -Inf, filtervar = NA)
+  exper = list(filtervar = NA)
 )
 }
 \arguments{
-\item{data}{A data table containing the panel data.}
+\item{data}{A data.table containing the panel data.}
 
 \item{timevar}{The name of the time variable.}
 
@@ -56,11 +55,11 @@ fastdid(
 
 \item{biters}{The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.}
 
-\item{cband}{Logical, indicate whether to use uniform confidence band or just point-wise, defulat is FALSE (use point-wise)}
+\item{cband}{Logical, indicate whether to use uniform confidence band or point-wise, defulat is FALSE (use point-wise)}
 
 \item{alpha}{The significance level, default is 0.05}
 
-\item{weightvar}{The name of the weight variable (optional).}
+\item{weightvar}{The name of the weight variable, if not specified will cluster on unit level (optional).}
 
 \item{clustervar}{The name of the cluster variable, can only be used when boot == TRUE (optional).}
 
