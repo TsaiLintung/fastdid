@@ -147,8 +147,15 @@ Since **fastdid** is not on CRAN yet, it needs to be converted to R scripts to b
 
 # Experimental features
 
-To access these "experimental" features, use `fastdid(..., exper = list(filtervar = "FF"))`. 
+`fastdid` is intended to be a fast implementation of `did` and nothing more. However, as the list of features grows, it has also become a more flexible version of `did`. While such flexibility can be great, these features often lack proof of validity and can easily be misused.
 
+As an attempt to balance the validity and flexibility of `fastdid`, "experimental features" is introduced in version 0.9.4. These features will be less tested and documented, and it is generally advised to not use them unless the user know what they and the package are doing. These experimental features can be accessed via the `exper` argument. For example, to use the `filtervar` feature, call `fastdid(..., exper = list(filtervar = "FF"))`. 
+
+The current list of experimental features are
+
+- `max`/`min_control_cohort_diff`: limit the max/min cohort difference between treated and control group
+- `filtervar`: limit the units being used as treated and control group with a potentially-time-varying variable
+- `max`/`min_dynamic`: limit the group-time combinations `fastdid` estimates by the range of `t-g`.
 
 # Update
 
@@ -188,6 +195,6 @@ To access these "experimental" features, use `fastdid(..., exper = list(filterva
 
 # Acknowledgments
 
-**fastdid** is created by Lin-Tung Tsai, Maxwell Kellogg, and Kuan-Ju Tseng. 
+**fastdid** is created and maintained by Lin-Tung Tsai. Many thanks to Maxwell Kellogg and Kuan-Ju Tseng for their contribution. 
 
 
