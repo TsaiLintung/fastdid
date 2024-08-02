@@ -61,11 +61,7 @@ validate_dt <- function(dt, p){
   if(!is.na(p$balanced_event_time)){
     if(p$balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
-  
-  if(!is.null(p$exper$filtervar) && !is.logical(dt[[p$exper$filtervar]])){
-    stop("filter var needs to be a logical column")
-  }
-  
+
   #doesn't allow missing value for now
   for(col in varnames){
     if(is.na(col)){next}
