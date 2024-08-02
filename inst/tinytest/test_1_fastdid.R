@@ -42,9 +42,18 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 expect_silent(fastdid(dt[G != 3], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
               info = "missing cohort")
 
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
+              info = "alternative alpha")
+
+# bootstrap part ------------------------
+
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                       boot = TRUE),
               info = "bootstrap")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      boot = TRUE, cband = TRUE),
+              info = "uniform confidence interval")
 
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                       boot = TRUE, clustervar = "x"),
@@ -62,14 +71,6 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
               info = "balance panel false but dt is balance")
 
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
-                      max_control_cohort_diff = 2),
-              info = "max control cohort diff")
-
-expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
-                      min_control_cohort_diff = 4),
-              info = "min control cohort diff")
-
-expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
                       anticipation = 2),
               info = "anticipation")
 
@@ -80,16 +81,6 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 #plot
 expect_silent(plot_did_dynamics(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "dynamic")),
               info = "simple plot")
-
-
-# filtervar ------------------------------------------
-
-dt2 <- copy(dt)
-dt2[, f := x>0]
-
-expect_silent(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", allow_unbalance_panel = TRUE,
-                      base_period = "varying", filtervar = "f"),
-              info = "filtervar")
 
 # dt that needs adjustment ---------------------------
 

@@ -136,16 +136,38 @@ Aggregated parameters: `fastdid` aggregates in the same function.
 - Allowing for unbalanced panels :white_check_mark: (*well, not fully because DR and OR still need to be added*)
 - Anticipation :white_check_mark:
 - Varying base periods :white_check_mark:
+- Simultaneously valid confidence bands :white_check_mark:
 - User-provided aggregation scheme
-- User-provided control formula
-- simultaneously valid confidence bands
+- User-provided control formula 
 - Further optimization
 
 # Source version
 
 Since **fastdid** is not on CRAN yet, it needs to be converted to R scripts to be used in some restricted environments. This can be done with `development/build_source.R`. After changing the working directory, the script will produce `development/fastdid_VERNAME.R`, which can be sourced to mimic the functionalities of the package.
 
+# Experimental features
+
+`fastdid` is intended to be a fast implementation of `did` and nothing more. However, as the list of features grows, it has also become a more flexible version of `did`. While such flexibility can be great, these features often lack proof of validity and can easily be misused.
+
+As an attempt to balance the validity and flexibility of `fastdid`, "experimental features" is introduced in version 0.9.4. These features will be less tested and documented, and it is generally advised to not use them unless the user know what they and the package are doing. These experimental features can be accessed via the `exper` argument. For example, to use the `filtervar` feature, call `fastdid(..., exper = list(filtervar = "FF"))`. 
+
+The current list of experimental features are
+
+- `max`/`min_control_cohort_diff`: limit the max/min cohort difference between treated and control group
+- `filtervar`: limit the units being used as treated and control group with a potentially-time-varying variable
+- `max`/`min_dynamic`: limit the group-time combinations `fastdid` estimates by the range of `t-g`.
+
 # Update
+
+## 0.9.4 (2024/8/2)
+
+> [!WARNING]
+> Some BREAKING change is introduced in this update. 
+
+- add uniform confidence interval option with `cband` and significance level `alpha`, confidence interval are now provided in result as column `att_ciub` and `att_cilb`
+- BREAKING: `filtervar`, `max_control_cohort_diff`, `min_control_cohort_diff` are moved into the experimental features. See the above section for the explanation.
+- add `max_dynamic` and `min_dynamic` as experimental features. 
+- more informative error message when estimation fails for a specific `gt`, some internal interface overhaul
 
 ## 0.9.3 (2024/5/7)
 
@@ -173,6 +195,6 @@ Since **fastdid** is not on CRAN yet, it needs to be converted to R scripts to b
 
 # Acknowledgments
 
-**fastdid** is created by Lin-Tung Tsai, Maxwell Kellogg, and Kuan-Ju Tseng. 
+**fastdid** is created and maintained by Lin-Tung Tsai. Many thanks to Maxwell Kellogg and Kuan-Ju Tseng for their contribution. 
 
 

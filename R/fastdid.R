@@ -2,7 +2,7 @@
 #'
 #' Performs Difference-in-Differences (DID) estimation fast.
 #'
-#' @param data A data table containing the panel data.
+#' @param data A data.table containing the panel data.
 #' @param timevar The name of the time variable.
 #' @param cohortvar The name of the cohort (group) variable.
 #' @param unitvar The name of the unit (id) variable.
@@ -12,18 +12,18 @@
 #' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NA
 #' @param control_type The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust
 #' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE 
-#' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
+#' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
-#' @param weightvar The name of the weight variable (optional).
+#' @param cband Logical, indicate whether to use uniform confidence band or point-wise, defulat is FALSE (use point-wise)
+#' @param alpha The significance level, default is 0.05
+#' @param weightvar The name of the weight variable, if not specified will cluster on unit level (optional).
 #' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
 #' @param covariatesvar A character vector containing the names of time-invariant covariate variables (optional).
 #' @param varycovariatesvar A character vector containing the names of time-varying covariate variables (optional).
-#' @param filtervar A logical vector that specifies which units to use (can be time varying, units will only be included in 2x2 when filtervar is TRUE is the base period)
 #' @param copy whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.
 #' @param validate whether to validate the dataset before processing.
 #' @param anticipation periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).
-#' @param min_control_cohort_diff the min cohort difference between treated and control group 
-#' @param max_control_cohort_diff the max cohort difference between treated and control group 
+#' @param exper the list of experimental features, for features that are not in CSDID originally. Generally less tested. 
 #' @param base_period same as did
 #' 
 #' @import data.table parglm stringr dreamerr BMisc 
@@ -64,11 +64,11 @@
 fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", balanced_event_time = NA,
-                    control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
-                    weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, filtervar = NA,
+                    control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000, cband = FALSE, alpha = 0.05,
+                    weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
-                    max_control_cohort_diff = Inf, anticipation = 0, min_control_cohort_diff = -Inf, base_period = "universal"
-                    ){
+                    anticipation = 0,  base_period = "universal",
+                    exper = list(filtervar = NA)){
 
   # validation --------------------------------------------------------
   
@@ -77,52 +77,41 @@ fastdid <- function(data,
     data <- as.data.table(data)
   } 
   if(copy){dt <- copy(data)} else {dt <- data}
-
+  
   # validate arguments
   p <- as.list(environment()) #collect everything besides data
   p$data <- NULL
-  validate_argument(p, names(data))
-  
-  # validate data 
+  p$dt <- NULL
+  validate_argument(dt, p)
+
+  # validate and throw away not legal data 
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
-  if(validate){
-    varnames <- c("time", "G", "unit", outcomevar, weightvar, clustervar, covariatesvar, varycovariatesvar, filtervar)
-    dt <- validate_dt(dt, varnames, p)
-  }
+  dt <- validate_dt(dt, p)
   
   # preprocess -----------------------------------------------------------
   
   #make dt conform to the WLOG assumptions of fastdid
   coerce_result <- coerce_dt(dt, p) #also changed dt
   dt <- coerce_result$dt
-  
-  if(nrow(dt) == 0){
-    stop("no data after coercing the dataset")
-  }
+  p <- coerce_result$p
   
   # get auxiliary data
   aux <- get_auxdata(dt, p)
   
   # main part  -------------------------------------------------
 
-  # estimate attgt
   gt_result_list <- estimate_gtatt(aux, p)
-  
-  # aggregate the result by outcome
-  all_result <- rbindlist(lapply(gt_result_list, function(x){
-    result <- aggregate_gt(x, aux, p)
-    #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
-    result <- result |> convert_targets(result_type, coerce_result$time_change)
-    return(result)
-  }))
 
+  all_result <- aggregate_gt(gt_result_list, aux, p)
+  
+  #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
+  all_result <- convert_targets(all_result, p) 
+  
   return(all_result)
   
 }
 
 # small steps ----------------------------------------------------------------------
-
-
 
 coerce_dt <- function(dt, p){
   
@@ -132,6 +121,12 @@ coerce_dt <- function(dt, p){
   }
   if(!is.numeric(dt[, time])){
     dt[, time := as.numeric(time)] 
+  }
+
+  #chcek if there is availble never-treated group
+  if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){
+    warning("no never-treated availble, switching to not-yet-treated control")
+    p$control_option <- "notyet"
   }
   
   if(p$allow_unbalance_panel){
@@ -163,10 +158,15 @@ coerce_dt <- function(dt, p){
     dt[time != 1, time := (time-1)/time_step+1]
   }
   
-  return(list(dt = dt,
-              time_change = list(time_step = time_step,
-                            max_time = max(time_periods),
-                            time_offset = time_offset)))
+  #add the information to p
+  p$time_step = time_step
+  p$time_offset = time_offset
+  
+  if(nrow(dt) == 0){
+    stop("no data after coercing the dataset")
+  }
+  
+  return(list(dt = dt, p = p))
   
 }
 
@@ -230,18 +230,18 @@ get_auxdata <- function(dt, p){
   
   # filters
   filters <- list()
-  if(!is.na(p$filtervar)){
+  if(!is.na(p$exper$filtervar)){
     for(i in time_periods){
       start <- (i-1)*id_size+1
       end <- i*id_size
-      filters[[i]] <- dt[seq(start,end), .SD, .SDcols = p$filtervar]
+      filters[[i]] <- dt[seq(start,end), .SD, .SDcols = p$exper$filtervar]
     }
   } else {
     filters <- NA
   }
   
   if(!allNA(p$covariatesvar)){
-    covariates <- cbind(const = -1, dt_inv[,.SD, .SDcols = p$covariatesvar])
+    covariates <- dt_inv[,.SD, .SDcols = p$covariatesvar]
   } else {
     covariates <- NA
   }
@@ -274,21 +274,23 @@ get_auxdata <- function(dt, p){
   
 }
 
-convert_targets <- function(results, result_type, t){
+convert_targets <- function(results, p){
   
+  result_type <- p$result_type
+
   if(result_type == "dynamic"){
     setnames(results, "target", "event_time")
     
   } else if (result_type == "cohort"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := recover_time(abs(target), t$time_offset, t$time_step)]
+    results[, target := recover_time(abs(target), p$time_offset, p$time_step)]
     setnames(results, "target", "cohort")
     
   } else if (result_type == "calendar"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := recover_time(abs(target), t$time_offset, t$time_step)]
+    results[, target := recover_time(abs(target), p$time_offset, p$time_step)]
     setnames(results, "target", "time")
     
   } else if (result_type == "group_time"){
@@ -297,8 +299,8 @@ convert_targets <- function(results, result_type, t){
     results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
     
     #recover the time
-    results[, cohort := recover_time(cohort, t$time_offset, t$time_step)]
-    results[, time := recover_time(time, t$time_offset, t$time_step)]
+    results[, cohort := recover_time(cohort, p$time_offset, p$time_step)]
+    results[, time := recover_time(time, p$time_offset, p$time_step)]
     
     results[, target := NULL]
     

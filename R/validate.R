@@ -1,10 +1,16 @@
-validate_argument <- function(p, dt_names){
-
+validate_argument <- function(dt, p){
+  
+  if(!p$validate){
+    return(NULL)
+  }
+  
+  dt_names <- names(dt)
+  
   #release p
   for(name in names(p)){
     assign(name, p[[name]])
   }
-  
+
   name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
   check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
   
@@ -13,14 +19,13 @@ validate_argument <- function(p, dt_names){
                 "NA | multi match", .choices = dt_names, .message = covariate_message)
   
   checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
-  check_set_arg(weightvar, clustervar, filtervar,
-                "NA | match", .choices = dt_names, .message = checkvar_message)
+  check_set_arg(weightvar, clustervar, "NA | match", .choices = dt_names, .message = checkvar_message)
   
   check_set_arg(control_option, "match", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr")) 
   check_set_arg(base_period, "match", .choices = c("varying", "universal"))
-  check_arg(copy, validate, boot, allow_unbalance_panel, "scalar logical")
-  check_arg(max_control_cohort_diff, min_control_cohort_diff, anticipation, "scalar numeric")
+  check_arg(copy, validate, boot, allow_unbalance_panel, cband, "scalar logical")
+  check_arg(anticipation, alpha, "scalar numeric")
   
   if(!is.na(balanced_event_time)){
     if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
@@ -35,20 +40,20 @@ validate_argument <- function(p, dt_names){
   if(any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)){
     stop("time-varying var and invariant var have overlaps.")
   }
-  if(!boot & !allNA(clustervar)){
-    stop("clustering only available with bootstrap")
+  if(!boot & (!allNA(clustervar)|cband == TRUE)){
+    stop("clustering and uniform confidence interval only available with bootstrap")
   }
   
-  # coerce non-sensible option
-  if(!is.na(clustervar) && unitvar == clustervar){clustervar <- NA} #cluster on id anyway, would cause error otherwise
-  if((!is.infinite(max_control_cohort_diff) | !is.infinite(min_control_cohort_diff)) & control_option == "never"){
-    warning("control_cohort_diff can only be used with not yet")
-    p$control_option <- "notyet"
-  }
+  # varname collision
+  varnames <- unlist(p[str_subset(names(p), "var")])
+  varnames <- varnames[!is.na(varnames)]
+  if(any(duplicated(varnames))){stop("-var arguments can not have duplicated names. (no need to specicify cluster on unit-level, it is automatically done.)")}
 }
 
-validate_dt <- function(dt,varnames,p){
+validate_dt <- function(dt, p){
 
+  varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
+  
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
   
@@ -56,7 +61,7 @@ validate_dt <- function(dt,varnames,p){
     if(p$balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
   
-  if(!is.na(p$filtervar) && !is.logical(dt[[p$filtervar]])){
+  if(!is.na(p$exper$filtervar) && !is.logical(dt[[p$exper$filtervar]])){
     stop("filter var needs to be a logical column")
   }
   
@@ -99,5 +104,7 @@ validate_dt <- function(dt,varnames,p){
       dt <- dt[!unit %in% mis_unit[, unit]]
     }
   }
+  
   return(dt)
+
 }
