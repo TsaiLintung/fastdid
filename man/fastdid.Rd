@@ -17,17 +17,18 @@ fastdid(
   allow_unbalance_panel = FALSE,
   boot = FALSE,
   biters = 1000,
+  cband = FALSE,
+  alpha = 0.05,
   weightvar = NA,
   clustervar = NA,
   covariatesvar = NA,
   varycovariatesvar = NA,
-  filtervar = NA,
   copy = TRUE,
   validate = TRUE,
-  max_control_cohort_diff = Inf,
   anticipation = 0,
-  min_control_cohort_diff = -Inf,
-  base_period = "universal"
+  base_period = "universal",
+  exper = list(max_control_cohort_diff = Inf, min_control_cohort_diff = -Inf, max_dynamic
+    = Inf, min_dynamic = -Inf, filtervar = NA)
 )
 }
 \arguments{
@@ -51,9 +52,13 @@ fastdid(
 
 \item{allow_unbalance_panel}{Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE}
 
-\item{boot}{Logical, indicating whether bootstrapping should be performed. Default is FALSE.}
+\item{boot}{Logical, indicating whether bootstrapping should be performed. Default is FALSE}
 
 \item{biters}{The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.}
+
+\item{cband}{Logical, indicate whether to use uniform confidence band or just point-wise, defulat is FALSE (use point-wise)}
+
+\item{alpha}{The significance level, default is 0.05}
 
 \item{weightvar}{The name of the weight variable (optional).}
 
@@ -63,19 +68,15 @@ fastdid(
 
 \item{varycovariatesvar}{A character vector containing the names of time-varying covariate variables (optional).}
 
-\item{filtervar}{A logical vector that specifies which units to use (can be time varying, units will only be included in 2x2 when filtervar is TRUE is the base period)}
-
 \item{copy}{whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.}
 
 \item{validate}{whether to validate the dataset before processing.}
 
-\item{max_control_cohort_diff}{the max cohort difference between treated and control group}
-
 \item{anticipation}{periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).}
 
-\item{min_control_cohort_diff}{the min cohort difference between treated and control group}
-
 \item{base_period}{same as did}
+
+\item{exper}{the list of experimental features, for features that are not in CSDID originally. Generally less tested.}
 }
 \value{
 A data.table containing the estimated treatment effects and standard errors.

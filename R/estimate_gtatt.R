@@ -39,8 +39,10 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         
         # estimate --------------------
         
-        result <- estimate_did(dt_did = cohort_did, covvars, p, 
-                               last_coef, caches$ps[[gt_name]], caches$hess[[gt_name]])
+        result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, 
+                               last_coef, caches$ps[[gt_name]], caches$hess[[gt_name]]),
+                           error = function(e){stop("DiD estimation failed for group-", recover_time(g, p$time_offset, p$time_step) , 
+                                                    " time-", recover_time(t, p$time_offset, p$time_step), ": ", e)})
         
         # post process --------------------
         
@@ -82,42 +84,44 @@ get_did_setup <- function(g, t, base_period, aux, p){
   
   treated_cohorts <- aux$cohorts[!is.infinite(aux$cohorts)]
   
-  #setup and checks
-  
+  #get the range of cohorts
   if(p$control_option == "never"){
     min_control_cohort <- Inf
   } else {
-    if(!is.infinite(p$min_control_cohort_diff)){
-      min_control_cohort <- max(g+p$min_control_cohort_diff, min(treated_cohorts))
-    } else {
-      min_control_cohort <- max(t, base_period)+p$anticipation+1
-    }
+    min_control_cohort <- max(t, base_period)+p$anticipation+1
   }
-
-  if(!is.infinite(p$max_control_cohort_diff)){
-    max_control_cohort <- min(g+p$max_control_cohort_diff, max(treated_cohorts))
-  } else {
-    max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
-  }
+  max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
   
+  #experimental stuff
+  if(!is.infinite(p$exper$max_control_cohort_diff)){
+    max_control_cohort <- min(g+p$exper$max_control_cohort_diff, max(treated_cohorts))
+  } 
+  if(!is.infinite(p$exper$min_control_cohort_diff)){
+    min_control_cohort <- max(g+p$exper$min_control_cohort_diff, min(treated_cohorts))
+  } 
+  if(t-g > p$exper$max_dynamic | t-g < p$exper$min_dynamic){return(NULL)}
+  
+  
+  # invalid gt
   if(t == base_period | #no treatment effect for the base period
      base_period < min(aux$time_periods) | #no treatment effect for the first period, since base period is not observed
      g >= max_control_cohort | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
      t >= max_control_cohort | #no control available if the last cohort is treated too
      min_control_cohort > max_control_cohort){ #no control avalilble, most likely due to anticipation
     return(NULL)
-  } else {
-    #select the control and treated cohorts
-    did_setup <- rep(NA, aux$id_size)
-    did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
-    did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
-    
-    if(!is.na(p$filtervar)){
-      did_setup[!aux$filters[[base_period]]] <- NA #only use units with filter == TRUE at base period
-    }
-    
-    return(did_setup)
+  } 
+  
+  #select the control and treated cohorts
+  did_setup <- rep(NA, aux$id_size)
+  did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
+  did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
+  
+  
+  if(!is.na(p$exper$filtervar)){
+    did_setup[!aux$filters[[base_period]]] <- NA #only use units with filter == TRUE at base period
   }
+  
+  return(did_setup)
 }
 
 get_cohort_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){

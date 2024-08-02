@@ -12,18 +12,18 @@
 #' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NA
 #' @param control_type The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust
 #' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE 
-#' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE.
+#' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE
 #' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
+#' @param cband Logical, indicate whether to use uniform confidence band or just point-wise, defulat is FALSE (use point-wise)
+#' @param alpha The significance level, default is 0.05
 #' @param weightvar The name of the weight variable (optional).
 #' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
 #' @param covariatesvar A character vector containing the names of time-invariant covariate variables (optional).
 #' @param varycovariatesvar A character vector containing the names of time-varying covariate variables (optional).
-#' @param filtervar A logical vector that specifies which units to use (can be time varying, units will only be included in 2x2 when filtervar is TRUE is the base period)
 #' @param copy whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.
 #' @param validate whether to validate the dataset before processing.
 #' @param anticipation periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).
-#' @param min_control_cohort_diff the min cohort difference between treated and control group 
-#' @param max_control_cohort_diff the max cohort difference between treated and control group 
+#' @param exper the list of experimental features, for features that are not in CSDID originally. Generally less tested. 
 #' @param base_period same as did
 #' 
 #' @import data.table parglm stringr dreamerr BMisc 
@@ -64,11 +64,16 @@
 fastdid <- function(data,
                     timevar, cohortvar, unitvar, outcomevar, 
                     control_option="both",result_type="group_time", balanced_event_time = NA,
-                    control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000,
-                    weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, filtervar = NA,
+                    control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000, cband = FALSE, alpha = 0.05,
+                    weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
-                    max_control_cohort_diff = Inf, anticipation = 0, min_control_cohort_diff = -Inf, base_period = "universal"
-                    ){
+                    anticipation = 0,  base_period = "universal",
+                    exper = list(
+                      max_control_cohort_diff = Inf,
+                      min_control_cohort_diff = -Inf,
+                      max_dynamic = Inf,
+                      min_dynamic = -Inf,
+                      filtervar = NA)){
 
   # validation --------------------------------------------------------
   
@@ -230,11 +235,11 @@ get_auxdata <- function(dt, p){
   
   # filters
   filters <- list()
-  if(!is.na(p$filtervar)){
+  if(!is.na(p$exper$filtervar)){
     for(i in time_periods){
       start <- (i-1)*id_size+1
       end <- i*id_size
-      filters[[i]] <- dt[seq(start,end), .SD, .SDcols = p$filtervar]
+      filters[[i]] <- dt[seq(start,end), .SD, .SDcols = p$exper$filtervar]
     }
   } else {
     filters <- NA

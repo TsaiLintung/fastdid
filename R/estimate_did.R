@@ -1,4 +1,5 @@
 estimate_did <- function(dt_did, covvars, p, last_coef, cache_ps_fit, cache_hess){
+  
   #estimate did
   param <- as.list(environment())
   if(!p$allow_unbalance_panel){
@@ -333,7 +334,7 @@ estimate_did_rc <- function(dt_did, covvars, p,
     asym_linear_or_pre <- t(solve(XpX_pre, t(or_ex_pre)))
     
     #or for treat
-    inf_treat_or_post <- -asym_linear_or_post %*% M1_post #a negative sign here, since or_delta is subtracted from the att
+    inf_treat_or_post <- -asym_linear_or_post %*% M1_post #a negative sign here, since or_delta is subtracted from the att, THE PROBLEM
     inf_treat_or_pre <- -asym_linear_or_pre %*% M1_pre
     
     #or for control
