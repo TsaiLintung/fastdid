@@ -133,7 +133,11 @@ get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohor
 
 get_treat_pos <- function(cohort_sizes, treat_cohort){
   index <- which(cohort_sizes[,G] == treat_cohort)
-  start <- cohort_sizes[1:(index-1), sum(cohort_size)]+1
+  if(index == 1){
+    start <- 1
+  } else {
+    start <- cohort_sizes[1:(index-1), sum(cohort_size)]+1
+  }
   end <- cohort_sizes[1:index, sum(cohort_size)]
   return(start:end)
 }

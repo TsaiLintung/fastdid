@@ -10,7 +10,6 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   
   #get att
   agg_att <- agg_sch$agg_weights %*% gt_result$att
-  
   #get influence function
   inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
     get_weight_influence(x, gt_result, aux, agg_sch, p)
@@ -45,7 +44,7 @@ get_agg_sch <- function(gt_result, aux, p){
   if(!all(names(gt_result$att) == group_time[, paste0(G, ".", time)])){stop("some bug makes gt misaligned, please report this to the maintainer. Thanks.")}
   
   #get the event-specific matrix, and available ggts
-  if(p$exper$event_specif){
+  if(p$exper$event_specific){
     es <- get_es_scheme(group_time, aux, p)
     group_time <- es$group_time #some gt may not have availble effect (ex: g1 == g2)
     es_weight <- es$es_weight
@@ -56,6 +55,8 @@ get_agg_sch <- function(gt_result, aux, p){
   group_time <- tg$group_time
   targets <- tg$targets
   
+  
+  
   agg_weights <- data.table()
   for(tar in targets){ #the order matters
 
@@ -65,12 +66,12 @@ get_agg_sch <- function(gt_result, aux, p){
 
     agg_weights <- rbind(agg_weights, target_weights)
   }
-
+  
   agg_weights <- as.matrix(agg_weights)
   
   
   #apply the transformation on the aggregation matrix
-  if(p$exper$event_specif){
+  if(p$exper$event_specific){
     agg_weights <- agg_weights %*% as.matrix(es_weight)
   }
   
@@ -98,7 +99,7 @@ get_agg_targets <- function(group_time, p){
     group_time[, target := paste0(time-g1(G), ".", time-g2(G))]
   }
   
-  targets <- sort(group_time[, unique(target)])
+  targets <- group_time[, unique(target)]
   
   #for balanced cohort composition in dynamic setting
   #a cohort us only used if it is seen for all dynamic time

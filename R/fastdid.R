@@ -91,7 +91,6 @@ fastdid <- function(data,
   if(!is.na(p$exper$cohortvar2)){setnames(dt, p$exper$cohortvar2, "G2")}
   dt <- validate_dt(dt, p)
   
-  
   # preprocess -----------------------------------------------------------
   
   #make dt conform to the WLOG assumptions of fastdid
@@ -118,12 +117,21 @@ fastdid <- function(data,
 # small steps ----------------------------------------------------------------------
 
 get_exper_default <- function(exper){
-  exper_args <- c("filtervar", "min_dynamic", "max_dynamic", "min_control_cohort_diff", "max_control_cohort_diff")
-  for(arg in exper_args){
+  na_exper_args <- c("filtervar", "min_dynamic", "max_dynamic", "min_control_cohort_diff", "max_control_cohort_diff",
+                  "cohortvar2")
+  for(arg in na_exper_args){
     if(is.null(exper[[arg]])){
       exper[[arg]] <- NA
     }
   }
+  
+  f_exper_args <- c("event_specific")
+  for(arg in f_exper_args){
+    if(is.null(exper[[arg]])){
+      exper[[arg]] <- FALSE
+    }
+  }
+  
   return(exper)
 }
 
@@ -132,9 +140,6 @@ coerce_dt <- function(dt, p){
   #change to int before sorting
   if(!is.numeric(dt[, G])){
     dt[, G := as.numeric(G)]
-  }
-  if(!is.numeric(dt[, G2])){
-    dt[, G2 := as.numeric(G2)]
   }
   if(!is.numeric(dt[, time])){
     dt[, time := as.numeric(time)] 
@@ -154,15 +159,27 @@ coerce_dt <- function(dt, p){
     dt[, unit := new_unit]
   }
   
-  setorder(dt, time, G, G2, unit) #sort the dataset essential for the sort-once-quick-access 
+  if(is.na(p$exper$cohortvar2)){
+    setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
+  } else {
+    if(!is.numeric(dt[, G2])){
+      dt[, G2 := as.numeric(G2)]
+    }
+    setnames(dt, "G", "G1")
+    dt[, G := paste0(G1, "-", G2)]
+    dt[, mg := ming(G)]
+    setorder(dt, time, mg, G1, G2, unit) 
+  }
+
   #deal with time, coerice time to 1,2,3,4,5.......
   time_periods <- dt[, unique(time)]
   time_size <- length(time_periods)
   
   time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
+  gcol <- str_subset(names(dt), "G|G1|G2")
   if(time_offset != 0){
-    dt[, G := G-time_offset]
-    dt[, G2 := G2-time_offset]
+    dt[, c(gcol) := .SD-time_offset, .SDcols = gcol]
+
     dt[, time := time-time_offset]
     time_periods <- time_periods - time_offset
   }
@@ -172,8 +189,11 @@ coerce_dt <- function(dt, p){
     time_step <- time_periods[2]-time_periods[1]
     time_periods <- (time_periods-1)/time_step+1
     if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
-    dt[G != 1, G := (G-1)/time_step+1]
-    dt[G2 != 1, G2 := (G2-1)/time_step+1]
+
+    for(g in gcol){
+      dt[get(g) != 1, c(g) := (get(g)-1)/time_step+1]
+    }
+    
     dt[time != 1, time := (time-1)/time_step+1]
   }
   
@@ -193,16 +213,7 @@ get_auxdata <- function(dt, p){
 
   time_periods <- dt[, unique(time)]
   id_size <- dt[, uniqueN(unit)]
-  
-  if(!is.na(p$exper$cohortvar2)){
-    setnames(dt, "G", "G1")
-    dt[, G := paste0(G1, "-", G2)]
-    dt[, mg := ming(G)]
-    setorder(dt, time, mg, G1, G2, unit) #sort the dataset essential for the sort-once-quick-access 
-  } else {
-    setorder(dt, time, G, unit) 
-  }
-  
+
   #construct the outcomes list for fast access later
   #loop for multiple outcome
   outcomes_list <- list()
