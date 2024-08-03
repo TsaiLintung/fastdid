@@ -68,7 +68,7 @@ fastdid <- function(data,
                     weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
-                    exper = list(filtervar = NA)){
+                    exper = NULL){
 
   # validation --------------------------------------------------------
   
@@ -82,6 +82,7 @@ fastdid <- function(data,
   p <- as.list(environment()) #collect everything besides data
   p$data <- NULL
   p$dt <- NULL
+  p$exper <- get_exper_default(p$exper)
   validate_argument(dt, p)
 
   # validate and throw away not legal data 
@@ -114,6 +115,16 @@ fastdid <- function(data,
 }
 
 # small steps ----------------------------------------------------------------------
+
+get_exper_default <- function(exper){
+  exper_args <- c("filtervar", "min_dynamic", "max_dynamic", "min_control_cohort_diff", "max_control_cohort_diff")
+  for(arg in exper_args){
+    if(is.null(exper[[arg]])){
+      exper[[arg]] <- NA
+    }
+  }
+  return(exper)
+}
 
 coerce_dt <- function(dt, p){
   

@@ -1,5 +1,5 @@
-#2024-08-02
-message('loading fastdid source ver. ver: 0.9.4 date: 2024-08-02')
+#2024-08-03
+message('loading fastdid source ver. ver: 0.9.4 date: 2024-08-03')
 require(data.table);
  require(stringr);
  require(BMisc);
@@ -676,16 +676,16 @@ get_did_setup <- function(g, t, base_period, aux, p){
   max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
   
   #experimental
-  if(!is.null(p$exper$max_control_cohort_diff)){
+  if(!is.na(p$exper$max_control_cohort_diff)){
     max_control_cohort <- min(g+p$exper$max_control_cohort_diff, max(treated_cohorts))
   } 
-  if(!is.null(p$exper$min_control_cohort_diff)){
+  if(!is.na(p$exper$min_control_cohort_diff)){
     min_control_cohort <- max(g+p$exper$min_control_cohort_diff, min(treated_cohorts))
   } 
-  if((!is.null(p$exper$max_dynami))){
+  if((!is.na(p$exper$max_dynamic))){
     if(t-g > p$exper$max_dynamic){return(NULL)}
   }
-  if(!is.null(p$exper$min_dynami)){
+  if(!is.na(p$exper$min_dynamic)){
     if(t-g < p$exper$min_dynamic){return(NULL)}
   }
   
@@ -811,7 +811,7 @@ fastdid <- function(data,
                     weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
-                    exper = list(filtervar = NA)){
+                    exper = NULL){
 
   # validation --------------------------------------------------------
   
@@ -825,6 +825,7 @@ fastdid <- function(data,
   p <- as.list(environment()) #collect everything besides data
   p$data <- NULL
   p$dt <- NULL
+  p$exper <- get_exper_default(p$exper)
   validate_argument(dt, p)
 
   # validate and throw away not legal data 
@@ -857,6 +858,16 @@ fastdid <- function(data,
 }
 
 # small steps ----------------------------------------------------------------------
+
+get_exper_default <- function(exper){
+  exper_args <- c("filtervar", "min_dynamic", "max_dynamic", "min_control_cohort_diff", "max_control_cohort_diff")
+  for(arg in exper_args){
+    if(is.null(exper[[arg]])){
+      exper[[arg]] <- NA
+    }
+  }
+  return(exper)
+}
 
 coerce_dt <- function(dt, p){
   
@@ -1352,11 +1363,7 @@ validate_dt <- function(dt, p){
   if(!is.na(p$balanced_event_time)){
     if(p$balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
-  
-  if(!is.na(p$exper$filtervar) && !is.logical(dt[[p$exper$filtervar]])){
-    stop("filter var needs to be a logical column")
-  }
-  
+
   #doesn't allow missing value for now
   for(col in varnames){
     if(is.na(col)){next}

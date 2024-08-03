@@ -27,7 +27,7 @@ fastdid(
   validate = TRUE,
   anticipation = 0,
   base_period = "universal",
-  exper = list(filtervar = NA)
+  exper = NULL
 )
 }
 \arguments{
