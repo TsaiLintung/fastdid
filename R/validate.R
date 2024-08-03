@@ -10,7 +10,7 @@ validate_argument <- function(dt, p){
   for(name in names(p)){
     assign(name, p[[name]])
   }
-
+  
   name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
   check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
   
@@ -51,7 +51,7 @@ validate_argument <- function(dt, p){
 }
 
 validate_dt <- function(dt, p){
-
+  
   varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
   varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar)]
   
@@ -61,7 +61,6 @@ validate_dt <- function(dt, p){
   if(!is.na(p$balanced_event_time)){
     if(p$balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
-  
   
   #doesn't allow missing value for now
   for(col in varnames){
@@ -104,5 +103,5 @@ validate_dt <- function(dt, p){
   }
   
   return(dt)
-
+  
 }
