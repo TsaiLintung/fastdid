@@ -91,16 +91,16 @@ get_did_setup <- function(g, t, base_period, aux, p){
   max_control_cohort <- ifelse(p$control_option == "notyet", max(ming(treated_cohorts)), Inf) 
   
   #experimental
-  if(!is.null(p$exper$max_control_cohort_diff)){
+  if(!is.na(p$exper$max_control_cohort_diff)){
     max_control_cohort <- min(g+p$exper$max_control_cohort_diff, max(treated_cohorts))
   } 
-  if(!is.null(p$exper$min_control_cohort_diff)){
+  if(!is.na(p$exper$min_control_cohort_diff)){
     min_control_cohort <- max(g+p$exper$min_control_cohort_diff, min(treated_cohorts))
   } 
-  if((!is.null(p$exper$max_dynami))){
+  if((!is.na(p$exper$max_dynamic))){
     if(t-g > p$exper$max_dynamic){return(NULL)}
   }
-  if(!is.null(p$exper$min_dynami)){
+  if(!is.na(p$exper$min_dynamic)){
     if(t-g < p$exper$min_dynamic){return(NULL)}
   }
   
