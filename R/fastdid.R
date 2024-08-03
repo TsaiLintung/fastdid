@@ -82,7 +82,6 @@ fastdid <- function(data,
   p <- as.list(environment()) #collect everything besides data
   p$data <- NULL
   p$dt <- NULL
-  #TODO: fill unused exper with NA 
   validate_argument(dt, p)
 
   # validate and throw away not legal data 

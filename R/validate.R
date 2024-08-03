@@ -62,6 +62,7 @@ validate_dt <- function(dt, p){
     if(p$balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
   
+  
   #doesn't allow missing value for now
   for(col in varnames){
     if(is.na(col)){next}
