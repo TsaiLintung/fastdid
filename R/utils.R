@@ -12,6 +12,7 @@ reverse_col <- function(x){
 #GG <- as.factor(paste0(g11, ".", g22))
 
 g1 <- function(GG){
+  if(is.numeric(GG)){return(GG)}
   return(as.numeric(str_split_i(as.character(GG), "-", 1)))
 }
 g2 <- function(GG){

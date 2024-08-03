@@ -88,7 +88,7 @@ fastdid <- function(data,
   # validate and throw away not legal data 
   
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
-  if(!is.null(p$exper$cohortvar2)){setnames(dt, p$exper$cohortvar2, "G2")}
+  if(!is.na(p$exper$cohortvar2)){setnames(dt, p$exper$cohortvar2, "G2")}
   dt <- validate_dt(dt, p)
   
   
@@ -291,9 +291,6 @@ get_auxdata <- function(dt, p){
 }
 
 convert_targets <- function(results, p){
-  
-  #direct away
-  if(!is.na(p$exper$cohortvar2)){return(convert_targets_double(results,p))}
 
   if(p$result_type == "dynamic"){
     setnames(results, "target", "event_time")
@@ -311,7 +308,7 @@ convert_targets <- function(results, p){
     setnames(results, "target", "time")
     
   } else if (p$result_type == "group_time"){
-    
+
     results[, cohort := as.numeric(str_split_i(target, "\\.", 1))]
     results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
     
@@ -322,15 +319,11 @@ convert_targets <- function(results, p){
     results[, target := NULL]
     
   } else if (p$result_type == "simple") {
+    
     results[, type := ifelse(target >= 0, "post", "pre")]
     results[, target := NULL]
-  } 
-  return(results)
-}
-
-convert_targets_double <- function(results, p){
-  
-  if (p$result_type == "group_time"){
+ 
+  }  else if (p$result_type == "group_group_time"){
     results[, cohort := str_split_i(target, "\\.", 1)]
     results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
     
@@ -341,10 +334,13 @@ convert_targets_double <- function(results, p){
     results[, cohort2 := recover_time(cohort2, p$time_offset, p$time_step)]
     results[, time := recover_time(time, p$time_offset, p$time_step)]
     results[, `:=`(target = NULL, cohort = NULL)]
+  } else if (p$result_type == "dynamic_sq"){
+    results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
+    results[, event_time_2 :=  as.numeric(str_split_i(target, "\\.", 2))]
+    results[, target := NULL]
   }
   
   return(results)
-  
 }
 
 recover_time <- function(time, time_offset, time_step){

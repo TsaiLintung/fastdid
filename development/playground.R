@@ -1,4 +1,4 @@
-setwd("~/Documents/GitHub/fastdid")
+#setwd("~/Documents/GitHub/fastdid")
 
 library(devtools)
 library(tinytest)
