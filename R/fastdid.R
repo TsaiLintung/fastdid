@@ -82,11 +82,13 @@ fastdid <- function(data,
   p <- as.list(environment()) #collect everything besides data
   p$data <- NULL
   p$dt <- NULL
+  #TODO: fill unused exper with NA 
   validate_argument(dt, p)
 
   # validate and throw away not legal data 
   
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
+  if(!is.null(p$exper$cohortvar2)){setnames(dt, p$exper$cohortvar2, "G2")}
   dt <- validate_dt(dt, p)
   
   
@@ -121,6 +123,9 @@ coerce_dt <- function(dt, p){
   if(!is.numeric(dt[, G])){
     dt[, G := as.numeric(G)]
   }
+  if(!is.numeric(dt[, G2])){
+    dt[, G2 := as.numeric(G2)]
+  }
   if(!is.numeric(dt[, time])){
     dt[, time := as.numeric(time)] 
   }
@@ -139,7 +144,7 @@ coerce_dt <- function(dt, p){
     dt[, unit := new_unit]
   }
   
-  setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
+  setorder(dt, time, G, G2, unit) #sort the dataset essential for the sort-once-quick-access 
   #deal with time, coerice time to 1,2,3,4,5.......
   time_periods <- dt[, unique(time)]
   time_size <- length(time_periods)
@@ -147,6 +152,7 @@ coerce_dt <- function(dt, p){
   time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
   if(time_offset != 0){
     dt[, G := G-time_offset]
+    dt[, G2 := G2-time_offset]
     dt[, time := time-time_offset]
     time_periods <- time_periods - time_offset
   }
@@ -157,6 +163,7 @@ coerce_dt <- function(dt, p){
     time_periods <- (time_periods-1)/time_step+1
     if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
     dt[G != 1, G := (G-1)/time_step+1]
+    dt[G2 != 1, G2 := (G2-1)/time_step+1]
     dt[time != 1, time := (time-1)/time_step+1]
   }
   
@@ -177,7 +184,14 @@ get_auxdata <- function(dt, p){
   time_periods <- dt[, unique(time)]
   id_size <- dt[, uniqueN(unit)]
   
-  setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
+  if(!is.na(p$exper$cohortvar2)){
+    setnames(dt, "G", "G1")
+    dt[, G := paste0(G1, "-", G2)]
+    dt[, mg := ming(G)]
+    setorder(dt, time, mg, G1, G2, unit) #sort the dataset essential for the sort-once-quick-access 
+  } else {
+    setorder(dt, time, G, unit) 
+  }
   
   #construct the outcomes list for fast access later
   #loop for multiple outcome
@@ -278,24 +292,25 @@ get_auxdata <- function(dt, p){
 
 convert_targets <- function(results, p){
   
-  result_type <- p$result_type
+  #direct away
+  if(!is.na(p$exper$cohortvar2)){return(convert_targets_double(results,p))}
 
-  if(result_type == "dynamic"){
+  if(p$result_type == "dynamic"){
     setnames(results, "target", "event_time")
     
-  } else if (result_type == "cohort"){
+  } else if (p$result_type == "cohort"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
     results[, target := recover_time(abs(target), p$time_offset, p$time_step)]
     setnames(results, "target", "cohort")
     
-  } else if (result_type == "calendar"){
+  } else if (p$result_type == "calendar"){
     
     results[, type := ifelse(target >= 0, "post", "pre")]
     results[, target := recover_time(abs(target), p$time_offset, p$time_step)]
     setnames(results, "target", "time")
     
-  } else if (result_type == "group_time"){
+  } else if (p$result_type == "group_time"){
     
     results[, cohort := as.numeric(str_split_i(target, "\\.", 1))]
     results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
@@ -306,11 +321,30 @@ convert_targets <- function(results, p){
     
     results[, target := NULL]
     
-  } else if (result_type == "simple") {
+  } else if (p$result_type == "simple") {
     results[, type := ifelse(target >= 0, "post", "pre")]
     results[, target := NULL]
   } 
   return(results)
+}
+
+convert_targets_double <- function(results, p){
+  
+  if (p$result_type == "group_time"){
+    results[, cohort := str_split_i(target, "\\.", 1)]
+    results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
+    
+    results[, cohort1 := g1(cohort)]
+    results[, cohort2 := g2(cohort)]
+    
+    results[, cohort1 := recover_time(cohort1, p$time_offset, p$time_step)]
+    results[, cohort2 := recover_time(cohort2, p$time_offset, p$time_step)]
+    results[, time := recover_time(time, p$time_offset, p$time_step)]
+    results[, `:=`(target = NULL, cohort = NULL)]
+  }
+  
+  return(results)
+  
 }
 
 recover_time <- function(time, time_offset, time_step){

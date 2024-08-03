@@ -28,6 +28,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         #determine the 2x2
         base_period <- get_base_period(g,t,p)
         did_setup <- get_did_setup(g, t, base_period, aux, p)
+        
         if(is.null(did_setup)){next} #no gtatt if no did setup
         
         #covariates matrix
@@ -36,7 +37,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         #the 2x2 dataset
         cohort_did <- data.table(did_setup, y[[t]], y[[base_period]], aux$weights)
         names(cohort_did) <- c("D", "post.y", "pre.y", "weights")
-        
+
         # estimate --------------------
         
         result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, 
@@ -68,6 +69,7 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
 }
 
 get_base_period <- function(g,t,p){
+  g <- ming(g) #for two period
   if(p$base_period == "universal"){
     base_period <- g-1-p$anticipation
   } else {
@@ -78,7 +80,7 @@ get_base_period <- function(g,t,p){
 
 get_did_setup <- function(g, t, base_period, aux, p){
   
-  treated_cohorts <- aux$cohorts[!is.infinite(aux$cohorts)]
+  treated_cohorts <- aux$cohorts[!is.infinite(ming(aux$cohorts))]
   
   #get the range of cohorts
   if(p$control_option == "never"){
@@ -86,7 +88,7 @@ get_did_setup <- function(g, t, base_period, aux, p){
   } else {
     min_control_cohort <- max(t, base_period)+p$anticipation+1
   }
-  max_control_cohort <- ifelse(p$control_option == "notyet", max(treated_cohorts), Inf) 
+  max_control_cohort <- ifelse(p$control_option == "notyet", max(ming(treated_cohorts)), Inf) 
   
   #experimental
   if(!is.null(p$exper$max_control_cohort_diff)){
@@ -105,7 +107,7 @@ get_did_setup <- function(g, t, base_period, aux, p){
   # invalid gt
   if(t == base_period | #no treatment effect for the base period
      base_period < min(aux$time_periods) | #no treatment effect for the first period, since base period is not observed
-     g >= max_control_cohort | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
+     ming(g) >= max_control_cohort | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
      t >= max_control_cohort | #no control available if the last cohort is treated too
      min_control_cohort > max_control_cohort){ #no control avalilble, most likely due to anticipation
     return(NULL)
@@ -113,8 +115,8 @@ get_did_setup <- function(g, t, base_period, aux, p){
   
   #select the control and treated cohorts
   did_setup <- rep(NA, aux$id_size)
-  did_setup[get_cohort_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
-  did_setup[get_cohort_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
+  did_setup[get_control_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
+  did_setup[get_treat_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
   
   if(!is.na(p$exper$filtervar)){
     did_setup[!aux$filters[[base_period]]] <- NA #only use units with filter == TRUE at base period
@@ -123,9 +125,16 @@ get_did_setup <- function(g, t, base_period, aux, p){
   return(did_setup)
 }
 
-get_cohort_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
-  start <- cohort_sizes[G < start_cohort, sum(cohort_size)]+1
-  end <- cohort_sizes[G <= end_cohort, sum(cohort_size)]
+get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
+  start <- cohort_sizes[ming(G) < start_cohort, sum(cohort_size)]+1
+  end <- cohort_sizes[ming(G) <= end_cohort, sum(cohort_size)]
+  return(start:end)
+}
+
+get_treat_pos <- function(cohort_sizes, treat_cohort){
+  index <- which(cohort_sizes[,G] == treat_cohort)
+  start <- cohort_sizes[1:(index-1), sum(cohort_size)]+1
+  end <- cohort_sizes[1:index, sum(cohort_size)]
   return(start:end)
 }
 

@@ -16,6 +16,7 @@
 #' @param stratify Whether to stratify the dataset based on a binary covariate.
 #' @param treatment_assign The method for treatment assignment ("latent" or "uniform").
 #' @param vary_cov include time-varying covariates
+#' @param second_cohort include confounding events
 #'
 #' @return A list containing the simulated dataset (dt) and the treatment effect values (att).
 #'
@@ -29,7 +30,7 @@
 #' @export
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size = 0.001,
                     cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, vary_cov = FALSE, na = "none", 
-                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent"){
+                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent", second_cohort = FALSE){
   
   if(!is.na(seed)){set.seed(seed)}
   
@@ -74,6 +75,28 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
     #when treatment is set to 'uniform', untreated propensity is fixed
     dt_i[,G := floor((unit-1)/(sample_size/time_period))]
     dt_i[G < 2, G := Inf]
+  }
+  
+  if(second_cohort){
+    setnames(dt_i, "G", "G2")
+    if(treatment_assign == "latent"){
+      dt_i[, treat_latent := x*0.2 + x2*0.2 + rnorm(sample_size)] #unit with larger X tend to be treated and treated earlier
+      untreated_thres <- quantile(dt_i$treat_latent, untreated_prop)
+      dt_i[treat_latent <= untreated_thres, G := Inf] #unit with low latent is never treated
+      
+      cohort_prop <- (1-untreated_prop)/(time_period-1)
+      last_treat_thres <- untreated_thres
+      for(t in time_period:2){ #unit start getting treated in t = 2
+        treat_thres <- quantile(dt_i$treat_latent, untreated_prop + cohort_prop*(time_period - t + 1))
+        dt_i[treat_latent <= treat_thres & treat_latent > last_treat_thres, G := t]
+        last_treat_thres <- treat_thres
+      }
+      rm(t)
+    } else if (treatment_assign == "uniform"){
+      #when treatment is set to 'uniform', untreated propensity is fixed
+      dt_i[,G := floor((unit-1)/(sample_size/time_period))]
+      dt_i[G < 2, G := Inf]
+    }
   }
 
   #assign unit FE
@@ -120,7 +143,10 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   #potential outcome
   dt[, y1 := y0 + tau]
   dt[, y := y1*D + y0*(1-D)]
-  dt <- dt[, .SD, .SDcols = c("time", "G", "unit", "x", "x2", "y", "s", "xvar")]
+  
+  cols <- c("time", "G", "unit", "x", "x2", "y", "s", "xvar")
+  if(second_cohort){cols <- c(cols, "G2")}
+  dt <- dt[, .SD, .SDcols = cols]
   
   #additional -----------------
   

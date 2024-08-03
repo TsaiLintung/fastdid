@@ -3,7 +3,7 @@ aggregate_gt <- function(all_gt_result, aux, p){
 }
 
 aggregate_gt_outcome <- function(gt_result, aux, p){
-
+  
   agg_sch <- get_agg_sch(gt_result, aux, p)
   
   #get att and se
@@ -34,14 +34,17 @@ get_agg_sch <- function(gt_result, aux, p){
   id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
   group_time <- gt_result$gt |> merge(pg_dt, by = "G")
-  setorder(group_time, time, G) #change the order to match the order in gtatt
+  group_time[, mg := ming(G)]
+  setorder(group_time, time, mg) #change the order to match the order in gtatt
+  if(!all(names(gt_result$att) == group_time[, paste0(G, ".", time)])){stop("some bug makes gt misaligned, please report this to the maintainer. Thanks")}
   gt_count <- group_time[, .N]
-  
+
   #nothing to do
   if(result_type == "group_time"){
     return(list(targets = group_time[, paste0(G, ".", time)]))
   }
   
+  #TODO: do other aggregation types
   #choose the target based on aggregation type
   group_time[, post := as.numeric(ifelse(time >= G, 1, -1))]
   if (result_type == "dynamic") {
