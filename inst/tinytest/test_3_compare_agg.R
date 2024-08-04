@@ -31,6 +31,8 @@ rm(result, did_result)
 # group -------------------
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group")
+result <- result[type == "post",]
+result[, type := NULL]
 did_result_gt <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                              #xformla = ~x,
                              control_group = "notyettreated",
@@ -44,6 +46,8 @@ rm(result, did_result)
 # time --------------------
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "time")
+result <- result[type == "post",]
+result[, type := NULL]
 did_result_gt <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                              #xformla = ~x,
                              control_group = "notyettreated",
@@ -83,7 +87,6 @@ did_result <- did::aggte(did_result_gt, type = "dynamic",
 expect_equal(est_diff_ratio_agg(result, did_result), c(0,0), tolerance = tol,
              info = "dynamic with balanced cohort")
 rm(result, did_result)
-
 
 #clean up environment -------------------------
 rm(dt, simdt, tol, est_diff_ratio_agg)

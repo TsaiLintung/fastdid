@@ -295,71 +295,62 @@ get_auxdata <- function(dt, p){
     weights <- rep(1, id_size)
   }
   
-  aux <- list(time_periods = time_periods,
-              id_size = id_size,
-              outcomes_list = outcomes_list,
-              dt_inv= dt_inv,
-              cohorts = cohorts,
-              cohort_sizes = cohort_sizes, 
-              varycovariates = varycovariates,
-              covariates = covariates,
-              cluster = cluster,
-              weights = weights,
-              filters = filters)
+  aux <- as.list(environment())
+  aux$dt <- NULL
+  aux$p <- NULL
   
   return(aux)
   
 }
 
 convert_targets <- function(results, p){
+  
+  switch(p$result_type,
+         dynamic = {
+           results[, event_time := target]
+           setcolorder(results, "event_time", before = 1)
+         },
+         group = {
+           results[, type := ifelse(target >= 0, "post", "pre")]
+           results[, cohort := recover_time(abs(target), p$time_offset, p$time_step)]
+           setcolorder(results, "cohort", before = 1)
+         },
+         time = {
+           results[, type := ifelse(target >= 0, "post", "pre")]
+           results[, time := recover_time(abs(target), p$time_offset, p$time_step)]
+           setcolorder(results, "time", before = 1)
+         },
+         simple = {
+           results[, type := ifelse(target >= 0, "post", "pre")]
+         },
+         group_time = {
+           results[, cohort := as.numeric(str_split_i(target, "\\.", 1))]
+           results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
+           
+           #recover the time
+           results[, cohort := recover_time(cohort, p$time_offset, p$time_step)]
+           results[, time := recover_time(time, p$time_offset, p$time_step)]
 
-  if(p$result_type == "dynamic"){
-    setnames(results, "target", "event_time")
-    
-  } else if (p$result_type == "cohort"){
-    
-    results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := recover_time(abs(target), p$time_offset, p$time_step)]
-    setnames(results, "target", "cohort")
-    
-  } else if (p$result_type == "calendar"){
-    
-    results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := recover_time(abs(target), p$time_offset, p$time_step)]
-    setnames(results, "target", "time")
-    
-  } else if (p$result_type == "group_time"){
-
-    results[, cohort := as.numeric(str_split_i(target, "\\.", 1))]
-    results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
-    
-    #recover the time
-    results[, cohort := recover_time(cohort, p$time_offset, p$time_step)]
-    results[, time := recover_time(time, p$time_offset, p$time_step)]
-    
-    results[, target := NULL]
-    
-  } else if (p$result_type == "simple") {
-    
-    results[, type := ifelse(target >= 0, "post", "pre")]
-    results[, target := NULL]
- 
-  }  else if (p$result_type == "group_group_time"){
-    results[, cohort := str_split_i(target, "\\.", 1)]
-    results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
-    
-    results[, cohort1 := g1(cohort)]
-    results[, cohort2 := g2(cohort)]
-    
-    results[, cohort1 := recover_time(cohort1, p$time_offset, p$time_step)]
-    results[, cohort2 := recover_time(cohort2, p$time_offset, p$time_step)]
-    results[, time := recover_time(time, p$time_offset, p$time_step)]
-    results[, `:=`(target = NULL, cohort = NULL)]
-  } else if (p$result_type == "dynamic_sq"){
-    results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
-    results[, event_time_2 :=  as.numeric(str_split_i(target, "\\.", 2))]
-    results[, target := NULL]
-  }
+         },
+         group_group_time = {
+           results[, cohort := str_split_i(target, "\\.", 1)]
+           results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
+           
+           results[, cohort1 := g1(cohort)]
+           results[, cohort2 := g2(cohort)]
+           
+           results[, cohort1 := recover_time(cohort1, p$time_offset, p$time_step)]
+           results[, cohort2 := recover_time(cohort2, p$time_offset, p$time_step)]
+           results[, time := recover_time(time, p$time_offset, p$time_step)]
+           results[, `:=`(cohort = NULL)]
+         },
+         dynamic_sq = {
+           results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
+           results[, event_time_2 :=  as.numeric(str_split_i(target, "\\.", 2))]
+         }
+  )
+  
+  results[, target := NULL]
   
   return(results)
 }
