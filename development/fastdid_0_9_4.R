@@ -1,5 +1,5 @@
-#2024-08-03
-message('loading fastdid source ver. ver: 0.9.4 date: 2024-08-03')
+#2024-08-05
+message('loading fastdid source ver. ver: 0.9.4 date: 2024-08-05')
 require(data.table);
  require(stringr);
  require(BMisc);
@@ -625,12 +625,11 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         names(cohort_did) <- c("D", "post.y", "pre.y", "weights")
         
         # estimate --------------------
-        
         result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, 
                                last_coef, caches[[gt_name]]),
                            error = function(e){stop("DiD estimation failed for group-", recover_time(g, p$time_offset, p$time_step) , 
                                                     " time-", recover_time(t, p$time_offset, p$time_step), ": ", e)})
-        
+  
         # post process --------------------
         
         #collect the result
@@ -833,7 +832,6 @@ fastdid <- function(data,
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   dt <- validate_dt(dt, p)
   
-  
   # preprocess -----------------------------------------------------------
   
   #make dt conform to the WLOG assumptions of fastdid
@@ -870,14 +868,7 @@ get_exper_default <- function(exper){
 }
 
 coerce_dt <- function(dt, p){
-  
-  #change to int before sorting
-  if(!is.numeric(dt[, G])){
-    dt[, G := as.numeric(G)]
-  }
-  if(!is.numeric(dt[, time])){
-    dt[, time := as.numeric(time)] 
-  }
+
 
   #chcek if there is availble never-treated group
   if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){
@@ -1356,6 +1347,13 @@ validate_dt <- function(dt, p){
 
   varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
   varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar)]
+  
+  #change to int 
+  uniquecols <- c("G", "time", "unit")
+  for(col in uniquecols){
+      if(!dt[, is.numeric(get(col))]){stop(col, " needs to be numeric.")}
+      dt[!is.infinite(get(col)), c(col) := as.integer(get(col))] #yeah sometimes floating point can be annoying
+  }
   
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]

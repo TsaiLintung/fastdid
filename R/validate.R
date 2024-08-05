@@ -55,6 +55,13 @@ validate_dt <- function(dt, p){
   varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
   varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar)]
   
+  #change to int 
+  uniquecols <- c("G", "time", "unit")
+  for(col in uniquecols){
+      if(!dt[, is.numeric(get(col))]){stop(col, " needs to be numeric.")}
+      dt[!is.infinite(get(col)), c(col) := as.integer(get(col))] #yeah sometimes floating point can be annoying
+  }
+  
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
   

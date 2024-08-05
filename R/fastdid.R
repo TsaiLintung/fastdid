@@ -90,7 +90,6 @@ fastdid <- function(data,
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   dt <- validate_dt(dt, p)
   
-  
   # preprocess -----------------------------------------------------------
   
   #make dt conform to the WLOG assumptions of fastdid
@@ -127,14 +126,7 @@ get_exper_default <- function(exper){
 }
 
 coerce_dt <- function(dt, p){
-  
-  #change to int before sorting
-  if(!is.numeric(dt[, G])){
-    dt[, G := as.numeric(G)]
-  }
-  if(!is.numeric(dt[, time])){
-    dt[, time := as.numeric(time)] 
-  }
+
 
   #chcek if there is availble never-treated group
   if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){

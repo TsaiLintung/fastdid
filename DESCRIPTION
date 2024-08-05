@@ -1,8 +1,8 @@
 Package: fastdid
 Type: Package
 Title: lightning-fast staggered Difference-in-Difference estimators
-Version: 0.9.2
-Date: 2023-12-20
+Version: 0.9.4
+Date: 2024-08-05
 Authors@R: c(
   person("Lin-Tung","Tsai",
          role = c("aut", "cre"),
