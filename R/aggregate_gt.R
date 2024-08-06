@@ -1,13 +1,18 @@
 # high level -------------------------------------------------------------------
 
 aggregate_gt <- function(all_gt_result, aux, p){
-  rbindlist(lapply(all_gt_result, aggregate_gt_outcome, aux, p))
+  results <- lapply(all_gt_result, aggregate_gt_outcome, aux, p)
+  return(list(
+    est = rbindlist(lapply(results, function(x) {x$result})),
+    inf_func = lapply(results, function(x) {x$inf_func}),
+    agg_weight_matrix = lapply(results, function(x) {x$weight_matrix})
+  ))
 }
 
 aggregate_gt_outcome <- function(gt_result, aux, p){
   
   agg_sch <- get_agg_sch(gt_result, aux, p)
-  
+
   #get att
   agg_att <- agg_sch$agg_weights %*% gt_result$att
   #get influence function
@@ -27,7 +32,9 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
               att_cilb = att-se*agg_se$crit_val)]
 
   
-  return(result)
+  return(list(result = result,
+              inf_func = inf_matrix,
+              weight_matrix = agg_sch$agg_weights))
 }
 
 # scheme ------------------------------------------------------------------------

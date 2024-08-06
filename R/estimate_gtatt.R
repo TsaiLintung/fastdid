@@ -43,7 +43,6 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
                                last_coef, caches[[gt_name]]),
                            error = function(e){stop("DiD estimation failed for group-", recover_time(g, p$time_offset, p$time_step) , 
                                                     " time-", recover_time(t, p$time_offset, p$time_step), ": ", e)})
-  
         # post process --------------------
         
         #collect the result

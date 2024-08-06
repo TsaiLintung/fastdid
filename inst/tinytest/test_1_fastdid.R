@@ -45,10 +45,10 @@ expect_silent(fastdid(dt[G != 3], timevar = "time", cohortvar = "G", unitvar = "
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
               info = "alternative alpha")
 
-dt2 <- copy(dt)
-setnames(dt2, c("time", "G", "unit"), c("t", "g", "u"))
-expect_silent(fastdid(dt2, timevar = "t", cohortvar = "g", unitvar = "u",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
-              info = "other column names")
+full_res <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = c("y", "y2"),  result_type = "group_time", full = TRUE)
+expect_equal(names(full_res), c("call", "estimate", "gt_estimate", "agg_inf_func", "agg_weight_matrix"),
+             info = "full result")
+#get full result
 
 # bootstrap part ------------------------
 
@@ -116,7 +116,7 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       allow_unbalance_panel = TRUE),
               info = "balance panel false but dt is balance")
 
-# throw error / warning at problematic dt -------------------------
+# internal behavor -------------------------
 
 expect_error(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                       boot = FALSE, clustervar = "x"),
@@ -156,3 +156,16 @@ mes <- as.character(tryCatch(fastdid(dt, timevar = "time", cohortvar = "g", unit
                 error = function(e){return(e)}))
 expect_equal(errormes, mes,
                info = "wrong col name")
+
+#make sure dt is not copied if copy == FALSE
+dtc <- copy(dt)
+tracemem(dtc)
+out <- capture.output(fastdid(dtc, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time", copy = FALSE))
+#if a copy happen there will be a message at the start, so out[1] won't be the header. 
+expect_equal(out[1], "           att        se outcome     att_ciub    att_cilb cohort  time",
+              info = "no unintentional copy")
+
+dt2 <- copy(dt)
+setnames(dt2, c("time", "G", "unit"), c("t", "g", "u"))
+expect_silent(fastdid(dt2, timevar = "t", cohortvar = "g", unitvar = "u",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
+              info = "other column names")

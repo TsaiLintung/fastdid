@@ -25,6 +25,7 @@
 #' @param anticipation periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).
 #' @param exper the list of experimental features, for features that are not in CSDID originally. Generally less tested. 
 #' @param base_period same as did
+#' @param full return the full result, like the influence function, call, etc,. Default is false. 
 #' 
 #' @import data.table parglm stringr dreamerr BMisc 
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula
@@ -68,7 +69,7 @@ fastdid <- function(data,
                     weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
-                    exper = NULL){
+                    exper = NULL, full = FALSE){
 
   # validation --------------------------------------------------------
   
@@ -83,6 +84,7 @@ fastdid <- function(data,
   p$data <- NULL
   p$dt <- NULL
   p$exper <- get_exper_default(p$exper)
+  class(p) <- "locked"
   validate_argument(dt, p)
 
   # validate and throw away not legal data 
@@ -95,23 +97,29 @@ fastdid <- function(data,
   
   #make dt conform to the WLOG assumptions of fastdid
   coerce_result <- coerce_dt(dt, p) #also changed dt
-  dt <- coerce_result$dt
-  p <- coerce_result$p
   
   # get auxiliary data
-  aux <- get_auxdata(dt, p)
-  
+  aux <- get_auxdata(coerce_result$dt, p)
+
   # main part  -------------------------------------------------
 
   gt_result_list <- estimate_gtatt(aux, p)
-
-  all_result <- aggregate_gt(gt_result_list, aux, p)
+  agg_result <- aggregate_gt(gt_result_list, aux, p)
   
   #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
-  all_result <- convert_targets(all_result, p) 
+  est_results <- convert_targets(agg_result$est, p, coerce_result$t) 
   
-  return(all_result)
-  
+  if(!p$full){
+    return(est_results)
+  } else {
+    full_result <- list(
+      call = p,
+      estimate = est_results,
+      gt_estimate = gt_result_list,
+      agg_inf_func = agg_result$inf_func,
+      agg_weight_matrix = agg_result$agg_weight_matrix
+    )
+  }
 }
 
 # small steps ----------------------------------------------------------------------
@@ -190,15 +198,16 @@ coerce_dt <- function(dt, p){
     dt[time != 1, time := (time-1)/time_step+1]
   }
   
-  #add the information to p
-  p$time_step = time_step
-  p$time_offset = time_offset
+  #add the information to t
+  t <- list()
+  t$time_step <- time_step
+  t$time_offset <- time_offset
   
   if(nrow(dt) == 0){
     stop("no data after coercing the dataset")
   }
   
-  return(list(dt = dt, p = p))
+  return(list(dt = dt, p = p, t = t))
   
 }
 
@@ -291,12 +300,13 @@ get_auxdata <- function(dt, p){
   aux <- as.list(environment())
   aux$dt <- NULL
   aux$p <- NULL
-  
+  class(aux) <- "locked"
+
   return(aux)
   
 }
 
-convert_targets <- function(results, p){
+convert_targets <- function(results, p, t){
   
   switch(p$result_type,
          dynamic = {
@@ -305,12 +315,12 @@ convert_targets <- function(results, p){
          },
          group = {
            results[, type := ifelse(target >= 0, "post", "pre")]
-           results[, cohort := recover_time(abs(target), p$time_offset, p$time_step)]
+           results[, cohort := recover_time(abs(target), t)]
            setcolorder(results, "cohort", before = 1)
          },
          time = {
            results[, type := ifelse(target >= 0, "post", "pre")]
-           results[, time := recover_time(abs(target), p$time_offset, p$time_step)]
+           results[, time := recover_time(abs(target), t)]
            setcolorder(results, "time", before = 1)
          },
          simple = {
@@ -321,8 +331,8 @@ convert_targets <- function(results, p){
            results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
            
            #recover the time
-           results[, cohort := recover_time(cohort, p$time_offset, p$time_step)]
-           results[, time := recover_time(time, p$time_offset, p$time_step)]
+           results[, cohort := recover_time(cohort, t)]
+           results[, time := recover_time(time, t)]
 
          },
          group_group_time = {
@@ -332,9 +342,9 @@ convert_targets <- function(results, p){
            results[, cohort1 := g1(cohort)]
            results[, cohort2 := g2(cohort)]
            
-           results[, cohort1 := recover_time(cohort1, p$time_offset, p$time_step)]
-           results[, cohort2 := recover_time(cohort2, p$time_offset, p$time_step)]
-           results[, time := recover_time(time, p$time_offset, p$time_step)]
+           results[, cohort1 := recover_time(cohort1, t)]
+           results[, cohort2 := recover_time(cohort2, t)]
+           results[, time := recover_time(time, t)]
            results[, `:=`(cohort = NULL)]
          },
          dynamic_sq = {
@@ -348,6 +358,6 @@ convert_targets <- function(results, p){
   return(results)
 }
 
-recover_time <- function(time, time_offset, time_step){
-  return(((time-1)*time_step)+1+time_offset)
+recover_time <- function(time, t){
+  return(((time-1)*t$time_step)+1+t$time_offset)
 }

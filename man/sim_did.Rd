@@ -18,7 +18,8 @@ sim_did(
   balanced = TRUE,
   seed = NA,
   stratify = FALSE,
-  treatment_assign = "latent"
+  treatment_assign = "latent",
+  second_cohort = FALSE
 )
 }
 \arguments{
@@ -49,6 +50,8 @@ sim_did(
 \item{stratify}{Whether to stratify the dataset based on a binary covariate.}
 
 \item{treatment_assign}{The method for treatment assignment ("latent" or "uniform").}
+
+\item{second_cohort}{include confounding events}
 }
 \value{
 A list containing the simulated dataset (dt) and the treatment effect values (att).
