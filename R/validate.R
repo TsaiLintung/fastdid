@@ -12,24 +12,24 @@ validate_argument <- function(dt, p){
   }
 
   name_message <- "__ARG__ must be a character scalar and a name of a column from the dataset."
-  check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message)
+  check_set_arg(timevar, unitvar, cohortvar, "match", .choices = dt_names, .message = name_message, .up = 1)
   
   covariate_message <- "__ARG__ must be NA or a character vector which are all names of columns from the dataset."
   check_set_arg(varycovariatesvar, covariatesvar, outcomevar, 
-                "NA | multi match", .choices = dt_names, .message = covariate_message)
+                "NA | multi match", .choices = dt_names, .message = covariate_message, .up = 1)
   
   checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
-  check_set_arg(weightvar, clustervar, "NA | match", .choices = dt_names, .message = checkvar_message)
+  check_set_arg(weightvar, clustervar, "NA | match", .choices = dt_names, .message = checkvar_message, .up = 1)
   
-  check_set_arg(control_option, "match", .choices = c("both", "never", "notyet")) #kinda bad names since did's notyet include both notyet and never
-  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr")) 
-  check_set_arg(base_period, "match", .choices = c("varying", "universal"))
-  check_arg(copy, validate, boot, allow_unbalance_panel, cband, "scalar logical")
-  check_arg(anticipation, alpha, "scalar numeric")
+  check_set_arg(control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) #kinda bad names since did's notyet include both notyet and never
+  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1) 
+  check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
+  check_arg(copy, validate, boot, allow_unbalance_panel, cband, "scalar logical", .up = 1)
+  check_arg(anticipation, alpha, "scalar numeric", .up = 1)
   
   if(!is.na(balanced_event_time)){
     if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
-    check_arg(balanced_event_time, "numeric scalar")
+    check_arg(balanced_event_time, "numeric scalar", .up = 1)
   }
   if(allow_unbalance_panel == TRUE & control_type %in% c("dr", "reg")){
     stop("fastdid currently only supprts ipw when allowing for unbalanced panels.")
