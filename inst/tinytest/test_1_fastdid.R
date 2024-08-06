@@ -149,3 +149,10 @@ dt2[unit == 1 & time == 4, time := NA]
 dt2[time == 3 & unit > 30, y := NA]
 expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time"),
                info = "missing values")
+
+#right error message
+errormes <- "Error: in fastdid(dt, timevar = \"time\", cohortvar...:\n outcomevar must be NA or a character vector which are all names of columns from the dataset. Problem: i) is.na returns\n FALSE, or ii) no match was found for 'zz'.\n"
+mes <- as.character(tryCatch(fastdid(dt, timevar = "time", cohortvar = "g", unitvar = "unit", outcomevar = "zz",  result_type = "group_time"),
+                error = function(e){return(e)}))
+expect_equal(errormes, mes,
+               info = "wrong col name")
