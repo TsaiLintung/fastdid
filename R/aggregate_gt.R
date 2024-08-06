@@ -47,7 +47,9 @@ get_agg_sch <- function(gt_result, aux, p){
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
   group_time <- gt_result$gt |> merge(pg_dt, by = "G")
   group_time[, mg := ming(G)]
-  setorder(group_time, time, mg) #change the order to match the order in gtatt
+  group_time[, G1 := g1(G)]
+  group_time[, G2 := g2(G)]
+  setorder(group_time, time, mg, G1, G2) #change the order to match the order in gtatt
   if(!all(names(gt_result$att) == group_time[, paste0(G, ".", time)])){stop("some bug makes gt misaligned, please report this to the maintainer. Thanks.")}
   
   #get the event-specific matrix, and available ggts

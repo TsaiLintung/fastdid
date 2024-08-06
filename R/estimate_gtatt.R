@@ -41,8 +41,8 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
         # estimate --------------------
         result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, 
                                last_coef, caches[[gt_name]]),
-                           error = function(e){stop("DiD estimation failed for group-", recover_time(g, p$time_offset, p$time_step) , 
-                                                    " time-", recover_time(t, p$time_offset, p$time_step), ": ", e)})
+                           error = function(e){stop("DiD estimation failed for group-",g , 
+                                                    " time-", t, "(note this is the internal g-t that starts at 1 with step 1): ", e)})
         # post process --------------------
         
         #collect the result

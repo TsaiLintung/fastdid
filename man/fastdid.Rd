@@ -27,7 +27,8 @@ fastdid(
   validate = TRUE,
   anticipation = 0,
   base_period = "universal",
-  exper = NULL
+  exper = NULL,
+  full = FALSE
 )
 }
 \arguments{
@@ -76,6 +77,8 @@ fastdid(
 \item{base_period}{same as did}
 
 \item{exper}{the list of experimental features, for features that are not in CSDID originally. Generally less tested.}
+
+\item{full}{return the full result, like the influence function, call, etc,. Default is false.}
 }
 \value{
 A data.table containing the estimated treatment effects and standard errors.
