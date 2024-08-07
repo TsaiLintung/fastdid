@@ -13,7 +13,7 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   
   #get aggregation scheme from g-t to target parameters
   agg_sch <- get_agg_sch(gt_result, aux, p)
-  
+
   if(is.na(p$exper$cohortvar2)){
     att <- gt_result$att
     inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights)
