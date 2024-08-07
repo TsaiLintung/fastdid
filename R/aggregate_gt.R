@@ -12,27 +12,22 @@ aggregate_gt <- function(all_gt_result, aux, p){
 aggregate_gt_outcome <- function(gt_result, aux, p){
   
   agg_sch <- get_agg_sch(gt_result, aux, p)
-
+  
+  
   #get att
   if(is.na(p$exper$cohortvar2)){
-    agg_att <- agg_sch$agg_weights %*% gt_result$att
-    #get influence function
-    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-      get_weight_influence(x, agg_sch$group_time, gt_result$att, aux, p)
-    })
-    inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
+    att <- gt_result$att
+    inf_func <- gt_result$inf_func
   } else {
-    
-    es_att <- agg_sch$es_weight %*% gt_result$att
-    agg_att <- agg_sch$agg_weights %*% es_att
-    
-    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-      get_weight_influence(x, agg_sch$group_time, es_att, aux, p)
-    })
-    inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights %*% agg_sch$es_weight)) + inf_weights 
-    
-    
+    att <- agg_sch$es_weight %*% gt_result$att
+    inf_func <- gt_result$inf_func %*% t(agg_sch$es_weight)
   }
+  
+  agg_att <- agg_sch$agg_weights %*% att
+  inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+    get_weight_influence(x, agg_sch$group_time, att, aux, p)
+  })
+  inf_matrix <- (inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
   
   #get se
   agg_se <- get_se(inf_matrix, aux, p)
