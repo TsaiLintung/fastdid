@@ -21,21 +21,22 @@ ming <- function(GG){
 get_es_scheme <- function(group_time, aux, p){
   
   es_group_time <- copy(group_time) #group_time with available es effect
-  es_weight <- data.table()
+  es_weight_list <- list()
   for(ggt in seq_len(nrow(group_time))){
     
-    group_time <- get_es_ggt_weight(group_time, ggt, aux, p)
+    es_ggt_weights <- get_es_ggt_weight(group_time, ggt, aux, p)
     
-    if(group_time[, all(weight == 0)]){ #no available stuff
+    if(is.null(es_ggt_weights)){ #no available stuff
       t <- group_time[ggt, time]
       gg <- group_time[ggt, G]
       es_group_time <- es_group_time[!(time == t & G == gg)] #remove the ggt from new group time
     } else {
-      es_ggt_weights <- group_time[, .(weight)] |> transpose()
-      es_weight <- es_weight |> rbind(es_ggt_weights)
+      es_weight_list <- c(es_weight_list, list(es_ggt_weights)) 
     }
     
   }
+
+  es_weight <- do.call(rbind, es_weight_list) #not sure if the dim is right
   
   return(list(group_time = es_group_time, es_weight = es_weight))
   
@@ -57,7 +58,7 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
   } else if(g1 < g2) { #imputation = treat-pre + (control-post - control-pre)
     
     base_period <- g2 - 1
-    if(base_period == t){return(group_time)}
+    if(base_period == t){return(NULL)}
     
     #get the cohorts
     tb <- group_time[,G == gg & time == base_period]
@@ -66,7 +67,7 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
     cb <- group_time[, c & time == base_period]
     
     #if any group have no available cohort, skip
-    if(sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(group_time)}
+    if(sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
     
     #assign the weights
     group_time[tb, weight := pg/sum(pg)]
@@ -77,7 +78,7 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
   } else if (g1 > g2) { #double did = (treat-post - treat-base) - (control-post - control-pre)
     
     base_period <- g1 - 1
-    if(base_period == t){return(group_time)}
+    if(base_period == t){return(NULL)}
     
     #get the cohorts
     tp <- group_time[,.I == ggt]
@@ -87,7 +88,7 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
     cb <- group_time[, c & time == base_period]
     
     #if any group have no available cohort, skip
-    if(sum(tp) == 0 | sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(group_time)}
+    if(sum(tp) == 0 | sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
     
     #assign the weights
     group_time[tp, weight := pg/sum(pg)]
@@ -97,6 +98,6 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
     
   } 
   
-  return(group_time)
+  return(group_time[, weight])
   
 }

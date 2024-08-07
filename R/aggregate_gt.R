@@ -131,11 +131,10 @@ get_agg_targets <- function(group_time, p){
 # influence function ------------------------------------------------------------
 
 get_weight_influence <- function(att, agg_sch, aux, p){
-  weights <- aux$weights
-  id_cohorts <- aux$dt_inv[, G]
+
   group <- agg_sch$group_time
   
-  id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
+  id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = aux$dt_inv[, G])
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
   group <- group |> merge(pg_dt, by = "G")
   
@@ -151,9 +150,8 @@ get_weight_influence <- function(att, agg_sch, aux, p){
     setorder(group, time, mg, G1, G2) #sort
   }
   
-  design_matrix <- weights*sapply(1:nrow(group), function(g){as.integer(id_cohorts == group[g,G]) - group[g,pg]})
   inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-    get_weight_influence_param(x, group, att, design_matrix, p)
+    get_weight_influence_param(x, group, att, aux, p)
   })
   
   return(inf_weights)
@@ -161,27 +159,15 @@ get_weight_influence <- function(att, agg_sch, aux, p){
 }
 
 #influence from weight calculation
-get_weight_influence_param <- function(agg_weights, group, gt_att, design_matrix, p) {
+get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
 
- 
-
-  # effect of estimating weights in the numerator
-  # if1 <- sapply(keepers, function(k) {
-  #   (weights*as.integer(id_cohorts == group[k,G]) - group[k,pg]) /
-  #     sum(group[keepers,pg])
-  # })
-  
   keepers <- which(agg_weights != 0)
-  keepers_matrix <- as.matrix(design_matrix[, keepers])
-  if1 <- keepers_matrix/sum(group[keepers,pg])
+  group <- group[keepers,]
+  keepers_matrix <- as.matrix(aux$weights*sapply(1:nrow(group), function(g){as.integer(aux$dt_inv[, G] == group[g,G]) - group[g,pg]}))
   
-  # effect of estimating weights in the denominator
-  # if2 <- base::rowSums(sapply(keepers, function(k) {
-  #   weights*as.integer(id_cohorts == group[k,G]) - group[k,pg]
-  # })) %*%
-  #   t(group[keepers,pg]/(sum(group[keepers,pg])^2))
-  
-  if2 <- rowSums(keepers_matrix) %*% t(group[keepers,pg])/(sum(group[keepers,pg])^2)
+  # gt weight = pgi / sum(pgi)
+  if1 <- keepers_matrix/sum(group[,pg]) #numerator
+  if2 <- rowSums(keepers_matrix) %*% t(group[,pg])/(sum(group[,pg])^2) #denominator
   
   # return the influence function for the weights
   inf_weight <- (if1 - if2) %*% as.vector(gt_att[keepers])
