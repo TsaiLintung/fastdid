@@ -22,12 +22,25 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   agg_sch <- get_agg_sch(gt_result, aux, p)
 
   #get att
-  agg_att <- agg_sch$agg_weights %*% gt_result$att
-  #get influence function
-  inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-    get_weight_influence(x, gt_result, aux, agg_sch, p)
-  })
-  inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
+  if(is.na(p$exper$cohortvar2)){
+    agg_att <- agg_sch$agg_weights %*% gt_result$att
+    #get influence function
+    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+      get_weight_influence(x, agg_sch$group_time, gt_result$att, aux, p)
+    })
+    inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
+  } else {
+    
+    es_att <- agg_sch$es_weight %*% gt_result$att
+    agg_att <- agg_sch$agg_weights %*% es_att
+    
+    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+      get_weight_influence(x, agg_sch$group_time, es_att, aux, p)
+    })
+    inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights %*% agg_sch$es_weight)) + inf_weights 
+    
+    
+  }
   
   #get se
   agg_se <- get_se(inf_matrix, aux, p)
@@ -64,7 +77,9 @@ get_agg_sch <- function(gt_result, aux, p){
   if(p$exper$event_specific){
     es <- get_es_scheme(group_time, aux, p)
     group_time <- es$group_time #some gt may not have availble effect (ex: g1 == g2)
-    es_weight <- es$es_weight
+    es_weight <- as.matrix(es$es_weight)
+  } else {
+    es_weight <- NULL
   }
 
   #choose the target based on aggregation type
@@ -83,18 +98,14 @@ get_agg_sch <- function(gt_result, aux, p){
 
     agg_weights <- rbind(agg_weights, target_weights)
   }
+  group_time[, pg := NULL]
   
   agg_weights <- as.matrix(agg_weights)
   
-  
-  #apply the transformation on the aggregation matrix
-  if(p$exper$event_specific){
-    agg_weights <- agg_weights %*% as.matrix(es_weight)
-  }
-  
   return(list(agg_weights = agg_weights, #a matrix of each target and gt's weight in it 
               targets = targets,
-              group_time = group_time))
+              group_time = group_time,
+              es_weight = es_weight))
 }
 
 #get the target parameters
@@ -133,10 +144,8 @@ get_agg_targets <- function(group_time, p){
 # influence function ------------------------------------------------------------
 
 #influence from weight calculation
-get_weight_influence <- function(agg_weights, gt_result, aux, agg_sch, p) {
-  
-  group <- gt_result$gt[,.(G,time)]
-  gt_att <- gt_result$att
+get_weight_influence <- function(agg_weights, group, gt_att, aux, p) {
+
   weights <- aux$weights
   id_cohorts <- aux$dt_inv[, G]
   keepers <- which(agg_weights != 0)
@@ -284,7 +293,7 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
   } else if(g1 < g2) { #imputation = treat-pre + (control-post - control-pre)
     
     base_period <- g2 - 1
-    if(base_period == t){return(group_time)} #need to be treated already in base period
+    if(base_period == t){return(group_time)}
     
     #get the cohorts
     tb <- group_time[,G == gg & time == base_period]
