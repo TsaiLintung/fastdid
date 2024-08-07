@@ -11,60 +11,65 @@ estimate_gtatt <- function(aux, p){
   return(outcome_results)
 }
 
+#gtatt for each outcome
 estimate_gtatt_outcome <- function(y, aux, p, caches) {
 
-    last_coef <- NULL
-    gt <- data.table()
-    gt_att <- c()
-    gt_inf_func <- data.table(placeholder = rep(NA, aux$id_size)) #populate with NA
+    gt_all <- expand.grid(g = aux$cohorts, t = aux$time_periods, stringsAsFactors = FALSE) |> transpose() |> as.list() #first loop t then g
     
-    for(t in aux$time_periods){
-      for(g in aux$cohorts){
-        
-        # preparation -----------------------
-        
-        gt_name <- paste0(g,".",t)
-        
-        #determine the 2x2
-        base_period <- get_base_period(g,t,p)
-        did_setup <- get_did_setup(g, t, base_period, aux, p)
-        
-        if(is.null(did_setup)){next} #no gtatt if no did setup
-        
-        #covariates matrix
-        covvars <- get_covvars(base_period, t, aux, p)
-        
-        #the 2x2 dataset
-        cohort_did <- data.table(did_setup, y[[t]], y[[base_period]], aux$weights)
-        names(cohort_did) <- c("D", "post.y", "pre.y", "weights")
+    #main estimation 
+    gt_results <- lapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches)
+    
+    
+    #post process
+    gt_results <- gt_results[which(!sapply(gt_results, is.null))] #remove the ones with no valid didsetup
+    
+    gt <- lapply(gt_results, function(x) {x$gt}) |> as.data.table() |> transpose()
+    names(gt) <- c("G", "time")
 
-        # estimate --------------------
-        result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, 
-                               last_coef, caches[[gt_name]]),
-                           error = function(e){stop("DiD estimation failed for group-",g , 
-                                                    " time-", t, "(note this is the internal g-t that starts at 1 with step 1): ", e)})
-        # post process --------------------
-        
-        #collect the result
-        gt <- rbind(gt, data.table(G = g, time = t)) #the sequence matters for the weights
-        gt_att <- c(gt_att, att = result$att)
-        gt_inf_func[[gt_name]] <- result$inf_func
-        
-        #caches
-        last_coef <- result$logit_coef #for faster convergence in next iter
-        if(is.null(caches[[gt_name]])){caches[[gt_name]] <- result$cache_fit}
-        
-        rm(result)
-        
-      }
-    }
-  
-  gt_inf_func[,placeholder := NULL]  
-  names(gt_att) <- names(gt_inf_func)
-  gt_inf_func <- as.matrix(gt_inf_func)
-  
+    gt_att <- lapply(gt_results, function(x) {x$result$att})
+    gt_inf_func <- lapply(gt_results, function(x) {x$result$inf_func})
+    caches <- lapply(gt_results, function(x) {x$result$cache})
+    
+    gt_names <- gt[,paste0(G,".",time)]
+    names(gt_att) <- gt_names
+    names(gt_inf_func) <- gt_names
+    names(caches) <- gt_names
+    
+    gt_inf_func <- do.call(cbind, gt_inf_func)
+    gt_att <- do.call(cbind, gt_att) |> t()
+
   return(list(est = list(gt = gt, att = gt_att, inf_func = gt_inf_func), caches = caches))    
 }
+
+#gtatt for each outcome, each gt
+estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
+  
+  g <- gt[1]
+  t <- as.numeric(gt[2])
+  
+  gt_name <- paste0(g,".",t)
+  
+  base_period <- get_base_period(g,t,p)
+  did_setup <- get_did_setup(g,t, base_period, aux, p)
+  
+  if(is.null(did_setup)){return(NULL)} #no gtatt if no did setup
+  
+  #covariates matrix
+  covvars <- get_covvars(base_period, t, aux, p)
+  
+  #the 2x2 dataset
+  cohort_did <- data.table(did_setup, y[[t]], y[[base_period]], aux$weights)
+  names(cohort_did) <- c("D", "post.y", "pre.y", "weights")
+  
+  # estimate --------------------
+  result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, caches[[gt_name]]),
+                     error = function(e){stop("DiD estimation failed for group-",g , 
+                                              " time-", t, "(note this is the internal g-t that starts at 1 with step 1): ", e)})
+
+  return(list(gt = gt, result = result))
+  
+}
+
 
 get_base_period <- function(g,t,p){
   g <- ming(g) #for two period
