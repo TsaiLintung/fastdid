@@ -30,7 +30,7 @@ get_es_scheme <- function(group_time, aux, p){
     
     es_ggt_weights <- get_es_ggt_weight(group_time, ggt, aux, p)
     
-    if(is.null(es_ggt_weights)){ #no available stuff
+    if(is.null(es_ggt_weights)|all(es_ggt_weights == 0)){ #no available stuff
       t <- group_time[ggt, time]
       gg <- group_time[ggt, G]
       es_group_time <- es_group_time[!(time == t & G == gg)] #remove the ggt from new group time
