@@ -21,6 +21,10 @@ ming <- function(GG){
 get_es_scheme <- function(group_time, aux, p){
   
   es_group_time <- copy(group_time) #group_time with available es effect
+  #create lookup
+  es_group_time[, mg := ming(G)]
+  es_group_time[, G1 := g1(G)]
+  es_group_time[, G2 := g2(G)]
   es_weight_list <- list()
   for(ggt in seq_len(nrow(group_time))){
     
@@ -47,8 +51,8 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
   
   group_time[, weight := 0] #reset 
   t <- group_time[ggt, time]
-  g1 <- group_time[ggt, g1(G)]
-  g2 <- group_time[ggt, g2(G)]
+  g1 <- group_time[ggt, G1]
+  g2 <- group_time[ggt, G2]
   gg <- group_time[ggt, G]
   
   if(t < g2){ #direct pure effect
@@ -62,7 +66,7 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
     
     #get the cohorts
     tb <- group_time[,G == gg & time == base_period]
-    c <-  group_time[,g1(G) == g1 & g2(G) > max(t,base_period) & g2(G) != g2]
+    c <-  group_time[, G1 == g1 & G2 > max(t,base_period) & G2 != g2]
     cp <- group_time[, c & time == t]
     cb <- group_time[, c & time == base_period]
     
@@ -83,7 +87,7 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
     #get the cohorts
     tp <- group_time[,.I == ggt]
     tb <- group_time[,G == gg & time == base_period]
-    c <-  group_time[,g2(G) == g2 & g1(G) > max(t,base_period) & g1(G) != g1]
+    c <-  group_time[,G2 == g2 & G1 > max(t,base_period) & G1 != g1]
     cp <- group_time[, c & time == t]
     cb <- group_time[, c & time == base_period]
     
