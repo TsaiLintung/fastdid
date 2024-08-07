@@ -35,44 +35,11 @@ result <- fastdid(data = dt, #the dataset
                   result_type = "group_time") #the result type
 ```
 
-You can control for covariates by providing the name of the data columns, and choose the method among doubly-robust (`"dr"`), inverse probability weight (`"ipw"`), and outcome regression (`"or"`). 
+You can control for covariates by providing the name of the data columns (`x, x2`), and choose the method among doubly-robust (`"dr"`), inverse probability weight (`"ipw"`), and outcome regression (`"or"`). Ex: `fastdid(..., control_option = "dr", covaraitesvar = c("x", "x2"))`. 
 
-```
-result <- fastdid(data = dt, 
-                  timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",
-                  result_type = "group_time",
-                  control_option = "dr", #choose the control method
-                  covaraitesvar = c("x", "x2")) #add covariates
-```
+Clustered standard error can be obtained from multiplier bootstrap. Ex: `fastdid(..., boot = TRUE, clustervar = "x")`. 
 
-While the default is to coerce the data into a balanced panel, you can allow for unbalanced panel. Note that currently only "ipw" is available when `allow_unbalance_panel = TRUE`.
-
-```
-result <- fastdid(data = dt, 
-                  timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",
-                  result_type = "group_time",
-                  allow_unbalance_panel = TRUE, #allow for unbalanced panel
-                  covaraitesvar = c("x", "x2"))
-```
-
-
-Clustered standard error can be obtained from multiplier bootstrap. 
-
-```
-result <- fastdid(data = dt,
-                  timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",
-                  result_type = "group_time",
-                  clustervar = "x", boot = TRUE) #add clustering by using bootstrap
-```
-
-Estimation for multiple outcomes can be done in one call by providing a vector of outcome column names (saves a lot of time when controlling for covariates since logit estimates can be recycled across outcomes). 
-
-```
-#calling fastdid
-result <- fastdid(data = dt, #the dataset
-                  timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = c("y", "y2"), #name of the columns
-                  result_type = "group_time") #the result type
-```
+Estimation for multiple outcomes can be done in one call by providing a vector of outcome column names. This saves a lot of time when using `ipw` since logit estimates can be recycled across outcomes. Ex: `fastdid(...,outcomevar = c("y", "y2"))`.
 
 # Performance
 
@@ -90,15 +57,29 @@ Unfortunately, the Author's computer fails to run **did** at 1 million sample. F
 
 For the benchmark, a baseline group-time ATT is estimated with no covariates control, no bootstrap, and no explicit parallelization. Computing time is measured by `microbenchmark` and peak RAM by `peakRAM`.
 
+# Validity
+
+Before each release, we conduct tests to ensure the validity of estimates from `fastdid`.
+
+## Basics: comparison with `did`
+
+For features included in CS, `fastdid` maintains a maximum of 1% difference from results from the `did` package. This margin of error is mostly for bootstrapped results due to its inherent randomess. For point estimates, the difference is smaller than 1e-12, and is most likely the result of [floating-point error](https://en.wikipedia.org/wiki/Floating-point_error_mitigation). The relevant test files are [group-time](https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_2_compare_gt.R) and [aggregates](https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_3_compare_agg.R). 
+
+## Extensions: direct coverage test
+
+For features not included in CS, `fastdid` maintains that the 95% confidence intervals have a coverage rate between 94% and 96%. The coverage rate is calculated by running 200 iterations. In each iteration, we test whether the confidence interval estimated covers the group-truth values. We then average the rate across iterations. Due to the randomness of coverage, the realized coverage fall outside of the thresholds in about 1% of the time. The relevant test file is [coverage](https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_5_coverage.R). 
+
+## Experimental: not tested
+
+Experimental features are not tested. The validity of its estimates are not guaranteed. 
+
 # **fastdid** and **did**
 
 As the name suggests, **fastdid**'s goal is to be fast **did**. Besides performance, here are some comparisons between the two packages.
 
-## Estimates
+## Estimator
 
 **fastdid**'s estimators is identical to **did**'s. As the performance gains mostly come from efficient data manipulation, the key estimation implementations are analogous. For example, 2x2 DiD (`estimate_did.R` and `DRDID::std_ipw_did_panel`), influence function from weights (`aggregate_gt.R/get_weight_influence`, `compute.aggte.R/wif`), and multiplier bootstrap (`get_se.R` and `mboot.R`).
-
-Therefore, the estimates are practically identical. For point estimates, the difference is negligible (smaller than 1e-12), and is most likely the result of [floating-point error](https://en.wikipedia.org/wiki/Floating-point_error_mitigation). For standard errors, the estimates can be slightly different sometimes, but the difference never exceeds 1\% of **did**'s standard error estimates. 
 
 ## Interface
 
@@ -124,7 +105,6 @@ Aggregated parameters: `fastdid` aggregates in the same function.
 
 1. **fastdid** only offers inverse probability weights estimators for controlling for covariates when allowing for unbalanced panels.
 2. **fastdid** use universal base periods as default. 
-4. **fastdid** only reports the pointwise confidence intervals, instead of the simultaneously valid confidence intervals (check section 4.1 of Callaway and Sant'Anna's (2021) for more detail.)
 
 # Roadmap
 
