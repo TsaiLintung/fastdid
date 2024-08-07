@@ -56,7 +56,7 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
   } else if(g1 < g2) { #imputation = treat-pre + (control-post - control-pre)
     
     base_period <- g2 - 1
-    if(base_period == t){return(group_time)} #need to be treated already in base period
+    if(base_period == t){return(group_time)}
     
     #get the cohorts
     tb <- group_time[,G == gg & time == base_period]
