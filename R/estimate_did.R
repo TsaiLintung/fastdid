@@ -1,4 +1,4 @@
-estimate_did <- function(dt_did, covvars, p, cache){
+estimate_did <- function(dt_did, covvars, p, last_coef, cache){
   
   #estimate did
   param <- as.list(environment())
@@ -10,7 +10,8 @@ estimate_did <- function(dt_did, covvars, p, cache){
   return(result)
 }
 
-estimate_did_bp <- function(dt_did, covvars, p, cache){
+estimate_did_bp <- function(dt_did, covvars, p,
+                         last_coef = NULL, cache){
   
   # preprocess --------
   oldn <- dt_did[, .N]
@@ -33,7 +34,7 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
     if(is.null(cache)){ #if no cache, calcuate ipw
       #estimate the logit
       prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
-                                                    family = stats::binomial(), 
+                                                    family = stats::binomial(), start = last_coef,
                                                     weights = dt_did[, weights],
                                                     control = parglm.control(nthreads = getDTthreads()),
                                                     intercept = FALSE))
@@ -169,10 +170,12 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
   inf_func_no_na <- inf_func_no_na * oldn / n #adjust the value such that mean over the whole id size give the right result
   inf_func[data_pos] <- inf_func_no_na
 
-  return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
+  return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
+              cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
 }
 
-estimate_did_rc <- function(dt_did, covvars, p, cache){
+estimate_did_rc <- function(dt_did, covvars, p,
+                            last_coef = NULL, cache){
   
   #TODO: skip if not enough valid data
   
@@ -210,7 +213,7 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     
     #estimate the logit
     prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
-                                                  family = stats::binomial(),
+                                                  family = stats::binomial(), start = last_coef,
                                                   weights = dt_did[, weights*(inpre+inpost)*n/(n_pre+n_post)], #when seen in both pre and post have double weight
                                                   control = parglm.control(nthreads = getDTthreads()),
                                                   intercept = FALSE)) #*(inpre+inpost)
@@ -374,6 +377,7 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
   inf_func[data_pos] <- inf_func_no_na_post - inf_func_no_na_pre
 
-  return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
+  return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
+              cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
 }
 
