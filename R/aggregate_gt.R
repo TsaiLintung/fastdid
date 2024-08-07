@@ -11,24 +11,25 @@ aggregate_gt <- function(all_gt_result, aux, p){
 
 aggregate_gt_outcome <- function(gt_result, aux, p){
   
+  #get aggregation scheme from g-t to target parameters
   agg_sch <- get_agg_sch(gt_result, aux, p)
   
-  
-  #get att
   if(is.na(p$exper$cohortvar2)){
     att <- gt_result$att
-    inf_func <- gt_result$inf_func
+    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights)
   } else {
     att <- agg_sch$es_weight %*% gt_result$att
-    inf_func <- gt_result$inf_func %*% t(agg_sch$es_weight)
+    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights %*% agg_sch$es_weight)
   }
   
+  #get att
   agg_att <- agg_sch$agg_weights %*% att
-  inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-    get_weight_influence(x, agg_sch$group_time, att, aux, p)
-  })
-  inf_matrix <- (inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
   
+  #get influence function matrix
+  
+  inf_weights <- get_weight_influence(att, agg_sch, aux, p)
+  inf_matrix <- inf_func + inf_weights 
+
   #get se
   agg_se <- get_se(inf_matrix, aux, p)
   
@@ -38,7 +39,6 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   result[,`:=`(outcome = gt_result$outname,
               att_ciub = att+se*agg_se$crit_val,
               att_cilb = att-se*agg_se$crit_val)]
-
   
   return(list(result = result,
               inf_func = inf_matrix,
@@ -75,7 +75,7 @@ get_agg_sch <- function(gt_result, aux, p){
   targets <- tg$targets
   
   
-  
+  #get aggregation weights
   agg_weights <- data.table()
   for(tar in targets){ #the order matters
 
@@ -130,12 +130,10 @@ get_agg_targets <- function(group_time, p){
 
 # influence function ------------------------------------------------------------
 
-#influence from weight calculation
-get_weight_influence <- function(agg_weights, group, gt_att, aux, p) {
-
+get_weight_influence <- function(att, agg_sch, aux, p){
   weights <- aux$weights
   id_cohorts <- aux$dt_inv[, G]
-  keepers <- which(agg_weights != 0)
+  group <- agg_sch$group_time
   
   id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
@@ -152,17 +150,39 @@ get_weight_influence <- function(agg_weights, group, gt_att, aux, p) {
     group[, G2 := g2(G)]
     setorder(group, time, mg, G1, G2) #sort
   }
+  
+  design_matrix <- weights*sapply(1:nrow(group), function(g){as.integer(id_cohorts == group[g,G]) - group[g,pg]})
+  inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+    get_weight_influence_param(x, group, att, design_matrix, p)
+  })
+  
+  return(inf_weights)
+  
+}
+
+#influence from weight calculation
+get_weight_influence_param <- function(agg_weights, group, gt_att, design_matrix, p) {
+
+ 
 
   # effect of estimating weights in the numerator
-  if1 <- sapply(keepers, function(k) {
-    (weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]) /
-      sum(group[keepers,pg])
-  })
+  # if1 <- sapply(keepers, function(k) {
+  #   (weights*as.integer(id_cohorts == group[k,G]) - group[k,pg]) /
+  #     sum(group[keepers,pg])
+  # })
+  
+  keepers <- which(agg_weights != 0)
+  keepers_matrix <- as.matrix(design_matrix[, keepers])
+  if1 <- keepers_matrix/sum(group[keepers,pg])
+  
   # effect of estimating weights in the denominator
-  if2 <- base::rowSums(sapply(keepers, function(k) {
-    weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]
-  })) %*%
-    t(group[keepers,pg]/(sum(group[keepers,pg])^2))
+  # if2 <- base::rowSums(sapply(keepers, function(k) {
+  #   weights*as.integer(id_cohorts == group[k,G]) - group[k,pg]
+  # })) %*%
+  #   t(group[keepers,pg]/(sum(group[keepers,pg])^2))
+  
+  if2 <- rowSums(keepers_matrix) %*% t(group[keepers,pg])/(sum(group[keepers,pg])^2)
+  
   # return the influence function for the weights
   inf_weight <- (if1 - if2) %*% as.vector(gt_att[keepers])
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps)*10] <- 0 #fill zero 

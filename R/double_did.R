@@ -5,16 +5,17 @@
 
 g1 <- function(GG){
   if(is.numeric(GG)){return(GG)}
-  return(as.numeric(str_split_i(as.character(GG), "-", 1)))
+  return(as.numeric(str_split_i(GG, "-", 1)))
 }
+
 g2 <- function(GG){
-  return(as.numeric(str_split_i(as.character(GG), "-", 2)))
+  return(as.numeric(str_split_i(GG, "-", 2)))
 }
+
 ming <- function(GG){
   if(is.numeric(GG)){return(GG)}
   else {pmin(g1(GG), g2(GG))}
 }
-
 
 #the scheme for getting event-specific effect
 get_es_scheme <- function(group_time, aux, p){

@@ -70,7 +70,7 @@ fastdid <- function(data,
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
                     exper = NULL, full = FALSE){
-
+  
   # validation --------------------------------------------------------
   
   if(!is.data.table(data)){
@@ -254,7 +254,7 @@ get_auxdata <- function(dt, p){
   
   cohorts <- dt_inv[, unique(G)]
   cohort_sizes <- dt_inv[, .(cohort_size = .N) , by = G]
-  
+
   # the optional columns
   varycovariates <- list()
   if(!allNA(p$varycovariatesvar)){
