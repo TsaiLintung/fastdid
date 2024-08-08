@@ -1,5 +1,5 @@
-#2024-08-06
-message('loading fastdid source ver. ver: 0.9.4 date: 2024-08-06')
+#2024-08-07
+message('loading fastdid source ver. ver: 0.9.4 date: 2024-08-07')
 require(data.table);
  require(stringr);
  require(BMisc);
@@ -19,29 +19,25 @@ aggregate_gt <- function(all_gt_result, aux, p){
 
 aggregate_gt_outcome <- function(gt_result, aux, p){
   
+  #get aggregation scheme from g-t to target parameters
   agg_sch <- get_agg_sch(gt_result, aux, p)
 
-  #get att
   if(is.na(p$exper$cohortvar2)){
-    agg_att <- agg_sch$agg_weights %*% gt_result$att
-    #get influence function
-    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-      get_weight_influence(x, agg_sch$group_time, gt_result$att, aux, p)
-    })
-    inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
+    att <- gt_result$att
+    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights)
   } else {
-    
-    es_att <- agg_sch$es_weight %*% gt_result$att
-    agg_att <- agg_sch$agg_weights %*% es_att
-    
-    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-      get_weight_influence(x, agg_sch$group_time, es_att, aux, p)
-    })
-    inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights %*% agg_sch$es_weight)) + inf_weights 
-    
-    
+    att <- agg_sch$es_weight %*% gt_result$att
+    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights %*% agg_sch$es_weight)
   }
   
+  #get att
+  agg_att <- agg_sch$agg_weights %*% att
+  
+  #get influence function matrix
+  
+  inf_weights <- get_weight_influence(att, agg_sch, aux, p)
+  inf_matrix <- inf_func + inf_weights 
+
   #get se
   agg_se <- get_se(inf_matrix, aux, p)
   
@@ -51,7 +47,6 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   result[,`:=`(outcome = gt_result$outname,
               att_ciub = att+se*agg_se$crit_val,
               att_cilb = att-se*agg_se$crit_val)]
-
   
   return(list(result = result,
               inf_func = inf_matrix,
@@ -88,7 +83,7 @@ get_agg_sch <- function(gt_result, aux, p){
   targets <- tg$targets
   
   
-  
+  #get aggregation weights
   agg_weights <- data.table()
   for(tar in targets){ #the order matters
 
@@ -143,14 +138,11 @@ get_agg_targets <- function(group_time, p){
 
 # influence function ------------------------------------------------------------
 
-#influence from weight calculation
-get_weight_influence <- function(agg_weights, group, gt_att, aux, p) {
+get_weight_influence <- function(att, agg_sch, aux, p){
 
-  weights <- aux$weights
-  id_cohorts <- aux$dt_inv[, G]
-  keepers <- which(agg_weights != 0)
+  group <- agg_sch$group_time
   
-  id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
+  id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = aux$dt_inv[, G])
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
   group <- group |> merge(pg_dt, by = "G")
   
@@ -165,17 +157,26 @@ get_weight_influence <- function(agg_weights, group, gt_att, aux, p) {
     group[, G2 := g2(G)]
     setorder(group, time, mg, G1, G2) #sort
   }
-
-  # effect of estimating weights in the numerator
-  if1 <- sapply(keepers, function(k) {
-    (weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]) /
-      sum(group[keepers,pg])
+  
+  inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+    get_weight_influence_param(x, group, att, aux, p)
   })
-  # effect of estimating weights in the denominator
-  if2 <- base::rowSums(sapply(keepers, function(k) {
-    weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]
-  })) %*%
-    t(group[keepers,pg]/(sum(group[keepers,pg])^2))
+  
+  return(inf_weights)
+  
+}
+
+#influence from weight calculation
+get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
+
+  keepers <- which(agg_weights != 0)
+  group <- group[keepers,]
+  keepers_matrix <- as.matrix(aux$weights*sapply(1:nrow(group), function(g){as.integer(aux$dt_inv[, G] == group[g,G]) - group[g,pg]}))
+  
+  # gt weight = pgi / sum(pgi)
+  if1 <- keepers_matrix/sum(group[,pg]) #numerator
+  if2 <- rowSums(keepers_matrix) %*% t(group[,pg])/(sum(group[,pg])^2) #denominator
+  
   # return the influence function for the weights
   inf_weight <- (if1 - if2) %*% as.vector(gt_att[keepers])
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps)*10] <- 0 #fill zero 
@@ -242,48 +243,53 @@ get_se <- function(inf_matrix, aux, p) {
 
 g1 <- function(GG){
   if(is.numeric(GG)){return(GG)}
-  return(as.numeric(str_split_i(as.character(GG), "-", 1)))
+  return(as.numeric(str_split_i(GG, "-", 1)))
 }
+
 g2 <- function(GG){
-  return(as.numeric(str_split_i(as.character(GG), "-", 2)))
+  return(as.numeric(str_split_i(GG, "-", 2)))
 }
+
 ming <- function(GG){
   if(is.numeric(GG)){return(GG)}
   else {pmin(g1(GG), g2(GG))}
 }
 
-
 #the scheme for getting event-specific effect
 get_es_scheme <- function(group_time, aux, p){
   
   es_group_time <- copy(group_time) #group_time with available es effect
-  es_weight <- data.table()
-  for(ggt in seq_len(nrow(group_time))){
-    
-    group_time <- get_es_ggt_weight(group_time, ggt, aux, p)
-    
-    if(group_time[, all(weight == 0)]){ #no available stuff
-      t <- group_time[ggt, time]
-      gg <- group_time[ggt, G]
-      es_group_time <- es_group_time[!(time == t & G == gg)] #remove the ggt from new group time
-    } else {
-      es_ggt_weights <- group_time[, .(weight)] |> transpose()
-      es_weight <- es_weight |> rbind(es_ggt_weights)
-    }
-    
+  #create lookup
+  es_group_time[, mg := ming(G)]
+  es_group_time[, G1 := g1(G)]
+  es_group_time[, G2 := g2(G)]
+  es_weight_list <- list()
+  
+  ggt <- as.list(seq_len(nrow(group_time)))
+  if(!p$parallel){
+    es_weight_list <- lapply(ggt, get_es_ggt_weight, group_time, aux, p)
+  } else {
+    es_weight_list <- mclapply(ggt, get_es_ggt_weight, group_time, aux, p, mc.cores = getDTthreads())
   }
+  
+  valid_ggt <- which(!sapply(es_weight_list, is.null))
+  es_group_time <- es_group_time[valid_ggt] #remove the ones without
+  es_weight_list <- es_weight_list[valid_ggt]
+  es_weight <- do.call(rbind, es_weight_list) #not sure if the dim is right
   
   return(list(group_time = es_group_time, es_weight = es_weight))
   
 }
 
 #get the scheme for retriving group-group-time estimates
-get_es_ggt_weight <- function(group_time, ggt, aux, p){
+get_es_ggt_weight <- function(ggt, group_time, aux, p){
+  
+  group_time <- copy(group_time) #avoid accidental modification
   
   group_time[, weight := 0] #reset 
   t <- group_time[ggt, time]
-  g1 <- group_time[ggt, g1(G)]
-  g2 <- group_time[ggt, g2(G)]
+  g1 <- group_time[ggt, G1]
+  g2 <- group_time[ggt, G2]
   gg <- group_time[ggt, G]
   
   if(t < g2){ #direct pure effect
@@ -293,16 +299,16 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
   } else if(g1 < g2) { #imputation = treat-pre + (control-post - control-pre)
     
     base_period <- g2 - 1
-    if(base_period == t){return(group_time)}
+    if(base_period == t){return(NULL)}
     
     #get the cohorts
     tb <- group_time[,G == gg & time == base_period]
-    c <-  group_time[,g1(G) == g1 & g2(G) > max(t,base_period) & g2(G) != g2]
+    c <-  group_time[, G1 == g1 & G2 > max(t,base_period) & G2 != g2]
     cp <- group_time[, c & time == t]
     cb <- group_time[, c & time == base_period]
     
     #if any group have no available cohort, skip
-    if(sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(group_time)}
+    if(sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
     
     #assign the weights
     group_time[tb, weight := pg/sum(pg)]
@@ -313,17 +319,17 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
   } else if (g1 > g2) { #double did = (treat-post - treat-base) - (control-post - control-pre)
     
     base_period <- g1 - 1
-    if(base_period == t){return(group_time)}
+    if(base_period == t){return(NULL)}
     
     #get the cohorts
     tp <- group_time[,.I == ggt]
     tb <- group_time[,G == gg & time == base_period]
-    c <-  group_time[,g2(G) == g2 & g1(G) > max(t,base_period) & g1(G) != g1]
+    c <-  group_time[,G2 == g2 & G1 > max(t,base_period) & G1 != g1]
     cp <- group_time[, c & time == t]
     cb <- group_time[, c & time == base_period]
     
     #if any group have no available cohort, skip
-    if(sum(tp) == 0 | sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(group_time)}
+    if(sum(tp) == 0 | sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
     
     #assign the weights
     group_time[tp, weight := pg/sum(pg)]
@@ -333,11 +339,12 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
     
   } 
   
-  return(group_time)
+  if(all(group_time[, weight] == 0)){return(NULL)}
+  return(group_time[, weight])
   
 }
 
-estimate_did <- function(dt_did, covvars, p, last_coef, cache){
+estimate_did <- function(dt_did, covvars, p, cache){
   
   #estimate did
   param <- as.list(environment())
@@ -349,8 +356,7 @@ estimate_did <- function(dt_did, covvars, p, last_coef, cache){
   return(result)
 }
 
-estimate_did_bp <- function(dt_did, covvars, p,
-                         last_coef = NULL, cache){
+estimate_did_bp <- function(dt_did, covvars, p, cache){
   
   # preprocess --------
   oldn <- dt_did[, .N]
@@ -373,9 +379,9 @@ estimate_did_bp <- function(dt_did, covvars, p,
     if(is.null(cache)){ #if no cache, calcuate ipw
       #estimate the logit
       prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
-                                                    family = stats::binomial(), start = last_coef,
+                                                    family = stats::binomial(), 
                                                     weights = dt_did[, weights],
-                                                    control = parglm.control(nthreads = getDTthreads()),
+                                                    control = parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())), #no parallel if already parallel
                                                     intercept = FALSE))
       class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
       #const is implicitly put into the ipw formula, need to incorporate it manually
@@ -509,12 +515,10 @@ estimate_did_bp <- function(dt_did, covvars, p,
   inf_func_no_na <- inf_func_no_na * oldn / n #adjust the value such that mean over the whole id size give the right result
   inf_func[data_pos] <- inf_func_no_na
 
-  return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
-              cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
+  return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
 }
 
-estimate_did_rc <- function(dt_did, covvars, p,
-                            last_coef = NULL, cache){
+estimate_did_rc <- function(dt_did, covvars, p, cache){
   
   #TODO: skip if not enough valid data
   
@@ -552,9 +556,9 @@ estimate_did_rc <- function(dt_did, covvars, p,
     
     #estimate the logit
     prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
-                                                  family = stats::binomial(), start = last_coef,
+                                                  family = stats::binomial(),
                                                   weights = dt_did[, weights*(inpre+inpost)*n/(n_pre+n_post)], #when seen in both pre and post have double weight
-                                                  control = parglm.control(nthreads = getDTthreads()),
+                                                  control = parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())),
                                                   intercept = FALSE)) #*(inpre+inpost)
     class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
     #const is implicitly put into the ipw formula, need to incorporate it manually
@@ -716,8 +720,7 @@ estimate_did_rc <- function(dt_did, covvars, p,
   inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
   inf_func[data_pos] <- inf_func_no_na_post - inf_func_no_na_pre
 
-  return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
-              cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
+  return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
 }
 
 
@@ -734,60 +737,68 @@ estimate_gtatt <- function(aux, p){
   return(outcome_results)
 }
 
+#gtatt for each outcome
 estimate_gtatt_outcome <- function(y, aux, p, caches) {
 
-    last_coef <- NULL
-    gt <- data.table()
-    gt_att <- c()
-    gt_inf_func <- data.table(placeholder = rep(NA, aux$id_size)) #populate with NA
+    gt_all <- expand.grid(g = aux$cohorts, t = aux$time_periods, stringsAsFactors = FALSE) |> transpose() |> as.list() #first loop t then g
     
-    for(t in aux$time_periods){
-      for(g in aux$cohorts){
-        
-        # preparation -----------------------
-        
-        gt_name <- paste0(g,".",t)
-        
-        #determine the 2x2
-        base_period <- get_base_period(g,t,p)
-        did_setup <- get_did_setup(g, t, base_period, aux, p)
-        
-        if(is.null(did_setup)){next} #no gtatt if no did setup
-        
-        #covariates matrix
-        covvars <- get_covvars(base_period, t, aux, p)
-        
-        #the 2x2 dataset
-        cohort_did <- data.table(did_setup, y[[t]], y[[base_period]], aux$weights)
-        names(cohort_did) <- c("D", "post.y", "pre.y", "weights")
-
-        # estimate --------------------
-        result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, 
-                               last_coef, caches[[gt_name]]),
-                           error = function(e){stop("DiD estimation failed for group-",g , 
-                                                    " time-", t, "(note this is the internal g-t that starts at 1 with step 1): ", e)})
-        # post process --------------------
-        
-        #collect the result
-        gt <- rbind(gt, data.table(G = g, time = t)) #the sequence matters for the weights
-        gt_att <- c(gt_att, att = result$att)
-        gt_inf_func[[gt_name]] <- result$inf_func
-        
-        #caches
-        last_coef <- result$logit_coef #for faster convergence in next iter
-        if(is.null(caches[[gt_name]])){caches[[gt_name]] <- result$cache_fit}
-        
-        rm(result)
-        
-      }
+    #main estimation 
+    if(!p$parallel){
+      gt_results <- lapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches)
+    } else {
+      gt_results <- mclapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches, mc.cores = getDTthreads())
     }
-  
-  gt_inf_func[,placeholder := NULL]  
-  names(gt_att) <- names(gt_inf_func)
-  gt_inf_func <- as.matrix(gt_inf_func)
-  
+    
+    #post process
+    gt_results <- gt_results[which(!sapply(gt_results, is.null))] #remove the ones with no valid didsetup
+    
+    gt <- lapply(gt_results, function(x) {x$gt}) |> as.data.table() |> transpose()
+    names(gt) <- c("G", "time")
+
+    gt_att <- lapply(gt_results, function(x) {x$result$att})
+    gt_inf_func <- lapply(gt_results, function(x) {x$result$inf_func})
+    caches <- lapply(gt_results, function(x) {x$result$cache})
+    
+    gt_names <- gt[,paste0(G,".",time)]
+    names(gt_att) <- gt_names
+    names(gt_inf_func) <- gt_names
+    names(caches) <- gt_names
+    
+    gt_inf_func <- do.call(cbind, gt_inf_func)
+    gt_att <- do.call(cbind, gt_att) |> t()
+
   return(list(est = list(gt = gt, att = gt_att, inf_func = gt_inf_func), caches = caches))    
 }
+
+#gtatt for each outcome, each gt
+estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
+  
+  g <- gt[1]
+  t <- as.numeric(gt[2])
+  
+  gt_name <- paste0(g,".",t)
+  
+  base_period <- get_base_period(g,t,p)
+  did_setup <- get_did_setup(g,t, base_period, aux, p)
+  
+  if(is.null(did_setup)){return(NULL)} #no gtatt if no did setup
+  
+  #covariates matrix
+  covvars <- get_covvars(base_period, t, aux, p)
+  
+  #the 2x2 dataset
+  cohort_did <- data.table(did_setup, y[[t]], y[[base_period]], aux$weights)
+  names(cohort_did) <- c("D", "post.y", "pre.y", "weights")
+  
+  # estimate --------------------
+  result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, caches[[gt_name]]),
+                     error = function(e){stop("DiD estimation failed for group-",g , 
+                                              " time-", t, "(note this is the internal g-t that starts at 1 with step 1): ", e)})
+
+  return(list(gt = gt, result = result))
+  
+}
+
 
 get_base_period <- function(g,t,p){
   g <- ming(g) #for two period
@@ -847,18 +858,14 @@ get_did_setup <- function(g, t, base_period, aux, p){
 }
 
 get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
-  start <- cohort_sizes[ming(G) < start_cohort, sum(cohort_size)]+1
+  start <- cohort_sizes[ming(G) < start_cohort, sum(cohort_size)]+1 
   end <- cohort_sizes[ming(G) <= end_cohort, sum(cohort_size)]
   return(start:end)
 }
 
 get_treat_pos <- function(cohort_sizes, treat_cohort){
   index <- which(cohort_sizes[,G] == treat_cohort)
-  if(index == 1){
-    start <- 1
-  } else {
-    start <- cohort_sizes[1:(index-1), sum(cohort_size)]+1
-  }
+  start <- ifelse(index == 1, 1, cohort_sizes[1:(index-1), sum(cohort_size)]+1)
   end <- cohort_sizes[1:index, sum(cohort_size)]
   return(start:end)
 }
@@ -916,6 +923,7 @@ get_covvars <- function(base_period, t, aux, p){
 #' @param exper the list of experimental features, for features that are not in CSDID originally. Generally less tested. 
 #' @param base_period same as did
 #' @param full return the full result, like the influence function, call, etc,. Default is false. 
+#' @param parallel whether to use parallization (only available on unix systesm like Mac or Linux.)
 #' 
 #' @import data.table parglm stringr dreamerr BMisc 
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula
@@ -959,8 +967,8 @@ fastdid <- function(data,
                     weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
-                    exper = NULL, full = FALSE){
-
+                    exper = NULL, full = FALSE, parallel = FALSE){
+  
   # validation --------------------------------------------------------
   
   if(!is.data.table(data)){
@@ -1144,7 +1152,7 @@ get_auxdata <- function(dt, p){
   
   cohorts <- dt_inv[, unique(G)]
   cohort_sizes <- dt_inv[, .(cohort_size = .N) , by = G]
-  
+
   # the optional columns
   varycovariates <- list()
   if(!allNA(p$varycovariatesvar)){
@@ -1265,7 +1273,7 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
                          "allow_unbalance_panel", "boot", "biters", "weightvar", "clustervar", "covariatesvar", "varycovariatesvar", "filtervar",
                          "copy", "validate", "max_control_cohort_diff", "anticipation", "min_control_cohort_diff", "base_period", "post", "att_ciub", "att_cilb", "cband", "alpha",
                          "G2", "G1", "mg", "cohort1", "cohort2", "event_time_1", "event_time_2",
-                         "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2"))
+                         "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2", "parallel"))
 
 
 #' Create an event study plot for Difference-in-Differences (DiD) analysis.
@@ -1575,7 +1583,7 @@ validate_argument <- function(dt, p){
   check_set_arg(control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) #kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1) 
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
-  check_arg(copy, validate, boot, allow_unbalance_panel, cband, "scalar logical", .up = 1)
+  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)
   check_arg(anticipation, alpha, "scalar numeric", .up = 1)
   
   if(!is.na(balanced_event_time)){
@@ -1593,6 +1601,11 @@ validate_argument <- function(dt, p){
   }
   if(!boot & (!allNA(clustervar)|cband == TRUE)){
     stop("clustering and uniform confidence interval only available with bootstrap")
+  }
+  
+  if(parallel){
+    if(.Platform$OS.type != "unix"){stop("parallel option only available on unix sysytems")}
+    if(!requireNamespace("parallel")){stop("parallel requires the parallel package")}
   }
   
   # varname collision
