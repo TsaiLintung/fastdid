@@ -35,7 +35,7 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
       prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
                                                     family = stats::binomial(), 
                                                     weights = dt_did[, weights],
-                                                    control = parglm.control(nthreads = getDTthreads()),
+                                                    control = parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())), #no parallel if already parallel
                                                     intercept = FALSE))
       class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
       #const is implicitly put into the ipw formula, need to incorporate it manually
@@ -212,7 +212,7 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
                                                   family = stats::binomial(),
                                                   weights = dt_did[, weights*(inpre+inpost)*n/(n_pre+n_post)], #when seen in both pre and post have double weight
-                                                  control = parglm.control(nthreads = getDTthreads()),
+                                                  control = parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())),
                                                   intercept = FALSE)) #*(inpre+inpost)
     class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
     #const is implicitly put into the ipw formula, need to incorporate it manually

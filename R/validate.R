@@ -24,7 +24,7 @@ validate_argument <- function(dt, p){
   check_set_arg(control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) #kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1) 
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
-  check_arg(copy, validate, boot, allow_unbalance_panel, cband, "scalar logical", .up = 1)
+  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)
   check_arg(anticipation, alpha, "scalar numeric", .up = 1)
   
   if(!is.na(balanced_event_time)){
@@ -42,6 +42,11 @@ validate_argument <- function(dt, p){
   }
   if(!boot & (!allNA(clustervar)|cband == TRUE)){
     stop("clustering and uniform confidence interval only available with bootstrap")
+  }
+  
+  if(parallel){
+    if(.Platform$OS.type != "unix"){stop("parallel option only available on unix sysytems")}
+    if(!requireNamespace("parallel")){stop("parallel requires the parallel package")}
   }
   
   # varname collision

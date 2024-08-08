@@ -28,7 +28,8 @@ fastdid(
   anticipation = 0,
   base_period = "universal",
   exper = NULL,
-  full = FALSE
+  full = FALSE,
+  parallel = FALSE
 )
 }
 \arguments{
@@ -79,6 +80,8 @@ fastdid(
 \item{exper}{the list of experimental features, for features that are not in CSDID originally. Generally less tested.}
 
 \item{full}{return the full result, like the influence function, call, etc,. Default is false.}
+
+\item{parallel}{whether to use parallization (only available on unix systesm like Mac or Linux.)}
 }
 \value{
 A data.table containing the estimated treatment effects and standard errors.

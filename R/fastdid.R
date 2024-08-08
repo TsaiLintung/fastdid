@@ -26,6 +26,7 @@
 #' @param exper the list of experimental features, for features that are not in CSDID originally. Generally less tested. 
 #' @param base_period same as did
 #' @param full return the full result, like the influence function, call, etc,. Default is false. 
+#' @param parallel whether to use parallization (only available on unix systesm like Mac or Linux.)
 #' 
 #' @import data.table parglm stringr dreamerr BMisc 
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula
@@ -69,7 +70,7 @@ fastdid <- function(data,
                     weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
-                    exper = NULL, full = FALSE){
+                    exper = NULL, full = FALSE, parallel = FALSE){
   
   # validation --------------------------------------------------------
   

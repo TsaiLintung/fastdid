@@ -23,6 +23,6 @@ Imports:
     collapse,
     dreamerr (>= 1.4.0),
     parglm
-Suggests: ggplot2, did
+Suggests: ggplot2, did, parallel
 Encoding: UTF-8
 RoxygenNote: 7.3.2

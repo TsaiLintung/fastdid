@@ -17,8 +17,11 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
     gt_all <- expand.grid(g = aux$cohorts, t = aux$time_periods, stringsAsFactors = FALSE) |> transpose() |> as.list() #first loop t then g
     
     #main estimation 
-    gt_results <- lapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches)
-    
+    if(!p$parallel){
+      gt_results <- lapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches)
+    } else {
+      gt_results <- mclapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches, mc.cores = getDTthreads())
+    }
     
     #post process
     gt_results <- gt_results[which(!sapply(gt_results, is.null))] #remove the ones with no valid didsetup

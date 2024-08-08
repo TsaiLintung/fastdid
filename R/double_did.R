@@ -26,20 +26,17 @@ get_es_scheme <- function(group_time, aux, p){
   es_group_time[, G1 := g1(G)]
   es_group_time[, G2 := g2(G)]
   es_weight_list <- list()
-  for(ggt in seq_len(nrow(group_time))){
-    
-    es_ggt_weights <- get_es_ggt_weight(group_time, ggt, aux, p)
-    
-    if(is.null(es_ggt_weights)|all(es_ggt_weights == 0)){ #no available stuff
-      t <- group_time[ggt, time]
-      gg <- group_time[ggt, G]
-      es_group_time <- es_group_time[!(time == t & G == gg)] #remove the ggt from new group time
-    } else {
-      es_weight_list <- c(es_weight_list, list(es_ggt_weights)) 
-    }
-    
+  
+  ggt <- as.list(seq_len(nrow(group_time)))
+  if(!p$parallel){
+    es_weight_list <- lapply(ggt, get_es_ggt_weight, group_time, aux, p)
+  } else {
+    es_weight_list <- mclapply(ggt, get_es_ggt_weight, group_time, aux, p, mc.cores = getDTthreads())
   }
-
+  
+  valid_ggt <- which(!sapply(es_weight_list, is.null))
+  es_group_time <- es_group_time[valid_ggt] #remove the ones without
+  es_weight_list <- es_weight_list[valid_ggt]
   es_weight <- do.call(rbind, es_weight_list) #not sure if the dim is right
   
   return(list(group_time = es_group_time, es_weight = es_weight))
@@ -47,7 +44,9 @@ get_es_scheme <- function(group_time, aux, p){
 }
 
 #get the scheme for retriving group-group-time estimates
-get_es_ggt_weight <- function(group_time, ggt, aux, p){
+get_es_ggt_weight <- function(ggt, group_time, aux, p){
+  
+  group_time <- copy(group_time) #avoid accidental modification
   
   group_time[, weight := 0] #reset 
   t <- group_time[ggt, time]
@@ -102,6 +101,7 @@ get_es_ggt_weight <- function(group_time, ggt, aux, p){
     
   } 
   
+  if(all(group_time[, weight] == 0)){return(NULL)}
   return(group_time[, weight])
   
 }
