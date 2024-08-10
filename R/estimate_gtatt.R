@@ -28,7 +28,8 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
     
     gt <- lapply(gt_results, function(x) {x$gt}) |> as.data.table() |> transpose()
     names(gt) <- c("G", "time")
-
+    gt[, time := as.integer(time)]
+    
     gt_att <- lapply(gt_results, function(x) {x$result$att})
     gt_inf_func <- lapply(gt_results, function(x) {x$result$inf_func})
     caches <- lapply(gt_results, function(x) {x$result$cache})

@@ -149,8 +149,7 @@ coerce_dt <- function(dt, p){
 
   #chcek if there is availble never-treated group
   if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){
-    warning("no never-treated availble, switching to not-yet-treated control")
-    p$control_option <- "notyet"
+    warning("no never-treated availble, effectively using not-yet-treated control")
   }
   
   if(p$allow_unbalance_panel){
@@ -177,15 +176,19 @@ coerce_dt <- function(dt, p){
   time_periods <- dt[, unique(time)]
   time_size <- length(time_periods)
   
+  #TODO: this part is kinda ugly
   time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
-  gcol <- str_subset(names(dt), "G|G1|G2")
+  gcol <- str_subset(names(dt), ifelse(is.na(p$exper$cohortvar2), "G", "G1|G2")) 
   if(time_offset != 0){
     dt[, c(gcol) := .SD-time_offset, .SDcols = gcol]
 
     dt[, time := time-time_offset]
     time_periods <- time_periods - time_offset
+    if(!is.na(p$exper$cohortvar2)){dt[, G:=paste0(G1, "-", G2)]} #reconstruct G after
   }
   
+  
+  #TODO := this needs it too
   time_step <- 1 #time may not jump at 1
   if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){
     time_step <- time_periods[2]-time_periods[1]
@@ -197,6 +200,7 @@ coerce_dt <- function(dt, p){
     }
     
     dt[time != 1, time := (time-1)/time_step+1]
+    if(!is.na(p$exper$cohortvar2)){dt[, G:=paste0(G1, "-", G2)]} #reconstruct G after
   }
   
   #add the information to t
@@ -294,6 +298,7 @@ get_auxdata <- function(dt, p){
   
   if(!is.na(p$weightvar)){
     weights <- dt_inv[, .SD, .SDcols = p$weightvar] |> unlist()
+    weights <- weights/mean(weights) #normalize
   } else {
     weights <- rep(1, id_size)
   }

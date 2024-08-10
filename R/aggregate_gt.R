@@ -114,8 +114,8 @@ get_agg_targets <- function(group_time, p){
   #a cohort us only used if it is seen for all dynamic time
   if(p$result_type == "dynamic" & !is.na(p$balanced_event_time)){
     
-    cohorts <- group_time[, .(max_et = max(time-G),
-                              min_et = min(time-G)), by = "G"]
+    cohorts <- group_time[, .(max_et = max(target), #event time is target if in dynamic
+                              min_et = min(target)), by = "G"]
     cohorts[, used := max_et >= p$balanced_event_time] #the max
     if(!cohorts[, any(used)]){stop("balanced_comp_range outside avalible range")}
     group_time[, used := G %in% cohorts[used == TRUE, G]]
