@@ -13,7 +13,7 @@ est_diff_ratio <- function(result, did_result){
   se_diff_per <- compare[, sum(abs(did_se-se), na.rm = TRUE)/sum(did_se, na.rm = TRUE)]
   return(c(att_diff_per , se_diff_per))
 }
-# unbalanced ------------------------------
+# simple ------------------------------
 
 dt2 <- data.table::copy(dt)
 keep <- sample(c(rep(TRUE, 15),FALSE), dt2[,.N], TRUE)
@@ -45,7 +45,7 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "unbalanced method, unbalance panel, simple")
 rm(result, did_result)
 
-# unbalanced method with balanced panel ------------------------------------------
+# ipw  ------------------------------------------
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                   control_type = "ipw",
@@ -79,73 +79,39 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "unbalanced method,unbalanced panel, data unbalanced, ipw")
 rm(result, did_result)
 
+# reg --------------------------------------------------------------------------
+
 # reg and dr unbalanced will be used after the OR influence issues is resolved
 
-# result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-#                   control_type = "reg",
-#                   covariatesvar = c("x", "x2"),
-#                   allow_unbalance_panel = TRUE)
-# did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",cband = FALSE,
-#                           est_method = "reg",xformla = ~x+x2,
-#                           control_group = "notyettreated",
-#                           allow_unbalanced_panel = TRUE,
-#                           clustervars = NULL,
-#                           bstrap = FALSE)
-# 
-# expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
-#              info = "unbalanced panel reg, but data balanced")
-# rm(result, did_result)
-# 
-# result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-#                   control_type = "dr",
-#                   covariatesvar = c("x", "x2"),
-#                   allow_unbalance_panel = TRUE)
-# did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",cband = FALSE,
-#                           est_method = "dr",xformla = ~x+x2,
-#                           control_group = "notyettreated",
-#                           allow_unbalanced_panel = TRUE,
-#                           clustervars = NULL,
-#                           bstrap = FALSE)
-# 
-# expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
-#              info = "unbalanced panel dr, but data balanced")
-# rm(result, did_result)
-# 
-# 
-# # unbalanced panel unbalanced method ------------------------------------------------------------------
-# 
-# 
-# 
-# 
-# result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-#                   control_type = "reg",
-#                   covariatesvar = c("x", "x2"),
-#                   allow_unbalance_panel = TRUE)
-# did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt2,base_period = "universal",cband = FALSE,
-#                           est_method = "reg",xformla = ~x+x2,
-#                           control_group = "notyettreated",
-#                           allow_unbalanced_panel = TRUE,
-#                           clustervars = NULL,
-#                           bstrap = FALSE)
-# 
-# expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
-#              info = "unbalanced panel reg, data unbalanced")
-# rm(result, did_result)
-# 
-# result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-#                   control_type = "dr",
-#                   covariatesvar = c("x", "x2"),
-#                   allow_unbalance_panel = TRUE)
-# did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt2,base_period = "universal",cband = FALSE,
-#                           est_method = "dr",xformla = ~x+x2,
-#                           control_group = "notyettreated",
-#                           allow_unbalanced_panel = TRUE,
-#                           clustervars = NULL,
-#                           bstrap = FALSE)
-# 
-# expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
-#              info = "unbalanced panel dr, data unbalanced")
-# rm(result, did_result)
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                  control_type = "reg",
+                  covariatesvar = c("x", "x2"),
+                  allow_unbalance_panel = TRUE)
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",cband = FALSE,
+                          est_method = "reg",xformla = ~x+x2,
+                          control_group = "notyettreated",
+                          allow_unbalanced_panel = TRUE,
+                          clustervars = NULL,
+                          bstrap = FALSE)
+expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+             info = "unbalanced panel reg, but data balanced")
+rm(result, did_result)
+
+result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                  control_type = "reg",
+                  covariatesvar = c("x", "x2"),
+                  allow_unbalance_panel = TRUE)
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt2 ,base_period = "universal",cband = FALSE,
+                          est_method = "reg",xformla = ~x+x2,
+                          control_group = "notyettreated",
+                          allow_unbalanced_panel = TRUE,
+                          clustervars = NULL,
+                          bstrap = FALSE)
+
+expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+             info = "unbalanced panel reg, but data unbalanced")
+rm(result, did_result)
+
 
 #clean up environment
 detach("package:did", unload=TRUE)

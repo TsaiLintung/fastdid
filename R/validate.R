@@ -24,19 +24,19 @@ validate_argument <- function(dt, p){
   check_set_arg(control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) #kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1) 
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
-  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)
+  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, varycov_diff_only, "scalar logical", .up = 1)
   check_arg(anticipation, alpha, "scalar numeric", .up = 1)
   
   if(!is.na(balanced_event_time)){
     if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
     check_arg(balanced_event_time, "numeric scalar", .up = 1)
   }
-  if(allow_unbalance_panel == TRUE & control_type %in% c("dr", "reg")){
-    stop("fastdid currently only supprts ipw when allowing for unbalanced panels.")
+  if(allow_unbalance_panel == TRUE & control_type == "dr"){
+    stop("fastdid does not support DR when allowing for unbalanced panels.")
   }
-  if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
-    stop("fastdid currently only supprts time varying covariates when not allowing for unbalanced panels.")
-  }
+  # if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
+  #   stop("fastdid currently only supprts time varying covariates when not allowing for unbalanced panels.")
+  # }
   if(any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)){
     stop("time-varying var and invariant var have overlaps.")
   }

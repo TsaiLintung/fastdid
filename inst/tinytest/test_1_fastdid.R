@@ -36,6 +36,11 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                       control_type = "dr",
+                      covariatesvar = c("x", "x2"), varycovariatesvar = "xvar", varycov_diff_only = TRUE),
+              info = "with varying covariates dr, diff value only")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      control_type = "dr",
                       varycovariatesvar = "xvar"),
               info = "varying covariates only dr")
 
