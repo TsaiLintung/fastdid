@@ -5,11 +5,16 @@ simdt <- sim_did(1e+02, 10, cov = "cont", hetero = "all", balanced = TRUE, secon
                  stratify = FALSE, second_cov = TRUE, vary_cov = TRUE)
 dt <- simdt$dt
 
-# message ---------------
+# wrong dt ---------------
 
-expect_error(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-                     boot = FALSE, clustervar = "x"),
-             info = "clustered but no boot")
+expect_warning(fastdid(as.data.frame(dt), timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
+             info = "data.frame")
+
+dt2 <- data.table::copy(dt)
+dt2 <- dt2[!is.infinite(G)]
+
+expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
+               info = "no never")
 
 expect_error(fastdid(dt[time != 3], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
              info = "missing time")
@@ -39,11 +44,27 @@ dt2[time == 3 & unit > 30, y := NA]
 expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time"),
                info = "missing values")
 
-expect_error(fastdid::fastdid(dt, timevar = "time", cohortvar = "g", unitvar = "unit", outcomevar = "zz",  result_type = "group_time"),
-            info = "wrong col name")
+
 
 # already_treated
 dt_at <- data.table::copy(dt)
 dt_at <- dt_at[time > min(G)]
 expect_warning(fastdid(dt_at, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time"),
                info = "already treated")
+
+# wrong arguments -------------------------------------------------
+
+expect_error(fastdid::fastdid(dt, timevar = "time", cohortvar = "g", unitvar = "unit", outcomevar = "zz",  result_type = "group_time"),
+             info = "wrong col name")
+
+expect_error(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                     boot = FALSE, clustervar = "x"),
+             info = "clustered but no boot")
+
+expect_error(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                     boot = FALSE, clustervar = "x"),
+             info = "clustered but no boot")
+
+expect_error(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                     varycovariatesvar = "x2", allow_unbalanced_panel = TRUE),
+             info = "unbalanced but vary")

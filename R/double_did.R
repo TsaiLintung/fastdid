@@ -27,13 +27,13 @@ coerce_dt_doub <- function(dt, p){
   }
   
   setnames(dt, "G", "G1")
-  dt[, mg := ming(G)]
+  dt[, mg := pmin(G1, G2)]
   setorder(dt, time, mg, G1, G2, unit)  #for sort one quick access
  
-  if(p$allow_unbalance_panel){
+  if(p$allow_unbalance_panel){ #let unit start from 1 .... N, useful for knowing which unit is missing
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, mg, G1, G2)
-    dt_inv_raw[, new_unit := 1:.N] #let unit start from 1 .... N, useful for knowing which unit is missing
+    dt_inv_raw[, new_unit := 1:.N] 
     dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit")
     dt[, unit := new_unit]
   }
@@ -62,7 +62,7 @@ coerce_dt_doub <- function(dt, p){
     
     dt[time != 1, time := (time-1)/time_step+1]
   }
-  
+  dt[, mg := pmin(G1, G2)]
   dt[, G := paste0(G1, "-", G2)] #create G once its finalized
   
   #add the information to t

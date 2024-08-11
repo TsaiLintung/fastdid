@@ -245,23 +245,23 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   
   if(or){
     
-    stop("or in RC should not be called right now")
+    # stop("or in RC should not be called right now")
     
-    control_bool_post <- dt_did[, D==0 & inpost] #control group and have obs in post period
-    control_bool_pre <- dt_did[, D==0 & inpre]
-    reg_coef_post <- stats::coef(stats::lm.wfit(x = covvars[control_bool_post,], y = dt_did[control_bool_post,post.y],
-                                                w = dt_did[control_bool_post,weights]))
-    
-    reg_coef_pre <- stats::coef(stats::lm.wfit(x = covvars[control_bool_pre,], y = dt_did[control_bool_pre,pre.y],
-                                               w = dt_did[control_bool_pre,weights]))
-    
-    if(anyNA(reg_coef_post)|anyNA(reg_coef_pre)){
-      stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
-    }
-    
-    #the control function from outcome regression
-    dt_did[, or_delta_post := as.vector(tcrossprod(reg_coef_post, covvars))]
-    dt_did[, or_delta_pre := as.vector(tcrossprod(reg_coef_pre, covvars))]
+    # control_bool_post <- dt_did[, D==0 & inpost] #control group and have obs in post period
+    # control_bool_pre <- dt_did[, D==0 & inpre]
+    # reg_coef_post <- stats::coef(stats::lm.wfit(x = covvars[control_bool_post,], y = dt_did[control_bool_post,post.y],
+    #                                             w = dt_did[control_bool_post,weights]))
+    # 
+    # reg_coef_pre <- stats::coef(stats::lm.wfit(x = covvars[control_bool_pre,], y = dt_did[control_bool_pre,pre.y],
+    #                                            w = dt_did[control_bool_pre,weights]))
+    # 
+    # if(anyNA(reg_coef_post)|anyNA(reg_coef_pre)){
+    #   stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
+    # }
+    # 
+    # #the control function from outcome regression
+    # dt_did[, or_delta_post := as.vector(tcrossprod(reg_coef_post, covvars))]
+    # dt_did[, or_delta_pre := as.vector(tcrossprod(reg_coef_pre, covvars))]
     
   } else {
     dt_did[, or_delta_post := 0]
@@ -314,30 +314,30 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   
   
   if(or){
-    stop("or in RC should not be called right now")
-    M1_post <- colSums(dt_did[, inpost*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpo
-    M1_pre <- colSums(dt_did[, inpre*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpr
-    M3_post <- colSums(dt_did[, inpost*cont_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wcpo
-    M3_pre <- colSums(dt_did[, inpre*cont_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wcpr
-    
-    or_x_post <- dt_did[, inpost*weights*(1-D)] * covvars
-    or_x_pre <- dt_did[, inpre*weights*(1-D)] * covvars
-    or_ex_post <- dt_did[, inpost*weights*(1-D)*(post.y - or_delta_post)] * covvars
-    or_ex_pre <- dt_did[, inpre*weights*(1-D)*(pre.y - or_delta_pre)] * covvars
-    XpX_post <- crossprod(or_x_post, covvars)/n_post
-    XpX_pre <- crossprod(or_x_pre, covvars)/n_pre
-    
-    #calculate alrw = eX (XpX)^-1 by solve XpX*alrw = ex, much faster since avoided inv
-    asym_linear_or_post <- t(solve(XpX_post, t(or_ex_post)))
-    asym_linear_or_pre <- t(solve(XpX_pre, t(or_ex_pre)))
-    
-    #or for treat
-    inf_treat_or_post <- -asym_linear_or_post %*% M1_post #a negative sign here, since or_delta is subtracted from the att, THE PROBLEM
-    inf_treat_or_pre <- -asym_linear_or_pre %*% M1_pre
-    
-    #or for control
-    inf_cont_or_post <- -asym_linear_or_post %*% M3_post
-    inf_cont_or_pre <- -asym_linear_or_pre %*% M3_pre
+    # stop("or in RC should not be called right now")
+    # M1_post <- colSums(dt_did[, inpost*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpo
+    # M1_pre <- colSums(dt_did[, inpre*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpr
+    # M3_post <- colSums(dt_did[, inpost*cont_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wcpo
+    # M3_pre <- colSums(dt_did[, inpre*cont_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wcpr
+    # 
+    # or_x_post <- dt_did[, inpost*weights*(1-D)] * covvars
+    # or_x_pre <- dt_did[, inpre*weights*(1-D)] * covvars
+    # or_ex_post <- dt_did[, inpost*weights*(1-D)*(post.y - or_delta_post)] * covvars
+    # or_ex_pre <- dt_did[, inpre*weights*(1-D)*(pre.y - or_delta_pre)] * covvars
+    # XpX_post <- crossprod(or_x_post, covvars)/n_post
+    # XpX_pre <- crossprod(or_x_pre, covvars)/n_pre
+    # 
+    # #calculate alrw = eX (XpX)^-1 by solve XpX*alrw = ex, much faster since avoided inv
+    # asym_linear_or_post <- t(solve(XpX_post, t(or_ex_post)))
+    # asym_linear_or_pre <- t(solve(XpX_pre, t(or_ex_pre)))
+    # 
+    # #or for treat
+    # inf_treat_or_post <- -asym_linear_or_post %*% M1_post #a negative sign here, since or_delta is subtracted from the att, THE PROBLEM
+    # inf_treat_or_pre <- -asym_linear_or_pre %*% M1_pre
+    # 
+    # #or for control
+    # inf_cont_or_post <- -asym_linear_or_post %*% M3_post
+    # inf_cont_or_pre <- -asym_linear_or_pre %*% M3_pre
     
   } else {
     inf_treat_or_post <- 0

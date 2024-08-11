@@ -45,10 +45,17 @@ expect_silent(fastdid(dt[G != 3], timevar = "time", cohortvar = "G", unitvar = "
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
               info = "alternative alpha")
 
+#get full result
 full_res <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = c("y", "y2"),  result_type = "group_time", full = TRUE)
 expect_equal(names(full_res), c("call", "estimate", "gt_estimate", "agg_inf_func", "agg_weight_matrix"),
              info = "full result")
-#get full result
+
+units <- dt[, unique(unit)]
+weights <- data.table::data.table(unit = units, w = rnorm(length(units), 1, 1))
+dt2 <- dt |> merge(weights, by = "unit")
+expect_silent(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      weightvar = "w"),
+              info = "weighted")
 
 # bootstrap part ------------------------
 

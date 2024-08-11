@@ -29,7 +29,9 @@ fastdid(
   base_period = "universal",
   exper = NULL,
   full = FALSE,
-  parallel = FALSE
+  parallel = FALSE,
+  cohortvar2 = NA,
+  event_specific = TRUE
 )
 }
 \arguments{

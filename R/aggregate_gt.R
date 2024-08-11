@@ -14,7 +14,7 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   #get aggregation scheme from g-t to target parameters
   agg_sch <- get_agg_sch(gt_result, aux, p)
 
-  if(is.na(p$exper$cohortvar2)){
+  if(!p$event_specific | is.na(p$cohortvar2)){
     att <- gt_result$att
     inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights)
   } else {
@@ -61,7 +61,7 @@ get_agg_sch <- function(gt_result, aux, p){
   if(!all(names(gt_result$att) == group_time[, paste0(G, ".", time)])){stop("some bug makes gt misaligned, please report this to the maintainer. Thanks.")}
   
   #get the event-specific matrix, and available ggts
-  if(p$exper$event_specific){
+  if(p$event_specific & !is.na(p$cohortvar2)){
     es <- get_es_scheme(group_time, aux, p)
     group_time <- es$group_time #some gt may not have availble effect (ex: g1 == g2)
     es_weight <- as.matrix(es$es_weight)
@@ -105,7 +105,7 @@ get_agg_targets <- function(group_time, p){
     simple = group_time[, target := post],
     group_time = group_time[, target := paste0(g1(G), ".", time)],
     group_group_time = group_time[, target := paste0(G, ".", time)] ,
-    dynamic_sq = group_time[, target := paste0(time-g1(G), ".", time-g2(G))]
+    dynamic_sq = group_time[, target := paste0(time-g1(G), ".", g1(G)-g2(G))]
   )
 
   targets <- group_time[, unique(target)]
@@ -140,7 +140,7 @@ get_weight_influence <- function(att, agg_sch, aux, p){
   
   group[, time := as.integer(time)]
   
-  if(is.na(p$exper$cohortvar2)){
+  if(is.na(p$cohortvar2)){
     group[, G := as.integer(G)]
     setorder(group, time, G)
   } else {

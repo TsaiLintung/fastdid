@@ -27,6 +27,8 @@
 #' @param base_period same as did
 #' @param full return the full result, like the influence function, call, etc,. Default is false. 
 #' @param parallel whether to use parallization (only available on unix systesm like Mac or Linux.)
+#' @param cohortvar2 The name of the second cohort (group) variable.
+#' @param event_specific Whether to recover event_specific treatment effect or report combined effect. 
 #' 
 #' @import data.table parglm stringr dreamerr BMisc 
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula
@@ -70,7 +72,8 @@ fastdid <- function(data,
                     weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
-                    exper = NULL, full = FALSE, parallel = FALSE){
+                    exper = NULL, full = FALSE, parallel = FALSE, 
+                    cohortvar2 = NA, event_specific = TRUE){
   
   # validation --------------------------------------------------------
   
@@ -91,7 +94,7 @@ fastdid <- function(data,
   # validate and throw away not legal data 
   
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
-  if(!is.na(p$exper$cohortvar2)){setnames(dt, p$exper$cohortvar2, "G2")}
+  if(!is.na(p$cohortvar2)){setnames(dt, p$cohortvar2, "G2")}
   dt <- validate_dt(dt, p)
   
   # preprocess -----------------------------------------------------------
@@ -126,27 +129,19 @@ fastdid <- function(data,
 # small steps ----------------------------------------------------------------------
 
 get_exper_default <- function(exper){
-  na_exper_args <- c("filtervar", "min_dynamic", "max_dynamic", "min_control_cohort_diff", "max_control_cohort_diff",
-                  "cohortvar2")
+  na_exper_args <- c("filtervar", "min_dynamic", "max_dynamic", "min_control_cohort_diff", "max_control_cohort_diff")
   for(arg in na_exper_args){
     if(is.null(exper[[arg]])){
       exper[[arg]] <- NA
     }
   }
-  
-  f_exper_args <- c("event_specific")
-  for(arg in f_exper_args){
-    if(is.null(exper[[arg]])){
-      exper[[arg]] <- FALSE
-    }
-  }
-  
+
   return(exper)
 }
 
 coerce_dt <- function(dt, p){
   
-  if(!is.na(p$exper$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
+  if(!is.na(p$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
 
   #chcek if there is availble never-treated group
   if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){
@@ -169,7 +164,7 @@ coerce_dt <- function(dt, p){
   
   #TODO: this part is kinda ugly
   time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
-  gcol <- str_subset(names(dt), ifelse(is.na(p$exper$cohortvar2), "G", "G1|G2")) 
+  gcol <- str_subset(names(dt), ifelse(is.na(p$cohortvar2), "G", "G1|G2")) 
   if(time_offset != 0){
     dt[, G := G-time_offset]
 
@@ -339,7 +334,7 @@ convert_targets <- function(results, p, t){
          },
          dynamic_sq = {
            results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
-           results[, event_time_2 :=  as.numeric(str_split_i(target, "\\.", 2))]
+           results[, event_stagger :=  as.numeric(str_split_i(target, "\\.", 2))]
          }
   )
   

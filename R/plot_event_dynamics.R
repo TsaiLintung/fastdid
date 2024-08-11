@@ -14,11 +14,9 @@ plot_did_dynamics <-function(dt,
 ){
   
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
-    warning("The ggplot2 package must be installed to use plotting functions")
-    #Either exit or do something without rgl
+    warning("The ggplot2 package must be installed to use plotting functions")   #Either exit or do something without rgl
     return(NULL)
   }
-  
   
   #find the base_period
   et_range <- min(dt[, event_time]):max(dt[, event_time])
@@ -48,8 +46,6 @@ plot_did_dynamics <-function(dt,
   if("outcome" %in% names(dt)){
     figure <- figure + ggplot2::facet_wrap(~outcome, scales = "free")
   }
-
-  figure <- figure + ggplot2::theme_classic()
 
   return(figure)
   

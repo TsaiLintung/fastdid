@@ -35,7 +35,7 @@ validate_argument <- function(dt, p){
     stop("fastdid currently only supprts ipw when allowing for unbalanced panels.")
   }
   if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
-    stop("fastdid currently only supprts time varying covariates when allowing for unbalanced panels.")
+    stop("fastdid currently only supprts time varying covariates when not allowing for unbalanced panels.")
   }
   if(any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)){
     stop("time-varying var and invariant var have overlaps.")
@@ -120,6 +120,17 @@ validate_dt <- function(dt, p){
     warning(length(always_treated), " units is treated in the first period, dropping them")
     dt <- dt[!unit %in% always_treated]
   }
+  
+  #for double did part
+  if(!is.na(p$cohortvar2)){
+    always_treated <- dt[G2 <= min(time), unique(unit)]
+    if(length(always_treated) > 0){
+      warning(length(always_treated), " units is treated in the first period, dropping them")
+      dt <- dt[!unit %in% always_treated]
+    }
+  }
+
+  
   
   return(dt)
 

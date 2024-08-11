@@ -52,7 +52,6 @@ estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
   t <- as.numeric(gt[2])
   
   gt_name <- paste0(g,".",t)
-  
   base_period <- get_base_period(g,t,p)
   did_setup <- get_did_setup(g,t, base_period, aux, p)
   
