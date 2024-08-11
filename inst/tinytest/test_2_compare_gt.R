@@ -9,7 +9,7 @@ simdt <- sim_did(1e+03, 10, cov = "cont", hetero = "all", balanced = TRUE, secon
 dt <- simdt$dt
 
 est_diff_ratio <- function(result, did_result){
-  did_result_dt <- data.table(cohort = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)
+  did_result_dt <- data.table::data.table(cohort = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)
   did_result_dt <- did_result_dt[did_att != 0]
   compare <- did_result_dt |> merge(result, by = c("cohort", "time"), all = TRUE) 
   att_diff_per <- compare[, sum(abs(did_att-att), na.rm = TRUE)/sum(did_att, na.rm = TRUE)]

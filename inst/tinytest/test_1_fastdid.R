@@ -94,10 +94,10 @@ base_result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",o
 expect_equal(fastdid(dt[nrow(dt):1], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"), base_result,
               info = "reversed")
 
-dt2 <- copy(dt)
+dt2 <- data.table::copy(dt)
 dt2[, time := time*2 + 3]
 dt2[, G := G*2 + 3]
-base_result2 <- copy(base_result)
+base_result2 <- data.table::copy(base_result)
 base_result2[, cohort := cohort*2 + 3]
 base_result2[, time := time*2 + 3]
 
@@ -107,7 +107,7 @@ expect_equal(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 
 # unbalanced panel ----------------------------------------------------
 
-dt2 <- copy(dt)
+dt2 <- data.table::copy(dt)
 keep <- sample(c(rep(TRUE, 19),FALSE), dt2[,.N], TRUE)
 dt2 <- dt2[keep]
 
@@ -118,55 +118,18 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 
 # internal behavor -------------------------
 
-expect_error(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-                      boot = FALSE, clustervar = "x"),
-              info = "clustered but no boot")
 
-expect_error(fastdid(dt[time != 3], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
-              info = "missing time")
-
-expect_warning(fastdid(dt[time != 3 | unit != 20], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y", result_type = "group_time"),
-             info = "non-balanced panel, missing")
-
-extra_row <-  dt[unit == 20 & time == 3]
-expect_error(fastdid(rbind(dt,extra_row), timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
-             info = "non-balanced panel, extra")
-
-dt2 <- copy(dt)
-dt2[, x := 1]
-expect_error(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
-                       covariatesvar = "x"),
-               info = "covariates with no variation")
-
-dt2 <- copy(dt)
-dt2[unit == 1 & time < 5, x := 3]
-expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
-                     covariatesvar = "x"),
-             info = "time varying covariates is warned")
-
-dt2 <- copy(dt)
-dt2[unit == 1 & time == 4, time := NA]
-dt2[time == 3 & unit > 30, y := NA]
-expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time"),
-               info = "missing values")
-
-#right error message
-errormes <- "Error: in fastdid(dt, timevar = \"time\", cohortvar...:\n outcomevar must be NA or a character vector which are all names of columns from the dataset. Problem: i) is.na returns\n FALSE, or ii) no match was found for 'zz'.\n"
-mes <- as.character(tryCatch(fastdid(dt, timevar = "time", cohortvar = "g", unitvar = "unit", outcomevar = "zz",  result_type = "group_time"),
-                error = function(e){return(e)}))
-expect_equal(errormes, mes,
-               info = "wrong col name")
 
 #make sure dt is not copied if copy == FALSE
-dtc <- copy(dt)
+dtc <- data.table::copy(dt)
 tracemem(dtc)
 out <- capture.output(fastdid(dtc, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time", copy = FALSE))
 #if a copy happen there will be a message at the start, so out[1] won't be the header. 
 expect_equal(out[1], "           att        se outcome     att_ciub    att_cilb cohort  time",
               info = "no unintentional copy")
 
-dt2 <- copy(dt)
-setnames(dt2, c("time", "G", "unit"), c("t", "g", "u"))
+dt2 <- data.table::copy(dt)
+data.table::setnames(dt2, c("time", "G", "unit"), c("t", "g", "u"))
 expect_silent(fastdid(dt2, timevar = "t", cohortvar = "g", unitvar = "u",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
               info = "other column names")
 

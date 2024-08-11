@@ -377,3 +377,9 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
 }
 
+# utilities ------
+
+reverse_col <- function(x){
+  return(x[,ncol(x):1])
+}
+

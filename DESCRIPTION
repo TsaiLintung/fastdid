@@ -23,6 +23,11 @@ Imports:
     collapse,
     dreamerr (>= 1.4.0),
     parglm
-Suggests: ggplot2, did, parallel
+Suggests: 
+    ggplot2,
+    did,
+    parallel,
+    tinytest
 Encoding: UTF-8
 RoxygenNote: 7.3.2
+Config/testthat/edition: 3
