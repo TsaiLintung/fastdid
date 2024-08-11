@@ -145,7 +145,8 @@ get_exper_default <- function(exper){
 }
 
 coerce_dt <- function(dt, p){
-
+  
+  if(!is.na(p$exper$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
 
   #chcek if there is availble never-treated group
   if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){
@@ -160,17 +161,7 @@ coerce_dt <- function(dt, p){
     dt[, unit := new_unit]
   }
   
-  if(is.na(p$exper$cohortvar2)){
-    setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
-  } else {
-    if(!is.numeric(dt[, G2])){
-      dt[, G2 := as.numeric(G2)]
-    }
-    setnames(dt, "G", "G1")
-    dt[, G := paste0(G1, "-", G2)]
-    dt[, mg := ming(G)]
-    setorder(dt, time, mg, G1, G2, unit) 
-  }
+  setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
 
   #deal with time, coerice time to 1,2,3,4,5.......
   time_periods <- dt[, unique(time)]
@@ -180,27 +171,20 @@ coerce_dt <- function(dt, p){
   time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
   gcol <- str_subset(names(dt), ifelse(is.na(p$exper$cohortvar2), "G", "G1|G2")) 
   if(time_offset != 0){
-    dt[, c(gcol) := .SD-time_offset, .SDcols = gcol]
+    dt[, G := G-time_offset]
 
     dt[, time := time-time_offset]
     time_periods <- time_periods - time_offset
-    if(!is.na(p$exper$cohortvar2)){dt[, G:=paste0(G1, "-", G2)]} #reconstruct G after
   }
   
-  
-  #TODO := this needs it too
   time_step <- 1 #time may not jump at 1
   if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){
     time_step <- time_periods[2]-time_periods[1]
     time_periods <- (time_periods-1)/time_step+1
     if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
+    dt[G != 1, G := (G-1)/time_step+1]
 
-    for(g in gcol){
-      dt[get(g) != 1, c(g) := (get(g)-1)/time_step+1]
-    }
-    
     dt[time != 1, time := (time-1)/time_step+1]
-    if(!is.na(p$exper$cohortvar2)){dt[, G:=paste0(G1, "-", G2)]} #reconstruct G after
   }
   
   #add the information to t

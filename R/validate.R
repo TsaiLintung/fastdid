@@ -114,6 +114,13 @@ validate_dt <- function(dt, p){
     }
   }
   
+  # drop always_treated units
+  always_treated <- dt[G <= min(time), unique(unit)]
+  if(length(always_treated) > 0){
+    warning(length(always_treated), " units is treated in the first period, dropping them")
+    dt <- dt[!unit %in% always_treated]
+  }
+  
   return(dt)
 
 }

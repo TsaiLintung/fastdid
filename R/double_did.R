@@ -17,6 +17,69 @@ ming <- function(GG){
   else {pmin(g1(GG), g2(GG))}
 }
 
+# overiden function -------------------------------------------------
+
+coerce_dt_doub <- function(dt, p){
+  
+  #chcek if there is availble never-treated group
+  if(!is.infinite(dt[, max(ming(G))]) & p$control_option != "notyet"){
+    warning("no never-treated availble, effectively using not-yet-treated control")
+  }
+  
+  setnames(dt, "G", "G1")
+  dt[, mg := ming(G)]
+  setorder(dt, time, mg, G1, G2, unit)  #for sort one quick access
+ 
+  if(p$allow_unbalance_panel){
+    dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
+    setorder(dt_inv_raw, mg, G1, G2)
+    dt_inv_raw[, new_unit := 1:.N] #let unit start from 1 .... N, useful for knowing which unit is missing
+    dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit")
+    dt[, unit := new_unit]
+  }
+  
+  #deal with time, coerice time to 1,2,3,4,5.......
+  time_periods <- dt[, unique(time)]
+  time_size <- length(time_periods)
+
+  time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
+  gcol <- c("G1", "G2")
+  if(time_offset != 0){
+    dt[, c(gcol) := .SD-time_offset, .SDcols = gcol]
+    dt[, time := time-time_offset]
+    time_periods <- time_periods - time_offset
+  }
+
+  time_step <- 1 #time may not jump at 1
+  if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){
+    time_step <- time_periods[2]-time_periods[1]
+    time_periods <- (time_periods-1)/time_step+1
+    if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
+    
+    for(g in gcol){
+      dt[get(g) != 1, c(g) := (get(g)-1)/time_step+1]
+    }
+    
+    dt[time != 1, time := (time-1)/time_step+1]
+  }
+  
+  dt[, G := paste0(G1, "-", G2)] #create G once its finalized
+  
+  #add the information to t
+  t <- list()
+  t$time_step <- time_step
+  t$time_offset <- time_offset
+  
+  if(nrow(dt) == 0){
+    stop("no data after coercing the dataset")
+  }
+  
+  return(list(dt = dt, p = p, t = t))
+  
+}
+
+# aggregation scheme -----------------------------------------------------------
+
 #the scheme for getting event-specific effect
 get_es_scheme <- function(group_time, aux, p){
   
