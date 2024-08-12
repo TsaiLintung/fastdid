@@ -23,8 +23,10 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
       gt_results <- mclapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches, mc.cores = getDTthreads())
     }
     
+    
     #post process
     gt_results <- gt_results[which(!sapply(gt_results, is.null))] #remove the ones with no valid didsetup
+    if(length(gt_results) == 0){stop("no valid group-times att to compute")}
     
     gt <- lapply(gt_results, function(x) {x$gt}) |> as.data.table() |> transpose()
     names(gt) <- c("G", "time")
@@ -113,7 +115,8 @@ get_did_setup <- function(g, t, base_period, aux, p){
   # invalid gt
   if(t == base_period | #no treatment effect for the base period
      base_period < min(aux$time_periods) | #no treatment effect for the first period, since base period is not observed
-     ming(g) >= max_control_cohort | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
+     base_period > max(aux$time_periods) |
+     ming(g) >= min(max_control_cohort) | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
      t >= max_control_cohort | #no control available if the last cohort is treated too
      min_control_cohort > max_control_cohort){ #no control avalilble, most likely due to anticipation
     return(NULL)
