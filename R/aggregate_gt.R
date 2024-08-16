@@ -154,10 +154,17 @@ get_weight_influence <- function(att, agg_sch, aux, p){
     group[, G2 := g2(G)]
     setorder(group, time, mg, G1, G2) #sort
   }
+
+  if(!p$parallel){
+    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+      get_weight_influence_param(x, group, att, aux, p)
+    })
+  } else {
+    inf_weights <- matrix(unlist(mclapply(asplit(agg_sch$agg_weights, 1), function (x){
+      get_weight_influence_param(x, group, att, aux, p)
+    })), ncol = length(agg_sch$targets))
+  }
   
-  inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-    get_weight_influence_param(x, group, att, aux, p)
-  })
   
   return(inf_weights)
   

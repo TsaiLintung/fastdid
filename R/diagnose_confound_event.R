@@ -35,14 +35,14 @@ diagnose_confound_event <- function(data, timevar, cohortvar, cohortvar2, contro
   for(g in dt[, unique(G)]){
     for(t in dt[, unique(time)]){ 
       
-      control_max <- ifelse(control_option == "never", Inf, max(g,t)+anticipation)
+      min_control_cohort <- ifelse(control_option == "never", Inf, max(g,t)+anticipation+1)
       
       base <- g-1-anticipation
       dt[,`:=`(tp = 0, cp = 0, tb = 0, cb = 0)]
       dt[G == g & time == t, tp := w/sum(w)]
-      dt[G > control_max & time == t, cp := w/sum(w)]
+      dt[G >= min_control_cohort & time == t, cp := w/sum(w)]
       dt[G == g & time == base, tb := w/sum(w)]
-      dt[G > control_max & time == base, cb := w/sum(w)]
+      dt[G >= min_control_cohort & time == base, cb := w/sum(w)]
       if(any(dt[, lapply(.SD, sum), .SDcols = c("tp", "cp", "tb", "cb")] == 0)){next} #rule out invalid gt
       
       gamma <- dt[, sum(D2*(tp-cp-tb+cb))] #btw, this is how simple staggered DiD can be without conditional PT

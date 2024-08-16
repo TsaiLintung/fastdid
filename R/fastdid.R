@@ -91,9 +91,8 @@ fastdid <- function(data,
   p$data <- NULL
   p$dt <- NULL
   
-  exper_args <- c("filtervar", "filtervar_post", "only_balance_2by2", 
-                  "min_dynamic", "max_dynamic", "aggregate_scheme",
-                  "min_control_cohort_diff", "max_control_cohort_diff")
+  exper_args <- c("filtervar", "filtervar_post", "only_balance_2by2",
+                  "aggregate_scheme", "max_control_cohort_diff")
   p$exper <- get_exper_default(p$exper, exper_args)
   class(p) <- "locked" #no more changes!
   validate_argument(dt, p)

@@ -5,3 +5,5 @@
 ^development
 
 ^\.github$
+^cran-comments\.md$
+^LICENSE\.md$

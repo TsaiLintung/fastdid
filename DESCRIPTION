@@ -1,7 +1,7 @@
 Package: fastdid
 Type: Package
-Title: fast staggered Difference-in-Difference estimators and extensions
-Version: 1.0.0
+Title: Fast Staggered Difference-in-Difference Estimators
+Version: 0.9.9
 Date: 2024-08-13
 Authors@R: c(
   person("Lin-Tung","Tsai",
@@ -14,8 +14,8 @@ Authors@R: c(
          family = "Tseng", ,
           role = "ctb"))
 Maintainer: Lin-Tung Tsai <tsaidondon@gmail.com>
-Description: **fastdid** is a fast implementation of Callaway and Sant'Anna's (2021)<https://www.sciencedirect.com/science/article/pii/S0304407620303948> staggered Difference-in-Differences (DiD) estimators. DiD setup for millions of units used to take hours to run. With **fastdid**, it takes seconds. 
-License: GPL (>= 2)
+Description: **fastdid** is a fast implementation of Callaway and Sant'Anna's (2021)<https://www.sciencedirect.com/science/article/pii/S0304407620303948> staggered Difference-in-Differences (DiD) estimators and its extensions. **Fastdid** not only reduces the computation time from hours to seconds, but also incorporates new extensions to the framework such as time-varying covariates<https://arxiv.org/abs/2202.02903> and double event<https://drive.google.com/file/d/1YSZR9moWq2GS9AeKeGEi9ytkbJzwI3gs/view?usp=drive_link>. 
+License: MIT + file LICENSE
 Imports:
     data.table,
     stringr,

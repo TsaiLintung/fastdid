@@ -133,12 +133,17 @@ As an attempt to balance the validity and flexibility of `fastdid`, "experimenta
 
 The current list of experimental features are
 
-- `max`/`min_control_cohort_diff`: limit the max/min cohort difference between treated and control group
+- `max_control_cohort_diff`: limit the max cohort difference between treated and control group
 - `filtervar`: limit the units being used as treated and control group with a potentially-time-varying variable
-- `max`/`min_dynamic`: limit the group-time combinations `fastdid` estimates by the range of `t-g`.
 - `only_balance_2by2`: only require observations to have non-NA values within each 2 by 2 DiD, instead of throughout all time periods. Can be an alternative way of dealing with unbalanced panel by filling the missing periods with NAs. Not recommended as CS only have `allow_unbalance_panel`, which uses a repeated cross-section 2 by 2 DiD estimator.
 
 # Update
+
+## 0.9.9
+
+remove: mincontrol cohort diff, min dynamic max dynamic
+add: full, custom scheme
+
 
 ## 0.9.4 (2024/8/2)
 

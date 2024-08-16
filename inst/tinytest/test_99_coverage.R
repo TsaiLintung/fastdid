@@ -2,6 +2,12 @@
 
 #takes a lot of time so only at home
 if(at_home() & .Platform$OS.type == "unix"){
+  
+  #gotta go fast 
+  setDTthreads(0)
+  options(mc.cores = getDTthreads())
+  
+  
   cov_error_margin <- 0.01
   iter <- 200
   
@@ -51,7 +57,7 @@ if(at_home() & .Platform$OS.type == "unix"){
     keep <- sample(c(rep(TRUE, 15),FALSE), dt2[,.N], TRUE)
     dt2 <- dt2[keep]
     result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-                      allow_unbalance_panel = TRUE, covariatesvar = "x", control_type = "reg")
+                      allow_unbalance_panel = TRUE, covariatesvar = "x", control_type = "reg", parallel = TRUE)
     cov <- merge(simdt_c$att, result, by.x = c("G", "time"), by.y = c("cohort", "time"))
     cov[, cover := as.numeric(attgt < att_ciub & attgt > att_cilb)]
     covers <- c(covers, cov[, cover])

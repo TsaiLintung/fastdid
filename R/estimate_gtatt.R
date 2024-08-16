@@ -13,14 +13,15 @@ estimate_gtatt <- function(aux, p){
 
 #gtatt for each outcome
 estimate_gtatt_outcome <- function(y, aux, p, caches) {
-
-    gt_all <- expand.grid(g = aux$cohorts, t = aux$time_periods, stringsAsFactors = FALSE) |> transpose() |> as.list() #first loop t then g
+    
+    treated_cohort <- aux$cohorts[!is.infinite(ming(aux$cohorts))] #otherwise would try to calculate the pre-period of nevertreated in varying base period lol
+    gt_all <- expand.grid(g = treated_cohort, t = aux$time_periods, stringsAsFactors = FALSE) |> transpose() |> as.list() #first loop t then g
     
     #main estimation 
     if(!p$parallel){
       gt_results <- lapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches)
     } else {
-      gt_results <- mclapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches, mc.cores = getDTthreads())
+      gt_results <- mclapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches)
     }
     
     #post process
@@ -30,8 +31,6 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
     gt <- lapply(gt_results, function(x) {x$gt}) |> as.data.table() |> transpose()
     names(gt) <- c("G", "time")
     gt[, time := as.integer(time)]
-    
-    
     
     gt_att <- lapply(gt_results, function(x) {x$result$att})
     gt_inf_func <- lapply(gt_results, function(x) {x$result$inf_func})
@@ -54,11 +53,17 @@ estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
   g <- gt[1]
   t <- as.numeric(gt[2])
   
+  #find base time
   gt_name <- paste0(g,".",t)
   base_period <- get_base_period(g,t,p)
+  if(t == base_period | #no treatment effect for the base period
+     !base_period %in% aux$time_period){ #base period out of bounds
+    return(NULL)
+  } 
+  #find treatment and control group
   did_setup <- get_did_setup(g,t, base_period, aux, p)
-  
-  if(is.null(did_setup)){return(NULL)} #no gtatt if no did setup
+  valid_tc_groups <- any(did_setup == 1) & any(did_setup == 0) #if takes up too much time, consider use collapse anyv, but right now quite ok
+  if(!isTRUE(valid_tc_groups)){return(NULL)} #no treatment group or control group #isTRUE for na as false
   
   #covariates matrix
   covvars <- get_covvars(base_period, t, aux, p)
@@ -89,37 +94,12 @@ get_base_period <- function(g,t,p){
 get_did_setup <- function(g, t, base_period, aux, p){
   
   treated_cohorts <- aux$cohorts[!is.infinite(ming(aux$cohorts))]
-  
-  #get the range of cohorts
-  if(p$control_option == "never"){
-    min_control_cohort <- Inf
-  } else {
-    min_control_cohort <- max(t, base_period)+p$anticipation+1
-  }
+
+  min_control_cohort <- ifelse(p$control_option == "never", Inf, max(t, base_period)+p$anticipation+1)
   max_control_cohort <- ifelse(p$control_option == "notyet", max(ming(treated_cohorts)), Inf) 
-  
-  #experimental
+
   if(!is.na(p$exper$max_control_cohort_diff)){
-    max_control_cohort <- min(g+p$exper$max_control_cohort_diff, max(treated_cohorts))
-  } 
-  if(!is.na(p$exper$min_control_cohort_diff)){
-    min_control_cohort <- max(g+p$exper$min_control_cohort_diff, min(treated_cohorts))
-  } 
-  if((!is.na(p$exper$max_dynamic))){
-    if(t-ming(g) > p$exper$max_dynamic){return(NULL)}
-  }
-  if(!is.na(p$exper$min_dynamic)){
-    if(t-ming(g) < p$exper$min_dynamic){return(NULL)}
-  }
-  
-  # invalid gt
-  if(t == base_period | #no treatment effect for the base period
-     base_period < min(aux$time_periods) | #no treatment effect for the first period, since base period is not observed
-     base_period > max(aux$time_periods) |
-     ming(g) >= min(max_control_cohort) | #no treatment effect for never treated or the last treated cohort (for not yet notyet)
-     t >= max_control_cohort | #no control available if the last cohort is treated too
-     min_control_cohort > max_control_cohort){ #no control avalilble, most likely due to anticipation
-    return(NULL)
+    max_control_cohort <- min(g+p$exper$max_control_cohort_diff, max_control_cohort)
   } 
   
   #select the control and treated cohorts
@@ -135,7 +115,6 @@ get_did_setup <- function(g, t, base_period, aux, p){
     did_setup[!aux$filters[[t]]] <- NA #only use units with filter == TRUE at target period
   }
   
-  if(all(is.na(did_setup))){return(NULL)}
   return(did_setup)
 }
 
@@ -145,7 +124,7 @@ get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohor
   return(start:end)
 }
 
-get_treat_pos <- function(cohort_sizes, treat_cohort){
+get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for double did, need to match exact g-g-t
   index <- which(cohort_sizes[,G] == treat_cohort)
   start <- ifelse(index == 1, 1, cohort_sizes[1:(index-1), sum(cohort_size)]+1)
   end <- cohort_sizes[1:index, sum(cohort_size)]
