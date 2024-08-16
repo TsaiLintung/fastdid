@@ -29,12 +29,9 @@ did_estimate <- fastdid(data = did_sim$dt, timevar = "time", #calling fastdid
 To learn more about fastdid: 
 
   - [basics](https://bcallaway11.github.io/did/articles/did-basics.html): basics of staggered Difference in Difference by Callaway and Sant'Anna
-  - [usage](articles/usage.html): guide to fastdid
-  - [fastdid and did](articles/did.html): comparison with [did](https://github.com/bcallaway11/did) package
-  - [performance](articles/performance.html): memory and speed benchmark
-  - [validity](articles/validity.html): testing conducted to ensure the validity
-  - [double](articles/double.html): guide to double event 
-  - [experimental](articles/experimental.html): flexible but less tested features
+  - [usage](articles/usage.html): fastdid's user guide
+  - [misc](articles/misc.html): comparison with [did](https://github.com/bcallaway11/did), benchmark, tests, and experimental features
+  - [double](articles/double.html): introduction to 
 
 # Acknowledgments
 
