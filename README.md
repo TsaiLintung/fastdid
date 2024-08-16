@@ -35,7 +35,7 @@ result <- fastdid(data = dt, #the dataset
                   result_type = "group_time") #the result type
 ```
 
-You can control for covariates by providing the name of the data columns (`x, x2`), and choose the method among doubly-robust (`"dr"`), inverse probability weight (`"ipw"`), and outcome regression (`"or"`). Ex: `fastdid(..., control_option = "dr", covaraitesvar = c("x", "x2"))`. 
+You can control for covariates by providing the name of the data columns (`x, x2`), and choose the method via the `control_type` argument among doubly-robust (`"dr"`), inverse probability weight (`"ipw"`), and outcome regression (`"or"`). Ex: `fastdid(..., control_type = "dr", covaraitesvar = c("x", "x2"))`. 
 
 Clustered standard error can be obtained from multiplier bootstrap. Ex: `fastdid(..., boot = TRUE, clustervar = "x")`. 
 

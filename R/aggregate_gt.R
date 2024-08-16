@@ -107,6 +107,11 @@ get_agg_targets <- function(group_time, p){
     group_group_time = group_time[, target := paste0(G, ".", time)] ,
     dynamic_sq = group_time[, target := paste0(time-g1(G), ".", g1(G)-g2(G))]
   )
+  
+  #allow custom aggregation scheme, this overides other stuff
+  if(!is.na(p$exper$aggregate_scheme)){
+    group_time[, target := eval(str2lang(p$exper$aggregate_scheme))]
+  }
 
   targets <- group_time[, unique(target)]
   
@@ -163,6 +168,7 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
 
   keepers <- which(agg_weights != 0)
   group <- group[keepers,]
+  #moving this outside will create a g*t*id matrix, not really worth the memory
   keepers_matrix <- as.matrix(aux$weights*sapply(1:nrow(group), function(g){as.integer(aux$dt_inv[, G] == group[g,G]) - group[g,pg]}))
   
   # gt weight = pgi / sum(pgi)

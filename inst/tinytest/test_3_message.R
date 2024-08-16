@@ -33,6 +33,14 @@ expect_error(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", o
              info = "covariates with no variation")
 
 dt2 <- data.table::copy(dt)
+dt2[G == Inf, x := x+10, by = "unit"]
+expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
+                     covariatesvar = "x", control_type = "ipw", control_option = "never"),
+             info = "covariates with no overlap")
+
+# warning for problematic dt ----------
+
+dt2 <- data.table::copy(dt)
 dt2[unit == 1 & time < 5, x := 3]
 expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
                        covariatesvar = "x"),

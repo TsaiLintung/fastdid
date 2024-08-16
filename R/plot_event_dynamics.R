@@ -3,15 +3,10 @@
 #' This function generates an event study plot based on the results of a DiD analysis.
 #'
 #' @param dt A data table containing the results of the DiD analysis. It should include columns for 'att' (average treatment effect), 'se' (standard error), and 'event_time' (time points).
-#' @param graphname A character string specifying the title of the plot (default is "event study plot").
-#' @param note A character string for adding additional notes or comments to the plot (default is empty).
 #'
 #' @return A ggplot2 object representing the event study plot.
 #' @export
-
-plot_did_dynamics <-function(dt, 
-                             graphname = "event study plot", note = ""
-){
+plot_did_dynamics <-function(dt ){
   
   if (!requireNamespace("ggplot2", quietly = TRUE)) {
     warning("The ggplot2 package must be installed to use plotting functions")   #Either exit or do something without rgl

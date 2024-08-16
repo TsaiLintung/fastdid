@@ -4,14 +4,10 @@
 \alias{plot_did_dynamics}
 \title{Create an event study plot for Difference-in-Differences (DiD) analysis.}
 \usage{
-plot_did_dynamics(dt, graphname = "event study plot", note = "")
+plot_did_dynamics(dt)
 }
 \arguments{
 \item{dt}{A data table containing the results of the DiD analysis. It should include columns for 'att' (average treatment effect), 'se' (standard error), and 'event_time' (time points).}
-
-\item{graphname}{A character string specifying the title of the plot (default is "event study plot").}
-
-\item{note}{A character string for adding additional notes or comments to the plot (default is empty).}
 }
 \value{
 A ggplot2 object representing the event study plot.

@@ -17,6 +17,7 @@
 #' @param treatment_assign The method for treatment assignment ("latent" or "uniform").
 #' @param vary_cov include time-varying covariates
 #' @param second_cohort include confounding events
+#' @param confound_ratio extent of event confoundedness
 #'
 #' @return A list containing the simulated dataset (dt) and the treatment effect values (att).
 #'
@@ -30,7 +31,7 @@
 #' @export
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size = 0.001,
                     cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, vary_cov = FALSE, na = "none", 
-                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent", second_cohort = FALSE){
+                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent", second_cohort = FALSE, confound_ratio = 1){
   
   if(!is.na(seed)){set.seed(seed)}
   
@@ -81,7 +82,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   if(second_cohort){
     setnames(dt_i, "G", "G2")
     if(treatment_assign == "latent"){
-      dt_i[, treat_latent := x*0.2 + x2*0.2 + ep1 + rnorm(sample_size)] #unit with larger X tend to be treated and treated earlier
+      dt_i[, treat_latent := x*0.2 + x2*0.2 + ep1*confound_ratio + rnorm(sample_size)] #unit with larger X tend to be treated and treated earlier
       untreated_thres <- quantile(dt_i$treat_latent, untreated_prop)
       dt_i[treat_latent <= untreated_thres, G := Inf] #unit with low latent is never treated
       
@@ -116,7 +117,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   
   #add time_varying covariates
   if(vary_cov){
-    dt[, xvar := pmin(G, time_period+4)*time+rnorm(sample_size*time_period, 0,30)] #should be confounding....?
+    dt[, xvar := pmin(G, time_period+4)*time^(1/3)*0.1+rnorm(sample_size*time_period, 0,10)] #should be confounding....?
   } else {
     dt[, xvar := 1]
   }

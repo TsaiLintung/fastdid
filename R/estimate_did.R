@@ -32,7 +32,7 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
   if(ipw){
     if(is.null(cache)){ #if no cache, calcuate ipw
       #estimate the logit
-      prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
+      prop_score_est <- suppressWarnings(parglm::parglm.fit(covvars, dt_did[, D],
                                                     family = stats::binomial(), 
                                                     weights = dt_did[, weights],
                                                     control = parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())), #no parallel if already parallel
@@ -48,8 +48,8 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
       
       logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
       prop_score_fit <- fitted(prop_score_est)
-      if(max(prop_score_fit) >= 1){warning(paste0("support overlap condition violated for some group_time"))}
-      prop_score_fit <- pmin(1-1e-16, prop_score_fit) #for the ipw
+      if(max(prop_score_fit) >= 1-1e-10){warning(paste0("extreme propensity score: ", max(prop_score_fit), ", support overlap is likely to be violated"))} #<=0 (only in control) is fine for ATT since it is just not used 
+      prop_score_fit <- pmin(1-1e-10, prop_score_fit) #for the ipw
 
       hess <- stats::vcov(prop_score_est) * n #for the influence function
       hess[is.na(hess)|abs(hess) > 1e10] <- 0
@@ -168,7 +168,7 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
   inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
   inf_func_no_na <- inf_func_no_na * oldn / n #adjust the value such that mean over the whole id size give the right result
   inf_func[data_pos] <- inf_func_no_na
-
+  
   return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
 }
 

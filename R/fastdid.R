@@ -30,9 +30,12 @@
 #' @param cohortvar2 The name of the second cohort (group) variable.
 #' @param event_specific Whether to recover event_specific treatment effect or report combined effect. 
 #' 
-#' @import data.table parglm stringr dreamerr BMisc 
+#' @import data.table stringr dreamerr  
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula
 #' @importFrom collapse allNA fnrow whichNA fnunique fsum na_insert
+#' @importFrom parallel mclapply
+#' @importFrom BMisc multiplier_bootstrap
+#' @importFrom parglm parglm.fit parglm.control
 #' @return A data.table containing the estimated treatment effects and standard errors.
 #' @export
 #'
@@ -123,13 +126,17 @@ fastdid <- function(data,
       agg_inf_func = agg_result$inf_func,
       agg_weight_matrix = agg_result$agg_weight_matrix
     )
+    return(full_result)
   }
 }
 
 # small steps ----------------------------------------------------------------------
 
 get_exper_default <- function(exper){
-  na_exper_args <- c("filtervar", "min_dynamic", "max_dynamic", "min_control_cohort_diff", "max_control_cohort_diff")
+  na_exper_args <- c("filtervar", "filtervar_post",
+                     "min_dynamic", "max_dynamic", 
+                     "min_control_cohort_diff", "max_control_cohort_diff",
+                     "aggregate_scheme")
   for(arg in na_exper_args){
     if(is.null(exper[[arg]])){
       exper[[arg]] <- NA
@@ -292,6 +299,8 @@ get_auxdata <- function(dt, p){
 }
 
 convert_targets <- function(results, p, t){
+  
+  if(!is.na(p$exper$aggregate_scheme)){return(results)}  #no conversion back if use custom
   
   switch(p$result_type,
          dynamic = {

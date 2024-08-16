@@ -84,6 +84,10 @@ fastdid(
 \item{full}{return the full result, like the influence function, call, etc,. Default is false.}
 
 \item{parallel}{whether to use parallization (only available on unix systesm like Mac or Linux.)}
+
+\item{cohortvar2}{The name of the second cohort (group) variable.}
+
+\item{event_specific}{Whether to recover event_specific treatment effect or report combined effect.}
 }
 \value{
 A data.table containing the estimated treatment effects and standard errors.

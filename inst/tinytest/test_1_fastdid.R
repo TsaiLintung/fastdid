@@ -36,11 +36,6 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                       control_type = "dr",
-                      covariatesvar = c("x", "x2"), varycovariatesvar = "xvar", varycov_diff_only = TRUE),
-              info = "with varying covariates dr, diff value only")
-
-expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-                      control_type = "dr",
                       varycovariatesvar = "xvar"),
               info = "varying covariates only dr")
 
@@ -134,10 +129,10 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 
 #make sure dt is not copied if copy == FALSE
 dtc <- data.table::copy(dt)
-tracemem(dtc)
+address <- tracemem(dtc) |> str_remove_all(">|<")
 out <- capture.output(fastdid(dtc, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time", copy = FALSE))
 #if a copy happen there will be a message at the start, so out[1] won't be the header. 
-expect_equal(out[1], "           att        se outcome     att_ciub    att_cilb cohort  time",
+expect_true(!str_detect(str_flatten_comma(out), address),
               info = "no unintentional copy")
 
 dt2 <- data.table::copy(dt)

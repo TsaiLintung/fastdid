@@ -23,7 +23,6 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
       gt_results <- mclapply(gt_all, estimate_gtatt_outcome_gt, y, aux, p, caches, mc.cores = getDTthreads())
     }
     
-    
     #post process
     gt_results <- gt_results[which(!sapply(gt_results, is.null))] #remove the ones with no valid didsetup
     if(length(gt_results) == 0){stop("no valid group-times att to compute")}
@@ -31,6 +30,8 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
     gt <- lapply(gt_results, function(x) {x$gt}) |> as.data.table() |> transpose()
     names(gt) <- c("G", "time")
     gt[, time := as.integer(time)]
+    
+    
     
     gt_att <- lapply(gt_results, function(x) {x$result$att})
     gt_inf_func <- lapply(gt_results, function(x) {x$result$inf_func})
@@ -68,9 +69,8 @@ estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
   
   # estimate --------------------
   result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, caches[[gt_name]]),
-                     error = function(e){stop("DiD estimation failed for group-",g , 
-                                              " time-", t, "(note this is the internal g-t that starts at 1 with step 1): ", e)})
-
+                     error = function(e){stop("2-by-2 DiD failed for internal group-time ",g , 
+                                              "-", t, ": ", e)})
   return(list(gt = gt, result = result))
   
 }
@@ -106,10 +106,10 @@ get_did_setup <- function(g, t, base_period, aux, p){
     min_control_cohort <- max(g+p$exper$min_control_cohort_diff, min(treated_cohorts))
   } 
   if((!is.na(p$exper$max_dynamic))){
-    if(t-g > p$exper$max_dynamic){return(NULL)}
+    if(t-ming(g) > p$exper$max_dynamic){return(NULL)}
   }
   if(!is.na(p$exper$min_dynamic)){
-    if(t-g < p$exper$min_dynamic){return(NULL)}
+    if(t-ming(g) < p$exper$min_dynamic){return(NULL)}
   }
   
   # invalid gt
@@ -129,8 +129,14 @@ get_did_setup <- function(g, t, base_period, aux, p){
   
   if(!is.na(p$exper$filtervar)){
     did_setup[!aux$filters[[base_period]]] <- NA #only use units with filter == TRUE at base period
+   
   }
   
+  if(!is.na(p$exper$filtervar_post)){
+    did_setup[!aux$filters[[t]]] <- NA #only use units with filter == TRUE at base period
+  }
+  
+  if(all(is.na(did_setup))){return(NULL)}
   return(did_setup)
 }
 

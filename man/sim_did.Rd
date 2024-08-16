@@ -19,7 +19,8 @@ sim_did(
   seed = NA,
   stratify = FALSE,
   treatment_assign = "latent",
-  second_cohort = FALSE
+  second_cohort = FALSE,
+  confound_ratio = 1
 )
 }
 \arguments{
@@ -52,6 +53,8 @@ sim_did(
 \item{treatment_assign}{The method for treatment assignment ("latent" or "uniform").}
 
 \item{second_cohort}{include confounding events}
+
+\item{confound_ratio}{extent of event confoundedness}
 }
 \value{
 A list containing the simulated dataset (dt) and the treatment effect values (att).
