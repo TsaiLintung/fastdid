@@ -117,8 +117,8 @@ Aggregated parameters: `fastdid` aggregates in the same function.
 - Anticipation :white_check_mark:
 - Varying base periods :white_check_mark:
 - Simultaneously valid confidence bands :white_check_mark:
-- User-provided aggregation scheme
-- User-provided control formula 
+- User-provided aggregation scheme :white_check_mark:
+- Zero-trust between steps for full customization
 - Further optimization
 
 # Source version
@@ -136,6 +136,7 @@ The current list of experimental features are
 - `max`/`min_control_cohort_diff`: limit the max/min cohort difference between treated and control group
 - `filtervar`: limit the units being used as treated and control group with a potentially-time-varying variable
 - `max`/`min_dynamic`: limit the group-time combinations `fastdid` estimates by the range of `t-g`.
+- `only_balance_2by2`: only require observations to have non-NA values within each 2 by 2 DiD, instead of throughout all time periods. Can be an alternative way of dealing with unbalanced panel by filling the missing periods with NAs. Not recommended as CS only have `allow_unbalance_panel`, which uses a repeated cross-section 2 by 2 DiD estimator.
 
 # Update
 

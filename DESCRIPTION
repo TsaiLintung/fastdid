@@ -22,9 +22,9 @@ Imports:
     BMisc,
     collapse,
     dreamerr (>= 1.4.0),
-    parglm
+    parglm,
+    ggplot2
 Suggests: 
-    ggplot2,
     did,
     parallel,
     tinytest

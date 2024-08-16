@@ -24,7 +24,7 @@ validate_argument <- function(dt, p){
   check_set_arg(control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) #kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1) 
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
-  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, varycov_diff_only, "scalar logical", .up = 1)
+  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)
   check_arg(anticipation, alpha, "scalar numeric", .up = 1)
   
   if(!is.na(balanced_event_time)){
@@ -58,7 +58,7 @@ validate_argument <- function(dt, p){
 validate_dt <- function(dt, p){
 
   varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
-  varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar)]
+  varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar) & !is.na(varnames) & !is.null(varnames)]
   
   #change to int 
   uniquecols <- c("G", "time", "unit")
@@ -74,13 +74,14 @@ validate_dt <- function(dt, p){
     if(p$balanced_event_time > dt[, max(time-G)]){stop("balanced_event_time is larger than the max event time in the data")}
   }
 
-  #doesn't allow missing value for now
-  for(col in varnames){
-    if(is.na(col)){next}
-    na_obs <- whichNA(dt[[col]])
-    if(length(na_obs) != 0){
-      warning("missing values detected in ", col, ", removing ", length(na_obs), " observation.")
-      dt <- dt[!na_obs]
+  #doesn't allow missing value
+  if(is.na(p$exper$only_balance_2by2) | !p$exper$only_balance_2by2){
+    for(col in varnames){
+      na_obs <- whichNA(dt[,get(col)])
+      if(length(na_obs) != 0){
+        warning("missing values detected in ", col, ", removing ", length(na_obs), " observation.")
+        dt <- dt[!na_obs]
+      }
     }
   }
   

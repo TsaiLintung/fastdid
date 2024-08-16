@@ -11,5 +11,6 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
                          "allow_unbalance_panel", "boot", "biters", "weightvar", "clustervar", "covariatesvar", "varycovariatesvar", "filtervar",
                          "copy", "validate", "max_control_cohort_diff", "anticipation", "min_control_cohort_diff", "base_period", "post", "att_ciub", "att_cilb", "cband", "alpha",
                          "G2", "G1", "mg", "cohort1", "cohort2", "event_time_1", "event_time_2",
-                         "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2", "parallel"))
+                         "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2", "parallel",
+                         "tp", "cp", "tb", "cb", "no_na", "event_stagger"))
 

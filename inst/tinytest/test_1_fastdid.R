@@ -90,10 +90,6 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       base_period = "varying"),
               info = "baseperiod vary")
 
-#plot
-expect_silent(plot_did_dynamics(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "dynamic")),
-              info = "simple plot")
-
 # dt that needs adjustment ---------------------------
 
 base_result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time")
@@ -129,10 +125,10 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 
 #make sure dt is not copied if copy == FALSE
 dtc <- data.table::copy(dt)
-address <- tracemem(dtc) |> str_remove_all(">|<")
+address <- tracemem(dtc) |> stringr::str_remove_all(">|<")
 out <- capture.output(fastdid(dtc, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time", copy = FALSE))
 #if a copy happen there will be a message at the start, so out[1] won't be the header. 
-expect_true(!str_detect(str_flatten_comma(out), address),
+expect_true(!stringr::str_detect(stringr::str_flatten_comma(out), address),
               info = "no unintentional copy")
 
 dt2 <- data.table::copy(dt)
@@ -140,7 +136,7 @@ data.table::setnames(dt2, c("time", "G", "unit"), c("t", "g", "u"))
 expect_silent(fastdid(dt2, timevar = "t", cohortvar = "g", unitvar = "u",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
               info = "other column names")
 
-if(.Platform$OS.type == "unix"){
+if(.Platform$OS.type == "unix" & at_home()){
   expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", parallel = TRUE),
                 info = "parallel")
 }

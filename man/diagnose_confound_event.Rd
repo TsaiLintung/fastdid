@@ -26,6 +26,8 @@ diagnose_confound_event(
 \item{control_option}{The control units used for the DiD estimates. Default is "both".}
 
 \item{weightvar}{The name of the weight variable, if not specified will cluster on unit level (optional).}
+
+\item{anticipation}{Period of anticipation}
 }
 \value{
 A data.table containing the contamination ratio for each group-time.
@@ -35,7 +37,11 @@ Diagnose Event Confoundedness
 }
 \examples{
 # simulated data
-simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE)
+simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, 
+second_outcome = TRUE, second_cohort = TRUE)
+dt <- simdt$dt
+
+diagnose_confound_event(dt, "time", "G", "G2")
 
 }
 \keyword{computation}

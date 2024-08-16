@@ -131,9 +131,8 @@ get_did_setup <- function(g, t, base_period, aux, p){
     did_setup[!aux$filters[[base_period]]] <- NA #only use units with filter == TRUE at base period
    
   }
-  
   if(!is.na(p$exper$filtervar_post)){
-    did_setup[!aux$filters[[t]]] <- NA #only use units with filter == TRUE at base period
+    did_setup[!aux$filters[[t]]] <- NA #only use units with filter == TRUE at target period
   }
   
   if(all(is.na(did_setup))){return(NULL)}

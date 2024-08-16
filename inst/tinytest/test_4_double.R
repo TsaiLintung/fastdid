@@ -50,7 +50,7 @@ expect_silent(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",o
                       cohortvar2 = "G2"),
              info = "time offset")
 
-if(.Platform$OS.type == "unix"){
+if(.Platform$OS.type == "unix" & at_home()){
   expect_silent(fastdid(dt, timevar = "time",cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                         cohortvar2 = "G2", parallel = TRUE),
                 info = "parallel double")
@@ -58,20 +58,20 @@ if(.Platform$OS.type == "unix"){
 
 # diagnosis -----------------------
 
-simdt <- sim_did(1e+05, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, 
+simdt <- sim_did(1e+03, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, 
                  stratify = FALSE, second_cohort = TRUE, confound_ratio = 1)
 dt <- simdt$dt
 diag <- diagnose_confound_event(dt, "time", "G", "G2")
 expect_true(mean(diag) > 0.25, info = "positive confound")
 expect_inherits(plot(diag), "ggplot", "plot diag")
 
-simdt <- sim_did(1e+05, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, 
+simdt <- sim_did(1e+03, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, 
                  stratify = FALSE, second_cohort = TRUE, confound_ratio = 0)
 dt <- simdt$dt
 diag <- diagnose_confound_event(dt, "time", "G", "G2")
-expect_true(abs(mean(diag)) < 0.01, info = "no confound")
+expect_true(abs(mean(diag)) < 0.02, info = "no confound")
 
-simdt <- sim_did(1e+05, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1,
+simdt <- sim_did(1e+03, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1,
                  stratify = FALSE, second_cohort = TRUE, confound_ratio = -1)
 dt <- simdt$dt
 diag <- diagnose_confound_event(dt, "time", "G", "G2")

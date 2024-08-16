@@ -30,8 +30,8 @@
 #' @param cohortvar2 The name of the second cohort (group) variable.
 #' @param event_specific Whether to recover event_specific treatment effect or report combined effect. 
 #' 
-#' @import data.table stringr dreamerr  
-#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula
+#' @import data.table stringr dreamerr ggplot2
+#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean
 #' @importFrom collapse allNA fnrow whichNA fnunique fsum na_insert
 #' @importFrom parallel mclapply
 #' @importFrom BMisc multiplier_bootstrap
@@ -78,7 +78,7 @@ fastdid <- function(data,
                     exper = NULL, full = FALSE, parallel = FALSE, 
                     cohortvar2 = NA, event_specific = TRUE){
   
-  # validation --------------------------------------------------------
+  # preprocess --------------------------------------------------------
   
   if(!is.data.table(data)){
     warning("coercing input into a data.table.")
@@ -90,17 +90,20 @@ fastdid <- function(data,
   p <- as.list(environment()) #collect everything besides data
   p$data <- NULL
   p$dt <- NULL
-  p$exper <- get_exper_default(p$exper)
-  class(p) <- "locked"
-  validate_argument(dt, p)
-
-  # validate and throw away not legal data 
   
+  exper_args <- c("filtervar", "filtervar_post", "only_balance_2by2", 
+                  "min_dynamic", "max_dynamic", "aggregate_scheme",
+                  "min_control_cohort_diff", "max_control_cohort_diff")
+  p$exper <- get_exper_default(p$exper, exper_args)
+  class(p) <- "locked" #no more changes!
+  validate_argument(dt, p)
+  
+  #change name for main columns
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
   if(!is.na(p$cohortvar2)){setnames(dt, p$cohortvar2, "G2")}
-  dt <- validate_dt(dt, p)
   
-  # preprocess -----------------------------------------------------------
+  # validate and throw away not legal data 
+  dt <- validate_dt(dt, p)
   
   #make dt conform to the WLOG assumptions of fastdid
   coerce_result <- coerce_dt(dt, p) #also changed dt
@@ -108,13 +111,16 @@ fastdid <- function(data,
   # get auxiliary data
   aux <- get_auxdata(coerce_result$dt, p)
 
-  # main part  -------------------------------------------------
+  # main estimation  -------------------------------------------------
 
   gt_result_list <- estimate_gtatt(aux, p)
   agg_result <- aggregate_gt(gt_result_list, aux, p)
   
-  #convert "targets" back to meaningful parameter identifiers like cohort 1 post, time 2 post 
+  # post process -------------------------------------------
+  
+  #convert "targets" back to meaningful parameters
   est_results <- convert_targets(agg_result$est, p, coerce_result$t) 
+  class(est_results) <- c("fastdid_est", class(est_results))
   
   if(!p$full){
     return(est_results)
@@ -126,232 +132,7 @@ fastdid <- function(data,
       agg_inf_func = agg_result$inf_func,
       agg_weight_matrix = agg_result$agg_weight_matrix
     )
+    class(full_result) <- c("fastdid_result", class(full_result))
     return(full_result)
   }
-}
-
-# small steps ----------------------------------------------------------------------
-
-get_exper_default <- function(exper){
-  na_exper_args <- c("filtervar", "filtervar_post",
-                     "min_dynamic", "max_dynamic", 
-                     "min_control_cohort_diff", "max_control_cohort_diff",
-                     "aggregate_scheme")
-  for(arg in na_exper_args){
-    if(is.null(exper[[arg]])){
-      exper[[arg]] <- NA
-    }
-  }
-
-  return(exper)
-}
-
-coerce_dt <- function(dt, p){
-  
-  if(!is.na(p$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
-
-  #chcek if there is availble never-treated group
-  if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){
-    warning("no never-treated availble, effectively using not-yet-treated control")
-  }
-  
-  if(p$allow_unbalance_panel){
-    dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
-    setorder(dt_inv_raw, G)
-    dt_inv_raw[, new_unit := 1:.N] #let unit start from 1 .... N, useful for knowing which unit is missing
-    dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit")
-    dt[, unit := new_unit]
-  }
-  
-  setorder(dt, time, G, unit) #sort the dataset essential for the sort-once-quick-access 
-
-  #deal with time, coerice time to 1,2,3,4,5.......
-  time_periods <- dt[, unique(time)]
-  time_size <- length(time_periods)
-  
-  #TODO: this part is kinda ugly
-  time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
-  gcol <- str_subset(names(dt), ifelse(is.na(p$cohortvar2), "G", "G1|G2")) 
-  if(time_offset != 0){
-    dt[, G := G-time_offset]
-
-    dt[, time := time-time_offset]
-    time_periods <- time_periods - time_offset
-  }
-  
-  time_step <- 1 #time may not jump at 1
-  if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){
-    time_step <- time_periods[2]-time_periods[1]
-    time_periods <- (time_periods-1)/time_step+1
-    if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
-    dt[G != 1, G := (G-1)/time_step+1]
-
-    dt[time != 1, time := (time-1)/time_step+1]
-  }
-  
-  #add the information to t
-  t <- list()
-  t$time_step <- time_step
-  t$time_offset <- time_offset
-  
-  if(nrow(dt) == 0){
-    stop("no data after coercing the dataset")
-  }
-  
-  return(list(dt = dt, p = p, t = t))
-  
-}
-
-get_auxdata <- function(dt, p){
-
-  time_periods <- dt[, unique(time)]
-  id_size <- dt[, uniqueN(unit)]
-
-  #construct the outcomes list for fast access later
-  #loop for multiple outcome
-  outcomes_list <- list()
-  for(outcol in p$outcomevar){
-    outcomes <- list()
-    
-    if(!p$allow_unbalance_panel){
-      for(i in time_periods){
-        start <- (i-1)*id_size+1
-        end <- i*id_size
-        outcomes[[i]] <- dt[seq(start,end), get(outcol)]
-      }
-    } else {
-      
-      for(i in time_periods){
-        #populate a outcome vector of length N with outcome data in the right place
-        #NA is data gone or missing, will be addressed in estimate_did_rc
-        outcome_period <- rep(NA, id_size)
-        data_pos <- dt[time == i, unit] #units observed in i
-        outcome_period[data_pos] <- dt[time == i, get(outcol)]
-        outcomes[[i]] <- outcome_period
-      }
-      
-    }
-    
-    outcomes_list[[outcol]] <- outcomes
-  }
-  
-  #the time-invariant parts 
-  if(!p$allow_unbalance_panel){
-    dt_inv <- dt[1:id_size]
-  } else {
-    dt_inv <- dt[dt[, .I[1], by = unit]$V1] #the first observation
-    setorder(dt_inv, unit) #can't move this outside
-  }
-  
-  cohorts <- dt_inv[, unique(G)]
-  cohort_sizes <- dt_inv[, .(cohort_size = .N) , by = G]
-
-  # the optional columns
-  varycovariates <- list()
-  if(!allNA(p$varycovariatesvar)){
-    for(i in time_periods){
-      start <- (i-1)*id_size+1
-      end <- i*id_size
-      varycovariates[[i]] <- dt[seq(start,end), .SD, .SDcols = p$varycovariatesvar]
-    }
-  } else {
-    varycovariates <- NA
-  }
-  
-  # filters
-  filters <- list()
-  if(!is.na(p$exper$filtervar)){
-    for(i in time_periods){
-      start <- (i-1)*id_size+1
-      end <- i*id_size
-      filters[[i]] <- dt[seq(start,end), .SD, .SDcols = p$exper$filtervar]
-    }
-  } else {
-    filters <- NA
-  }
-  
-  if(!allNA(p$covariatesvar)){
-    covariates <- dt_inv[,.SD, .SDcols = p$covariatesvar]
-  } else {
-    covariates <- NA
-  }
-  
-  if(!is.na(p$clustervar)){
-    cluster <- dt_inv[, .SD, .SDcols = p$clustervar] |> unlist()
-  } else {
-    cluster <- NA
-  }
-  
-  if(!is.na(p$weightvar)){
-    weights <- dt_inv[, .SD, .SDcols = p$weightvar] |> unlist()
-    weights <- weights/mean(weights) #normalize
-  } else {
-    weights <- rep(1, id_size)
-  }
-  
-  aux <- as.list(environment())
-  aux$dt <- NULL
-  aux$p <- NULL
-  class(aux) <- "locked"
-
-  return(aux)
-  
-}
-
-convert_targets <- function(results, p, t){
-  
-  if(!is.na(p$exper$aggregate_scheme)){return(results)}  #no conversion back if use custom
-  
-  switch(p$result_type,
-         dynamic = {
-           results[, event_time := target]
-           setcolorder(results, "event_time", before = 1)
-         },
-         group = {
-           results[, type := ifelse(target >= 0, "post", "pre")]
-           results[, cohort := recover_time(abs(target), t)]
-           setcolorder(results, "cohort", before = 1)
-         },
-         time = {
-           results[, type := ifelse(target >= 0, "post", "pre")]
-           results[, time := recover_time(abs(target), t)]
-           setcolorder(results, "time", before = 1)
-         },
-         simple = {
-           results[, type := ifelse(target >= 0, "post", "pre")]
-         },
-         group_time = {
-           results[, cohort := as.numeric(str_split_i(target, "\\.", 1))]
-           results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
-           
-           #recover the time
-           results[, cohort := recover_time(cohort, t)]
-           results[, time := recover_time(time, t)]
-
-         },
-         group_group_time = {
-           results[, cohort := str_split_i(target, "\\.", 1)]
-           results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
-           
-           results[, cohort1 := g1(cohort)]
-           results[, cohort2 := g2(cohort)]
-           
-           results[, cohort1 := recover_time(cohort1, t)]
-           results[, cohort2 := recover_time(cohort2, t)]
-           results[, time := recover_time(time, t)]
-           results[, `:=`(cohort = NULL)]
-         },
-         dynamic_sq = {
-           results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
-           results[, event_stagger :=  as.numeric(str_split_i(target, "\\.", 2))]
-         }
-  )
-  
-  results[, target := NULL]
-  
-  return(results)
-}
-
-recover_time <- function(time, t){
-  return(((time-1)*t$time_step)+1+t$time_offset)
 }
