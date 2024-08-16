@@ -14,7 +14,7 @@ Authors@R: c(
          family = "Tseng", ,
           role = "ctb"))
 Maintainer: Lin-Tung Tsai <tsaidondon@gmail.com>
-Description: **fastdid** is a fast implementation of Callaway and Sant'Anna's (2021)<https://www.sciencedirect.com/science/article/pii/S0304407620303948> staggered Difference-in-Differences (DiD) estimators and its extensions. **Fastdid** not only reduces the computation time from hours to seconds, but also incorporates new extensions to the framework such as time-varying covariates<https://arxiv.org/abs/2202.02903> and double event<https://drive.google.com/file/d/1YSZR9moWq2GS9AeKeGEi9ytkbJzwI3gs/view?usp=drive_link>. 
+Description: **fastdid** is a fast implementation of Callaway and Sant'Anna's (2021)<https://www.sciencedirect.com/science/article/pii/S0304407620303948> staggered Difference-in-Differences (DiD) estimators and its extensions. **Fastdid** not only reduces the computation time from hours to seconds, but also incorporates new extensions to the framework such as time-varying covariates<https://arxiv.org/abs/2202.02903> and double event<not_ready_yet>. 
 License: MIT + file LICENSE
 Imports:
     data.table,
@@ -26,9 +26,12 @@ Imports:
     ggplot2
 Suggests: 
     did,
+    knitr,
     parallel,
+    rmarkdown,
     tinytest
 Encoding: UTF-8
 RoxygenNote: 7.3.2
-URL: https://github.com/TsaiLintung/fastdid
+URL: https://github.com/TsaiLintung/fastdid, https://tsailintung.github.io/fastdid/
 BugReports: https://github.com/TsaiLintung/fastdid/issues
+VignetteBuilder: knitr

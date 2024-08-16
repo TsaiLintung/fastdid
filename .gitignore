@@ -38,3 +38,5 @@ vignettes/*.pdf
 #interactive stuff
 *development/old
 *development/output
+docs
+inst/doc
