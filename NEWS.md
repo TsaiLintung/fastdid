@@ -1,3 +1,3 @@
-# fastdid 0.9.5
+# fastdid 1.0.0
 
 * Initial CRAN submission.
