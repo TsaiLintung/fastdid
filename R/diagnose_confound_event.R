@@ -25,7 +25,7 @@ diagnose_confound_event <- function(data, timevar, cohortvar, cohortvar2, contro
   if(is.na(weightvar)){
     dt <- data[, .(w = .N), by = c(timevar, cohortvar, cohortvar2)]
   } else {
-    dt <- data[, .(w = sum(get(weightvar))), by = c(timevar, cohortvar2, cohortvar2)]
+    dt <- data[, .(w = sum(get(weightvar))), by = c(timevar, cohortvar, cohortvar2)]
   }
   setnames(dt, c("time", "G", "G2", "w"))
   dt[, D2 := as.numeric(time >= G2)]
@@ -52,7 +52,9 @@ diagnose_confound_event <- function(data, timevar, cohortvar, cohortvar2, contro
     }
   }
   
-  class(expo) <- c("confound_diagnosis", "data.table", "data.frame") #add class for generics
-  return(expo)
+  diag_result <- list(gtexpo = expo)
+  #TODO: make this list instead
+  class(diag_result) <- c("confound_diagnosis") #add class for generics
+  return(diag_result)
   
 }

@@ -67,23 +67,18 @@ plot_did_dynamics <-function(x, margin = "event_time"){
 
 #' @export
 print.confound_diagnosis <- function(x,...) {
-  cat(paste0("Average confoundedness: ", mean(x)))
+  cat(paste0("event correlation: ", mean(x)))
 }
 
 #' @export
 plot.confound_diagnosis <- function(x,...) {
-  
-  if (!requireNamespace("ggplot2", quietly = TRUE)) {
-    warning("The ggplot2 package must be installed to use plotting functions")   #Either exit or do something without rgl
-    return(NULL)
-  }
-  
-  x[time >= G] |>  ggplot( aes(x = time-G, y = as.factor(G), fill = gamma)) +  geom_tile() + 
+
+  x$gtexpo[time >= G] |>  ggplot( aes(x = as.factor(time-G), y = as.factor(G), fill = gamma)) +  geom_tile() + 
      scale_fill_distiller(palette = "RdBu", limits = c(-1, 1)) + 
-     labs(subtitle = paste0("average confoundedness: ", mean(x)), y = "G", x = "event_time") 
+     labs(subtitle = paste0("event correlation: ", mean(x)), y = "G", x = "event_time") 
 }
 
 #' @export
 mean.confound_diagnosis <- function(x,...){
-  return(x[time>=G,weighted.mean(gamma)])
+  return(x$gtexpo[time>=G,weighted.mean(gamma, w)])
 }
