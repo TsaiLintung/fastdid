@@ -2,7 +2,6 @@
 
 S3method(mean,confound_diagnosis)
 S3method(plot,confound_diagnosis)
-S3method(plot,fastdid_est)
 S3method(plot,fastdid_result)
 S3method(print,confound_diagnosis)
 export(diagnose_confound_event)

@@ -1,8 +1,6 @@
 #' @export
-plot.fastdid_result <- function(x,...){return(plot(x$estimate,...))}
-
-#' @export
-plot.fastdid_est <- function(x,...){
+plot.fastdid_result <- function(x,...){
+  x <- x$estimate
   #dispatch to functions by result_type
   if("event_time" %in% names(x)){
     plot <- plot_did_dynamics(x)

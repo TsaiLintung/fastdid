@@ -119,7 +119,6 @@ fastdid <- function(data,
   
   #convert "targets" back to meaningful parameters
   est_results <- convert_targets(agg_result$est, p, coerce_result$t) 
-  class(est_results) <- c("fastdid_est", class(est_results))
   
   if(!p$full){
     return(est_results)

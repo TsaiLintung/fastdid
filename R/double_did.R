@@ -120,6 +120,8 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
   g2 <- group_time[ggt, G2]
   gg <- group_time[ggt, G]
   
+  if(is.infinite(g1)){return(NULL)}
+  
   if(t < g2){ #direct pure effect
     
     group_time[ggt, weight := 1] #just use the observed effect

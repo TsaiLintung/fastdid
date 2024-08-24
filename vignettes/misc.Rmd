@@ -14,53 +14,17 @@ knitr::opts_chunk$set(
 )
 ```
 
-# Comparison with `did`
-
-As the name suggests, **fastdid**'s goal is to be fast **did**. Besides performance, here are some comparisons between the two packages.
-
-## Estimator
-
-**fastdid**'s estimators is identical to **did**'s. As the performance gains mostly come from efficient data manipulation, the key estimation implementations are analogous. For example, 2x2 DiD (`estimate_did.R` and `DRDID::std_ipw_did_panel`), influence function from weights (`aggregate_gt.R/get_weight_influence`, `compute.aggte.R/wif`), and multiplier bootstrap (`get_se.R` and `mboot.R`).
-
-## Interface
-
-**fastdid** should feel very similar to `att_gt`. But there are a few differences:
-
-Control group option: 
-| fastdid | did | control group used |
-|-|-|-|
-| both | notyettreated | never-treated + not-yet-but-eventually-treated |
-| never| nevertreated  | never-treated |
-| notyet | | not-yet-but-eventually-treated |
-
-Aggregated parameters: `fastdid` aggregates in the same function.
-| fastdid | did |
-|-|-|
-| group_time | no aggregation |
-|dynamic|dynamic|
-|time|calendar|
-|group|group|
-|simple|simple|
-
-## Other
-
-1. **fastdid** only offers inverse probability weights estimators for controlling for covariates when allowing for unbalanced panels.
-2. **fastdid** use universal base periods as default. 
-
 # Performance
 
+`fastdid` is magnitudes faster than [did](https://github.com/bcallaway11/did), and 15x faster than the fastest alternative [DiDforBigData](https://github.com/setzler/DiDforBigData) (dfbd for short) for large dataset. fastdid also uses less memory. Here is a comparison of run time for fastdid, did, and dfbd using a panel of 10 periods and varying samples sizes.
 
-**fastdid** is magnitudes faster than **did**, and 15x faster than the fastest alternative **DiDforBigData** for large dataset. 
+![](https://i.imgur.com/s5v32Rw.png)
 
-Here is a comparison of run time for **fastdid**, **did**, and **DiDforBigData** (dfbd for short) using a panel of 10 periods and varying samples sizes.
+Unfortunately, the Author's computer fails to run **did** at 1 million units. For a rough idea, **DiDforBigData** is about 100x faster than **did** in Bradley Setzler's [benchmark](https://setzler.github.io/DiDforBigData/articles/Background.html). Other staggered DiD implementations are even slower than **did**. 
 
-![time comparison](https://i.imgur.com/s5v32Rw.png)
+For memory:
 
-Unfortunately, the Author's computer fails to run **did** at 1 million sample. For a rough idea, **DiDforBigData** is about 100x faster than **did** in Bradley Setzler's [benchmark](https://setzler.github.io/DiDforBigData/articles/Background.html). Other staggered DiD implementations are even slower than **did**. 
-
-**fastdid** also uses less memory.
-
-![RAM comparison](https://i.imgur.com/7emkgOz.png)
+![](https://i.imgur.com/7emkgOz.png)
 
 For the benchmark, a baseline group-time ATT is estimated with no covariates control, no bootstrap, and no explicit parallelization. Computing time is measured by `microbenchmark` and peak RAM by `peakRAM`.
 
@@ -72,20 +36,66 @@ Before each release, we conduct tests to ensure the validity of estimates from `
 
 For features included in CS, `fastdid` maintains a maximum of 1% difference from results from the `did` package. This margin of error is mostly for bootstrapped results due to its inherent randomess. For point estimates, the difference is smaller than 1e-12, and is most likely the result of [floating-point error](https://en.wikipedia.org/wiki/Floating-point_error_mitigation). The relevant test files are [group-time](https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_2_compare_gt.R) and [aggregates](https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_3_compare_agg.R). 
 
-## Extensions: direct coverage test
+## Extensions: coverage test
 
-For features not included in CS, `fastdid` maintains that the 95% confidence intervals have a coverage rate between 94% and 96%. The coverage rate is calculated by running 200 iterations. In each iteration, we test whether the confidence interval estimated covers the group-truth values. We then average the rate across iterations. Due to the randomness of coverage, the realized coverage fall outside of the thresholds in about 1% of the time. The relevant test file is [coverage](https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_5_coverage.R). 
+For features not included in CS, `fastdid` maintains that the 95% confidence intervals have a coverage rate between 94% and 96%. 
 
-## Experimental: not tested
+The coverage rate is calculated by running 200 iterations. In each iteration, we test whether the confidence interval estimated covers the group-truth values. We then average the rate across iterations. Due to the randomness of coverage, the realized coverage fall outside of the thresholds in about 1% of the time. The relevant test file is [coverage](https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_5_coverage.R). 
 
-Experimental features are not tested. The validity of its estimates are not guaranteed. 
-
-# Experimental Features
+## Experimental Features: not tested
 
 As an attempt to balance the validity and flexibility of `fastdid`, "experimental features" is introduced in version 0.9.4. These features will be less tested and documented, and it is generally advised to not use them unless the user know what they and the package are doing. These experimental features can be accessed via the `exper` argument. For example, to use the `filtervar` feature, call `fastdid(..., exper = list(filtervar = "FF"))`. 
 
 The current list of experimental features are
 
 - `max_control_cohort_diff`: limit the max cohort difference between treated and control group
-- `filtervar`: limit the units being used as treated and control group with a potentially-time-varying variable
+- `filtervar`, `filtervar_post`: limit the units being used as treated and control group with a potentially-time-varying variable in base (post) period
 - `only_balance_2by2`: only require observations to have non-NA values within each 2 by 2 DiD, instead of throughout all time periods. Can be an alternative way of dealing with unbalanced panel by filling the missing periods with NAs. Not recommended as CS only have `allow_unbalance_panel`, which uses a repeated cross-section 2 by 2 DiD estimator.
+- `custom_scheme`: aggregate to user-defined parameters
+
+
+# Comparison with `did`
+
+As the name suggests, **fastdid**'s goal is to be fast **did**. Besides performance, here are some comparisons between the two packages.
+
+## Estimator
+
+**fastdid**'s estimators is identical to **did**'s. As the performance gains mostly come from efficient data manipulation, the key estimation implementations are analogous. For example, 2x2 DiD (`estimate_did.R` and `DRDID::std_ipw_did_panel`), influence function from weights (`aggregate_gt.R/get_weight_influence`, `compute.aggte.R/wif`), and multiplier bootstrap (`get_se.R` and `mboot.R`).
+
+## Interface
+
+**fastdid** should feel similar to `att_gt`. But there are a few differences:
+
+Control group option: 
+
+```{r table1, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
+tabl <- "
+| fastdid | did | control group used |
+|-|-|-|
+| both | notyettreated | never-treated + not-yet-but-eventually-treated |
+| never| nevertreated  | never-treated |
+| notyet | | not-yet-but-eventually-treated |
+"
+cat(tabl) # output the table in a format good for HTML/PDF/docx conversion
+```
+
+Aggregated parameters: `fastdid` aggregates in the same function.
+
+```{r table2, echo=FALSE, message=FALSE, warnings=FALSE, results='asis'}
+tabl <- "
+| fastdid | did |
+|-|-|
+| group_time | no aggregation |
+|dynamic|dynamic|
+|time|calendar|
+|group|group|
+|simple|simple|
+"
+cat(tabl) # output the table in a format good for HTML/PDF/docx conversion
+```
+
+## Other
+
+1. **fastdid** only offers inverse probability weights estimators for controlling for covariates when allowing for unbalanced panels.
+2. **fastdid** use universal base periods as default. 
+

@@ -14,6 +14,49 @@ knitr::opts_chunk$set(
 )
 ```
 
+Here we show how to deal with confounding events, see [Tsai (2024)](not_ready_yet) for the full treatment. We first simulate some data with confounding events. 
+
 ```{r setup}
 library(fastdid)
+library(ggplot2)
+library(data.table)
+simdt <- sim_did(1e+04, 5, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, 
+                 stratify = FALSE, second_cov = TRUE, vary_cov = TRUE,
+                 second_cohort = TRUE) #comfounding event
+dt <- simdt$dt #dataset
+
+#ground truth att
+att <- simdt$att |> merge(dt[,.(w = .N),by = "G"], by = "G")
+att[, event_time := time-G]
+att <- att[event == 1,.(att = weighted.mean(attgt, w)), by = "event_time"]
+```
+
+Using the default estimator, the estimates (black line) is biased from the ground truth (red line).
+
+```{r, naive}
+naive_result <-fastdid(data = dt, 
+                 timevar = "time", cohortvar = "G", unitvar = "unit", 
+                 outcomevar = "y", result_type = "dynamic")
+plot_did_dynamics(naive_result) + 
+  geom_line(aes(y = att, x = event_time), 
+            data = att, color = "red") + theme_bw()
+```
+
+Using the double did estimator with `cohortvar2`, the estimator recovers the ground truth.
+
+```{r, double}
+double_result <-fastdid(data = dt, 
+                 timevar = "time", cohortvar = "G", unitvar = "unit",
+                 outcomevar = "y", result_type = "dynamic",
+                 cohortvar2 = "G2", event_specific = TRUE)
+plot_did_dynamics(double_result) + 
+  geom_line(aes(y = att, x = event_time), 
+            data = att, color = "red") + theme_bw()
+```
+
+Diagnostics can be obtained using `diagnose_confound_event`.
+
+```{r, diag}
+diag <- diagnose_confound_event(dt, timevar = "time", cohortvar = "G", cohortvar2 = "G2")
+plot(diag) + theme_bw()
 ```
