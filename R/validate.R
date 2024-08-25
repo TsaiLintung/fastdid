@@ -21,7 +21,7 @@ validate_argument <- function(dt, p){
   checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
   check_set_arg(weightvar, clustervar, "NA | match", .choices = dt_names, .message = checkvar_message, .up = 1)
   
-  check_set_arg(control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) #kinda bad names since did's notyet include both notyet and never
+  check_set_arg(control_option, double_control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) #kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1) 
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
   check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)

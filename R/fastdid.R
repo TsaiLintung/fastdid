@@ -29,6 +29,7 @@
 #' @param parallel whether to use parallization (only available on unix systesm like Mac or Linux.)
 #' @param cohortvar2 The name of the second cohort (group) variable.
 #' @param event_specific Whether to recover event_specific treatment effect or report combined effect. 
+#' @param double_control_option The control units used for the double DiD estimates. Default is "both".
 #' 
 #' @import data.table stringr dreamerr ggplot2
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean
@@ -76,7 +77,7 @@ fastdid <- function(data,
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
                     exper = NULL, full = FALSE, parallel = FALSE, 
-                    cohortvar2 = NA, event_specific = TRUE){
+                    cohortvar2 = NA, event_specific = TRUE, double_control_option="both"){
   
   # preprocess --------------------------------------------------------
   

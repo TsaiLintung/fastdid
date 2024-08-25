@@ -31,7 +31,8 @@ fastdid(
   full = FALSE,
   parallel = FALSE,
   cohortvar2 = NA,
-  event_specific = TRUE
+  event_specific = TRUE,
+  double_control_option = "both"
 )
 }
 \arguments{
@@ -88,6 +89,8 @@ fastdid(
 \item{cohortvar2}{The name of the second cohort (group) variable.}
 
 \item{event_specific}{Whether to recover event_specific treatment effect or report combined effect.}
+
+\item{double_control_option}{The control units used for the double DiD estimates. Default is "both".}
 }
 \value{
 A data.table containing the estimated treatment effects and standard errors.

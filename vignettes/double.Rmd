@@ -20,9 +20,8 @@ Here we show how to deal with confounding events, see [Tsai (2024)](not_ready_ye
 library(fastdid)
 library(ggplot2)
 library(data.table)
-simdt <- sim_did(1e+04, 5, cov = "cont", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, 
-                 stratify = FALSE, second_cov = TRUE, vary_cov = TRUE,
-                 second_cohort = TRUE) #comfounding event
+simdt <- sim_did(1e+04, 5, cov = "cont", hetero = "all", balanced = TRUE, seed = 1, 
+                 second_cohort = TRUE, second_het = "no") #comfounding event
 dt <- simdt$dt #dataset
 
 #ground truth att
@@ -41,6 +40,15 @@ plot_did_dynamics(naive_result) +
   geom_line(aes(y = att, x = event_time), 
             data = att, color = "red") + theme_bw()
 ```
+Diagnostics can be obtained by using `time >= G2` as outcome. Since we set the effect of the confounding event at 10 constantly, it is clear that the bias of the default estimator is roughly 10 times the diagnostics.
+
+```{r, diag}
+dt[, D2 := time >= G2]
+diag <- fastdid(data = dt, 
+                 timevar = "time", cohortvar = "G", unitvar = "unit",
+                 outcomevar = "D2", result_type = "dynamic")
+plot_did_dynamics(diag) + theme_bw()
+```
 
 Using the double did estimator with `cohortvar2`, the estimator recovers the ground truth.
 
@@ -54,9 +62,3 @@ plot_did_dynamics(double_result) +
             data = att, color = "red") + theme_bw()
 ```
 
-Diagnostics can be obtained using `diagnose_confound_event`.
-
-```{r, diag}
-diag <- diagnose_confound_event(dt, timevar = "time", cohortvar = "G", cohortvar2 = "G2")
-plot(diag) + theme_bw()
-```

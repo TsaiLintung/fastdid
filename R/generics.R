@@ -5,7 +5,7 @@ plot.fastdid_result <- function(x,...){
   if("event_time" %in% names(x)){
     plot <- plot_did_dynamics(x)
   } else if ("cohort" %in% names(x) & "time" %in% names(x)){
-    stop("don't have plot for group-time for now")
+    plot <- plot_did_group_time(x)
   } else if ("cohort" %in% names(x)){
     plot <- plot_did_dynamics(x, "cohort")
   } else if ("time" %in% names(x)){
@@ -61,22 +61,10 @@ plot_did_dynamics <-function(x, margin = "event_time"){
   
 }
 
-# confound diagnosis ---------------------
 
 #' @export
-print.confound_diagnosis <- function(x,...) {
-  cat(paste0("event correlation: ", mean(x)))
-}
-
-#' @export
-plot.confound_diagnosis <- function(x,...) {
-
-  x$gtexpo[time >= G] |>  ggplot( aes(x = as.factor(time-G), y = as.factor(G), fill = gamma)) +  geom_tile() + 
-     scale_fill_distiller(palette = "RdBu", limits = c(-1, 1)) + 
-     labs(subtitle = paste0("event correlation: ", mean(x)), y = "G", x = "event_time") 
-}
-
-#' @export
-mean.confound_diagnosis <- function(x,...){
-  return(x$gtexpo[time>=G,weighted.mean(gamma, w)])
+plot_did_group_time <- function(x, range = c(-1, 1),...) {
+  x$gtexpo[time >= cohort] |>  ggplot( aes(x = as.factor(time-cohort), y = as.factor(cohort), fill = gamma)) +  geom_tile() + 
+     scale_fill_distiller(palette = "RdBu", limits = range) + 
+     labs(y = "cohort", x = "event_time") 
 }

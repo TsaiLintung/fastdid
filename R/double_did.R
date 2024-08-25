@@ -130,10 +130,14 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     
     base_period <- g2 - 1
     if(base_period == t){return(NULL)}
+    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+1)
     
     #get the cohorts
     tb <- group_time[,G == gg & time == base_period]
-    c <-  group_time[, G1 == g1 & G2 > max(t,base_period) & G2 != g2]
+    c <-  group_time[, G1 == g1 & G2 >= min_control_cohort & G2 != g2]
+    if(p$control_option == "notyet"){
+      c[group_time[, is.infinite(G2)]] <- FALSE
+    }
     cp <- group_time[, c & time == t]
     cb <- group_time[, c & time == base_period]
     
@@ -150,11 +154,15 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     
     base_period <- g1 - 1
     if(base_period == t){return(NULL)}
+    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+1)
     
     #get the cohorts
     tp <- group_time[,.I == ggt]
     tb <- group_time[,G == gg & time == base_period]
-    c <-  group_time[,G2 == g2 & G1 > max(t,base_period) & G1 != g1]
+    c <-  group_time[,G2 == g2 & G1 >= min_control_cohort & G1 != g1]
+    if(p$control_option == "notyet"){
+      c[group_time[, is.infinite(G1)]] <- FALSE
+    }
     cp <- group_time[, c & time == t]
     cb <- group_time[, c & time == base_period]
     

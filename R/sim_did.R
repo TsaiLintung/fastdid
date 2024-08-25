@@ -18,6 +18,7 @@
 #' @param vary_cov include time-varying covariates
 #' @param second_cohort include confounding events
 #' @param confound_ratio extent of event confoundedness
+#' @param second_het heterogeneity of the second event
 #'
 #' @return A list containing the simulated dataset (dt) and the treatment effect values (att).
 #'
@@ -31,7 +32,7 @@
 #' @export
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size = 0.001,
                     cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, vary_cov = FALSE, na = "none", 
-                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent", second_cohort = FALSE, confound_ratio = 1){
+                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent", second_cohort = FALSE, confound_ratio = 1, second_het = "all"){
   
   if(!is.na(seed)){set.seed(seed)}
   
@@ -144,11 +145,15 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
     dt[, D2 := as.integer(time >= G2)]
     #generate gtatt
     att2 <- CJ(G2 = 1:time_period, time = 1:time_period)
-    if(hetero == "all"){
-      att2[, attgt2 := rnorm(time_period*time_period, mean = 2, sd = 1)]
-    } else if (hetero == "dynamic"){
-      for(event_t in 0:max(att2[,time-G2])){
-        att2[time - G2 == event_t, attgt2 := rnorm(1, mean = 2, sd = 1)]
+    if(second_het == "no"){
+      att2[, attgt2 := 10]
+    } else {
+      if(hetero == "all"){
+        att2[, attgt2 := rnorm(time_period*time_period, mean = 2, sd = 1)]
+      } else if (hetero == "dynamic"){
+        for(event_t in 0:max(att2[,time-G2])){
+          att2[time - G2 == event_t, attgt2 := rnorm(1, mean = 2, sd = 1)]
+        }
       }
     }
     att2[time < G2, attgt2 := 0] #no anticipation

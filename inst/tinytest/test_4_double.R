@@ -22,6 +22,14 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
               info = "double, only never")
 
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      cohortvar2 = "G2", double_control_option = "never"),
+              info = "double call, double never")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      cohortvar2 = "G2", double_control_option = "notyet"),
+              info = "double cal, double notyet")
+
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                       covariatesvar = "x",
                       cohortvar2 = "G2"),
               info = "double, covariates")
@@ -55,25 +63,4 @@ if(.Platform$OS.type == "unix" & at_home()){
                         cohortvar2 = "G2", parallel = TRUE),
                 info = "parallel double")
 }
-
-# diagnosis -----------------------
-
-simdt <- sim_did(1e+03, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, 
-                 stratify = FALSE, second_cohort = TRUE, confound_ratio = 1)
-dt <- simdt$dt
-diag <- diagnose_confound_event(dt, "time", "G", "G2")
-expect_true(mean(diag) > 0.25, info = "positive confound")
-expect_inherits(plot(diag), "ggplot", "plot diag")
-
-simdt <- sim_did(1e+03, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1, 
-                 stratify = FALSE, second_cohort = TRUE, confound_ratio = 0)
-dt <- simdt$dt
-diag <- diagnose_confound_event(dt, "time", "G", "G2")
-expect_true(abs(mean(diag)) < 0.02, info = "no confound")
-
-simdt <- sim_did(1e+03, 10, cov = "no", hetero = "all", balanced = TRUE, second_outcome = FALSE, seed = 1,
-                 stratify = FALSE, second_cohort = TRUE, confound_ratio = -1)
-dt <- simdt$dt
-diag <- diagnose_confound_event(dt, "time", "G", "G2")
-expect_true(mean(diag) < -0.15, info = "negative confound")
 
