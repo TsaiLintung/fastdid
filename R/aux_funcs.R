@@ -28,7 +28,7 @@ coerce_dt <- function(dt, p){
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, G)
     dt_inv_raw[, new_unit := 1:.N] #let unit start from 1 .... N, useful for knowing which unit is missing
-    dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit")
+    dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit", sort = FALSE)
     dt[, unit := new_unit]
   }
   

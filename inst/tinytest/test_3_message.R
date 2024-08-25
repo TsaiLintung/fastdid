@@ -60,6 +60,11 @@ dt_at <- dt_at[time > min(G)]
 expect_warning(fastdid(dt_at, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time"),
                info = "already treated")
 
+dt2 <- data.table::copy(dt)
+dt2[, x := as.factor(round(x))]
+expect_error(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time", covariatesvar = "x"),
+             info = "only numeric covariate")
+
 # wrong arguments -------------------------------------------------
 
 expect_error(fastdid::fastdid(dt, timevar = "time", cohortvar = "g", unitvar = "unit", outcomevar = "zz",  result_type = "group_time"),

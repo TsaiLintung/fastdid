@@ -95,6 +95,7 @@ validate_dt <- function(dt, p){
       if(is.na(cov)){next}
       #check covaraites is not constant  
       if(fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1)stop(cov, " have no variation")
+      if(!(is.numeric(dt[, get(cov)])|is.integer(dt[, get(cov)]))){stop(cov, " is not numeric or integer, do not support fixed effects.")}
     }
   }
   

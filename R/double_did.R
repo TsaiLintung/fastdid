@@ -37,7 +37,7 @@ coerce_dt_doub <- function(dt, p){
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, mg, G1, G2)
     dt_inv_raw[, new_unit := 1:.N] 
-    dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit")
+    dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit", sort = FALSE)
     dt[, unit := new_unit]
   }
   

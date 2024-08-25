@@ -53,7 +53,7 @@ get_agg_sch <- function(gt_result, aux, p){
   #create group_time
   id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = aux$dt_inv[, G])
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
-  group_time <- gt_result$gt |> merge(pg_dt, by = "G")
+  group_time <- gt_result$gt |> merge(pg_dt, by = "G", sort = FALSE)
   group_time[, mg := ming(G)]
   group_time[, G1 := g1(G)]
   group_time[, G2 := g2(G)]
@@ -141,7 +141,7 @@ get_weight_influence <- function(att, agg_sch, aux, p){
   
   id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = aux$dt_inv[, G])
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
-  group <- group |> merge(pg_dt, by = "G")
+  group <- group |> merge(pg_dt, by = "G", sort = FALSE)
   
   group[, time := as.integer(time)]
   
