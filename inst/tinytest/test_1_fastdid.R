@@ -136,7 +136,7 @@ data.table::setnames(dt2, c("time", "G", "unit"), c("t", "g", "u"))
 expect_silent(fastdid(dt2, timevar = "t", cohortvar = "g", unitvar = "u",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
               info = "other column names")
 
-if(.Platform$OS.type == "unix" & at_home()){
+if(.Platform$OS.type == "unix" & at_home() & requireNamespace("parallel")){
   expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", parallel = TRUE),
                 info = "parallel")
 }

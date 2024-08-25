@@ -1,35 +1,35 @@
 #' Fast Staggered DID Estimation
 #'
-#' Performs Difference-in-Differences (DID) estimation fast.
+#' Performs Difference-in-Differences (DID) estimation.
 #'
-#' @param data A data.table containing the panel data.
-#' @param timevar The name of the time variable.
-#' @param cohortvar The name of the cohort (group) variable.
-#' @param unitvar The name of the unit (id) variable.
-#' @param outcomevar The name of the outcome variable.
-#' @param control_option The control units used for the DiD estimates. Default is "both".
-#' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
-#' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NA
-#' @param control_type The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust
-#' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE 
-#' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE
-#' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
-#' @param cband Logical, indicate whether to use uniform confidence band or point-wise, defulat is FALSE (use point-wise)
-#' @param alpha The significance level, default is 0.05
-#' @param weightvar The name of the weight variable, if not specified will cluster on unit level (optional).
-#' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
-#' @param covariatesvar A character vector containing the names of time-invariant covariate variables (optional).
-#' @param varycovariatesvar A character vector containing the names of time-varying covariate variables (optional).
-#' @param copy whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.
-#' @param validate whether to validate the dataset before processing.
-#' @param anticipation periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).
-#' @param exper the list of experimental features, for features that are not in CSDID originally. Generally less tested. 
-#' @param base_period same as did
-#' @param full return the full result, like the influence function, call, etc,. Default is false. 
-#' @param parallel whether to use parallization (only available on unix systesm like Mac or Linux.)
-#' @param cohortvar2 The name of the second cohort (group) variable.
-#' @param event_specific Whether to recover event_specific treatment effect or report combined effect. 
-#' @param double_control_option The control units used for the double DiD estimates. Default is "both".
+#' @param data data.table, the dataset.
+#' @param timevar character, name of the time variable.
+#' @param cohortvar character, name of the cohort (group) variable.
+#' @param unitvar character, name of the unit (id) variable.
+#' @param outcomevar character vector, name(s) of the outcome variable(s).
+#' @param control_option character, control units used for the DiD estimates, options are "both", "never", or "notyet". 
+#' @param result_type character, type of result to return, options are "group_time", "time", "group", "simple", "dynamic" (time since event), "group_group_time", or "dynamic_stagger". 
+#' @param balanced_event_time number, max event time to balance the cohort composition.
+#' @param control_type character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), or "dr" (doubly-robust).
+#' @param allow_unbalance_panel logical, allow unbalance panel as input or coerce dataset into one. 
+#' @param boot logical, whether to use bootstrap standard error. 
+#' @param biters number, bootstrap iterations. Default is 1000.
+#' @param cband logical, whether to use uniform confidence band or point-wise.
+#' @param alpha number, the significance level. Default is 0.05.
+#' @param weightvar character, name of the weight variable.
+#' @param clustervar character, name of the cluster variable. 
+#' @param covariatesvar character vector, names of time-invariant covariate variables. 
+#' @param varycovariatesvar character vector, names of time-varying covariate variables.
+#' @param copy logical, whether to copy the dataset. 
+#' @param validate logical, whether to validate the dataset. 
+#' @param anticipation number, periods with anticipation. 
+#' @param exper list, arguments for experimental features. 
+#' @param base_period character, type of base period in pre-preiods, options are "universal", or "varying".
+#' @param full logical, whether to return the full result (influence function, call, weighting scheme, etc,.). 
+#' @param parallel logical, whether to use parallization on unix system. 
+#' @param cohortvar2 character, name of the second cohort (group) variable.
+#' @param event_specific logical, whether to recover target treatment effect or use combined effect.
+#' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet". 
 #' 
 #' @import data.table stringr dreamerr ggplot2
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean
@@ -37,36 +37,25 @@
 #' @importFrom parallel mclapply
 #' @importFrom BMisc multiplier_bootstrap
 #' @importFrom parglm parglm.fit parglm.control
-#' @return A data.table containing the estimated treatment effects and standard errors.
+#' @return A data.table containing the estimated treatment effects and standard errors or a list of all results when `full == TRUE`.
 #' @export
+#'
+#' @details
+#' `balanced_event_time` is only meaningful when `result_type == "dynamic`.
+#' 
+#' `result_type` as `group-group-time` and `dynamic staggered` is only meaningful when using double did.
+#' 
+#' `biter` and `clustervar` is only used when `boot == TRUE`.
 #'
 #' @examples
 #' # simulated data
-#' simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE)
+#' simdt <- sim_did(1e+02, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE, seed = 1)
 #' dt <- simdt$dt
 #' 
 #' #basic call
 #' result <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
 #'                   unitvar = "unit", outcomevar = "y",  
 #'                   result_type = "group_time")
-#' 
-#' #control for covariates
-#' result2 <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
-#'                    unitvar = "unit", outcomevar = "y",  
-#'                    result_type = "group_time",
-#'                    covariatesvar = c("x", "x2"))
-#'                   
-#' #bootstrap and clustering
-#' result3 <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
-#'                    unitvar = "unit", outcomevar = "y",  
-#'                    result_type = "group_time",
-#'                    boot = TRUE, clustervar = "x")
-#'
-#' #estimate for multiple outcomes
-#' result4 <- fastdid(data = dt, #the dataset
-#'                    timevar = "time", cohortvar = "G", unitvar = "unit", 
-#'                    outcomevar = c("y", "y2"), #name of the outcome columns
-#'                    result_type = "group_time") 
 #'
 #' @keywords difference-in-differences fast computation panel data estimation did
 fastdid <- function(data,

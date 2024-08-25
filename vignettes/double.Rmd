@@ -40,7 +40,7 @@ plot_did_dynamics(naive_result) +
   geom_line(aes(y = att, x = event_time), 
             data = att, color = "red") + theme_bw()
 ```
-Diagnostics can be obtained by using `time >= G2` as outcome. Since we set the effect of the confounding event at 10 constantly, it is clear that the bias of the default estimator is roughly 10 times the diagnostics.
+Diagnostics can be obtained by using `time >= G2` as outcome. As we set the effect of the confounding event at 10 constantly, we can see that the bias of the default estimator is roughly 10 times the diagnostics.
 
 ```{r, diag}
 dt[, D2 := time >= G2]

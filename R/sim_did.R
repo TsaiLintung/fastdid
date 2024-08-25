@@ -26,9 +26,6 @@
 #' # Simulate a DiD dataset with default settings
 #' data <- sim_did(sample_size = 100, time_period = 5)
 #'
-#' # Simulate a DiD dataset with customized settings
-#' data <- sim_did(sample_size = 200, time_period = 8, cov = "int", hetero = "dynamic")
-#'
 #' @export
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size = 0.001,
                     cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, vary_cov = FALSE, na = "none", 

@@ -14,7 +14,7 @@ Authors@R: c(
          family = "Tseng", ,
           role = "ctb"))
 Maintainer: Lin-Tung Tsai <tsaidondon@gmail.com>
-Description: **fastdid** is a fast implementation of Callaway and Sant'Anna's (2021)<https://www.sciencedirect.com/science/article/pii/S0304407620303948> staggered Difference-in-Differences (DiD) estimators and its extensions. **Fastdid** not only reduces the computation time from hours to seconds, but also incorporates new extensions to the framework such as time-varying covariates<https://arxiv.org/abs/2202.02903> and double event<not_ready_yet>. 
+Description: A fast and flexible implementation of Callaway and Sant'Anna's (2021)<https://www.sciencedirect.com/science/article/pii/S0304407620303948> staggered Difference-in-Differences (DiD) estimators and its extensions, fastdid reduces the computation time from hours to seconds, and incorporates extensions such as time-varying covariates and multiple events. 
 License: MIT + file LICENSE
 Imports:
     data.table,

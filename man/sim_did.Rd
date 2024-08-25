@@ -20,7 +20,8 @@ sim_did(
   stratify = FALSE,
   treatment_assign = "latent",
   second_cohort = FALSE,
-  confound_ratio = 1
+  confound_ratio = 1,
+  second_het = "all"
 )
 }
 \arguments{
@@ -55,6 +56,8 @@ sim_did(
 \item{second_cohort}{include confounding events}
 
 \item{confound_ratio}{extent of event confoundedness}
+
+\item{second_het}{heterogeneity of the second event}
 }
 \value{
 A list containing the simulated dataset (dt) and the treatment effect values (att).

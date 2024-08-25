@@ -2,18 +2,33 @@
 % Please edit documentation in R/generics.R
 \name{plot_did_dynamics}
 \alias{plot_did_dynamics}
-\title{Create plot for Difference-in-Differences (DiD) analysis.}
+\title{Plot event study}
 \usage{
 plot_did_dynamics(x, margin = "event_time")
 }
 \arguments{
-\item{x}{A data table containing the results of the DiD analysis. It should include columns for 'att' (average treatment effect), 'se' (standard error), and 'event_time' (time points).}
+\item{x}{A data table generated with [fastdid] with one-dimensional index.}
 
-\item{margin}{the x-axis of the plot}
+\item{margin}{character, the x-axis of the plot}
 }
 \value{
-A ggplot2 object representing the event study plot.
+A ggplot2 object
 }
 \description{
-This function generates an plot based on the results of a DiD analysis.
+Plot event study results.
+}
+\examples{
+
+# simulated data
+simdt <- sim_did(1e+02, 10, seed = 1)
+dt <- simdt$dt
+
+#estimation
+result <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
+                  unitvar = "unit", outcomevar = "y",  
+                  result_type = "dynamic")
+
+#plot
+plot_did_dynamics(result)
+
 }

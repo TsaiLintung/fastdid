@@ -35,8 +35,8 @@ To create event study plots, use `plot_did_dynamics(did_estimate)`.
 
   - [did](https://bcallaway11.github.io/did/articles/did-basics.html): staggered Difference in Difference by Callaway and Sant'Anna
   - [fastdid](../reference/fastdid.html): full list of arguments and features.
-  - [double](articles/double.html): introduction to DiD with multiple events
-  - [misc](articles/misc.html): comparison with [did](https://github.com/bcallaway11/did), benchmark, tests, and experimental features
+  - [double](articles/double.html): introduction to DiD with multiple events.
+  - [misc](articles/misc.html): comparison with [did](https://github.com/bcallaway11/did), benchmark, tests, and experimental features.
 
 # Acknowledgments
 

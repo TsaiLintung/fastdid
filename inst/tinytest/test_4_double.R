@@ -38,7 +38,7 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       cohortvar2 = "G2"),
               info = "double, ggt")
 
-expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "dynamic_sq",
+expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "dynamic_stagger",
                       cohortvar2 = "G2"),
               info = "double, dynamic_sq")
 
@@ -58,7 +58,7 @@ expect_silent(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",o
                       cohortvar2 = "G2"),
              info = "time offset")
 
-if(.Platform$OS.type == "unix" & at_home()){
+if(.Platform$OS.type == "unix" & at_home() & requireNamespace("parallel")){
   expect_silent(fastdid(dt, timevar = "time",cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                         cohortvar2 = "G2", parallel = TRUE),
                 info = "parallel double")

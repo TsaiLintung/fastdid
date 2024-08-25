@@ -105,7 +105,7 @@ get_agg_targets <- function(group_time, p){
     simple = group_time[, target := post],
     group_time = group_time[, target := paste0(g1(G), ".", time)],
     group_group_time = group_time[, target := paste0(G, ".", time)] ,
-    dynamic_sq = group_time[, target := paste0(time-g1(G), ".", g1(G)-g2(G))]
+    dynamic_stagger = group_time[, target := paste0(time-g1(G), ".", g1(G)-g2(G))]
   )
   
   #allow custom aggregation scheme, this overides other stuff

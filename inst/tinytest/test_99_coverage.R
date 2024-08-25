@@ -1,7 +1,7 @@
 #setup
 
 #takes a lot of time so only at home
-if(at_home() & .Platform$OS.type == "unix"){
+if(at_home() & .Platform$OS.type == "unix" & requireNamespace("parallel")){
   
   #gotta go fast 
   setDTthreads(0)
