@@ -62,3 +62,17 @@ plot_did_dynamics(double_result) +
             data = att, color = "red") + theme_bw()
 ```
 
+Double DiD also allow for two additional aggregation scheme: group-group-time ("group_group_time") and dynamic-staggered ("dynamic_stagger", event time by event stagger, G1-G2).
+
+```{r, double}
+double_result_ds <-fastdid(data = dt, 
+                 timevar = "time", cohortvar = "G", unitvar = "unit",
+                 outcomevar = "y", result_type = "dynamic_stagger",
+                 cohortvar2 = "G2", event_specific = TRUE)
+
+double_result_ggt <-fastdid(data = dt, 
+                 timevar = "time", cohortvar = "G", unitvar = "unit",
+                 outcomevar = "y", result_type = "group_group_time",
+                 cohortvar2 = "G2", event_specific = TRUE)
+
+```
