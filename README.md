@@ -19,7 +19,7 @@ fastdid can be installed from GitHub.
 devtools::install_github("TsaiLintung/fastdid")
 ```
 
-To use `fastdid`, you need to provider the dataset `data`, the column name of time `timevar`, cohort `cohortvar`, unit `unitvar`, and outcome(s) `outcomevar`. Here is a simple call:
+To use `fastdid`, you need to provide the dataset `data`, the column name of time `timevar`, cohort `cohortvar`, unit `unitvar`, and outcome(s) `outcomevar`. Here is a simple call:
 
 ```
 library(fastdid) #loading the package
