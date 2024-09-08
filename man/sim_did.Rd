@@ -69,7 +69,4 @@ Simulates a dataset for a Difference-in-Differences analysis with various custom
 # Simulate a DiD dataset with default settings
 data <- sim_did(sample_size = 100, time_period = 5)
 
-# Simulate a DiD dataset with customized settings
-data <- sim_did(sample_size = 200, time_period = 8, cov = "int", hetero = "dynamic")
-
 }

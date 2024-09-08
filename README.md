@@ -8,7 +8,7 @@
 fastdid implements the Difference-in-Differences (DiD) estimators in [Callaway and Sant'Anna's (2021)](https://www.sciencedirect.com/science/article/pii/S0304407620303948), it is
 
   - fast, reducing the computation time with millions of units from hours to [seconds](articles/misc.html),
-  - flexible, with extensions such as [time-varying covariates](https://arxiv.org/abs/2202.02903) and [multiple events](not_ready_yet). 
+  - flexible, with extensions such as [time-varying covariates](https://arxiv.org/abs/2406.15288) and [multiple events](not_ready_yet). 
 
 # Getting Started
 
@@ -31,7 +31,7 @@ The function returns a `data.table` that includes the estimates. Column `att` is
 
 To create event study plots, use `plot_did_dynamics(did_estimate)`. 
 
-# Learn More
+# More
 
   - [did](https://bcallaway11.github.io/did/articles/did-basics.html): staggered Difference in Difference by Callaway and Sant'Anna
   - [fastdid](../reference/fastdid.html): full list of arguments and features.

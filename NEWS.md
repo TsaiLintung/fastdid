@@ -1,7 +1,7 @@
 # 0.9.9 (2024/9/1)
 
 - add double did (see the vignette for the introduction)
-- add `parallel`, parallization for unix systems (Parallization doesn't really work for Windows R)
+- add `parallel`, parallization for unix systems, useful if the number of g-t is large. 
 - add `full`, return full result such as influence function, aggregate scheme, and such
 - add `min`/`max_dynamic`, `custom_scheme` to experimental features
 
