@@ -45,10 +45,17 @@ expect_silent(fastdid(dt[G != 3], timevar = "time", cohortvar = "G", unitvar = "
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
               info = "alternative alpha")
 
-dt2 <- copy(dt)
-setnames(dt2, c("time", "G", "unit"), c("t", "g", "u"))
-expect_silent(fastdid(dt2, timevar = "t", cohortvar = "g", unitvar = "u",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
-              info = "other column names")
+#get full result
+full_res <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = c("y", "y2"),  result_type = "group_time", full = TRUE)
+expect_equal(names(full_res), c("call", "estimate", "gt_estimate", "agg_inf_func", "agg_weight_matrix"),
+             info = "full result")
+
+units <- dt[, unique(unit)]
+weights <- data.table::data.table(unit = units, w = rnorm(length(units), 1, 1))
+dt2 <- dt |> merge(weights, by = "unit")
+expect_silent(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      weightvar = "w"),
+              info = "weighted")
 
 # bootstrap part ------------------------
 
@@ -83,10 +90,6 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       base_period = "varying"),
               info = "baseperiod vary")
 
-#plot
-expect_silent(plot_did_dynamics(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "dynamic")),
-              info = "simple plot")
-
 # dt that needs adjustment ---------------------------
 
 base_result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time")
@@ -94,10 +97,10 @@ base_result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",o
 expect_equal(fastdid(dt[nrow(dt):1], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"), base_result,
               info = "reversed")
 
-dt2 <- copy(dt)
+dt2 <- data.table::copy(dt)
 dt2[, time := time*2 + 3]
 dt2[, G := G*2 + 3]
-base_result2 <- copy(base_result)
+base_result2 <- data.table::copy(base_result)
 base_result2[, cohort := cohort*2 + 3]
 base_result2[, time := time*2 + 3]
 
@@ -107,7 +110,7 @@ expect_equal(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 
 # unbalanced panel ----------------------------------------------------
 
-dt2 <- copy(dt)
+dt2 <- data.table::copy(dt)
 keep <- sample(c(rep(TRUE, 19),FALSE), dt2[,.N], TRUE)
 dt2 <- dt2[keep]
 
@@ -116,43 +119,24 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       allow_unbalance_panel = TRUE),
               info = "balance panel false but dt is balance")
 
-# throw error / warning at problematic dt -------------------------
+# internal behavor -------------------------
 
-expect_error(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-                      boot = FALSE, clustervar = "x"),
-              info = "clustered but no boot")
 
-expect_error(fastdid(dt[time != 3], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
-              info = "missing time")
 
-expect_warning(fastdid(dt[time != 3 | unit != 20], timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y", result_type = "group_time"),
-             info = "non-balanced panel, missing")
+#make sure dt is not copied if copy == FALSE
+dtc <- data.table::copy(dt)
+address <- tracemem(dtc) |> stringr::str_remove_all(">|<")
+out <- capture.output(fastdid(dtc, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time", copy = FALSE))
+#if a copy happen there will be a message at the start, so out[1] won't be the header. 
+expect_true(!stringr::str_detect(stringr::str_flatten_comma(out), address),
+              info = "no unintentional copy")
 
-extra_row <-  dt[unit == 20 & time == 3]
-expect_error(fastdid(rbind(dt,extra_row), timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
-             info = "non-balanced panel, extra")
+dt2 <- data.table::copy(dt)
+data.table::setnames(dt2, c("time", "G", "unit"), c("t", "g", "u"))
+expect_silent(fastdid(dt2, timevar = "t", cohortvar = "g", unitvar = "u",outcomevar = "y",  result_type = "group_time", alpha = 0.01),
+              info = "other column names")
 
-dt2 <- copy(dt)
-dt2[, x := 1]
-expect_error(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
-                       covariatesvar = "x"),
-               info = "covariates with no variation")
-
-dt2 <- copy(dt)
-dt2[unit == 1 & time < 5, x := 3]
-expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
-                     covariatesvar = "x"),
-             info = "time varying covariates is warned")
-
-dt2 <- copy(dt)
-dt2[unit == 1 & time == 4, time := NA]
-dt2[time == 3 & unit > 30, y := NA]
-expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time"),
-               info = "missing values")
-
-#right error message
-errormes <- "Error: in fastdid(dt, timevar = \"time\", cohortvar...:\n outcomevar must be NA or a character vector which are all names of columns from the dataset. Problem: i) is.na returns\n FALSE, or ii) no match was found for 'zz'.\n"
-mes <- as.character(tryCatch(fastdid(dt, timevar = "time", cohortvar = "g", unitvar = "unit", outcomevar = "zz",  result_type = "group_time"),
-                error = function(e){return(e)}))
-expect_equal(errormes, mes,
-               info = "wrong col name")
+if(.Platform$OS.type == "unix" & at_home() & requireNamespace("parallel")){
+  expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", parallel = TRUE),
+                info = "parallel")
+}

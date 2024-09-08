@@ -18,7 +18,10 @@ sim_did(
   balanced = TRUE,
   seed = NA,
   stratify = FALSE,
-  treatment_assign = "latent"
+  treatment_assign = "latent",
+  second_cohort = FALSE,
+  confound_ratio = 1,
+  second_het = "all"
 )
 }
 \arguments{
@@ -49,6 +52,12 @@ sim_did(
 \item{stratify}{Whether to stratify the dataset based on a binary covariate.}
 
 \item{treatment_assign}{The method for treatment assignment ("latent" or "uniform").}
+
+\item{second_cohort}{include confounding events}
+
+\item{confound_ratio}{extent of event confoundedness}
+
+\item{second_het}{heterogeneity of the second event}
 }
 \value{
 A list containing the simulated dataset (dt) and the treatment effect values (att).
@@ -59,8 +68,5 @@ Simulates a dataset for a Difference-in-Differences analysis with various custom
 \examples{
 # Simulate a DiD dataset with default settings
 data <- sim_did(sample_size = 100, time_period = 5)
-
-# Simulate a DiD dataset with customized settings
-data <- sim_did(sample_size = 200, time_period = 8, cov = "int", hetero = "dynamic")
 
 }

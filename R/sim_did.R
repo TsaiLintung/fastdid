@@ -16,6 +16,9 @@
 #' @param stratify Whether to stratify the dataset based on a binary covariate.
 #' @param treatment_assign The method for treatment assignment ("latent" or "uniform").
 #' @param vary_cov include time-varying covariates
+#' @param second_cohort include confounding events
+#' @param confound_ratio extent of event confoundedness
+#' @param second_het heterogeneity of the second event
 #'
 #' @return A list containing the simulated dataset (dt) and the treatment effect values (att).
 #'
@@ -23,13 +26,10 @@
 #' # Simulate a DiD dataset with default settings
 #' data <- sim_did(sample_size = 100, time_period = 5)
 #'
-#' # Simulate a DiD dataset with customized settings
-#' data <- sim_did(sample_size = 200, time_period = 8, cov = "int", hetero = "dynamic")
-#'
 #' @export
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size = 0.001,
                     cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, vary_cov = FALSE, na = "none", 
-                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent"){
+                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent", second_cohort = FALSE, confound_ratio = 1, second_het = "all"){
   
   if(!is.na(seed)){set.seed(seed)}
   
@@ -58,7 +58,8 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   #assign treated group based on a latent related to X
   
   if(treatment_assign == "latent"){
-    dt_i[, treat_latent := x*0.2 + x2*0.2 + rnorm(sample_size)] #unit with larger X tend to be treated and treated earlier
+    ep1 <- rnorm(sample_size)
+    dt_i[, treat_latent := x*0.2 + x2*0.2 + ep1] #unit with larger X tend to be treated and treated earlier
     untreated_thres <- quantile(dt_i$treat_latent, untreated_prop)
     dt_i[treat_latent <= untreated_thres, G := Inf] #unit with low latent is never treated
     
@@ -75,6 +76,28 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
     dt_i[,G := floor((unit-1)/(sample_size/time_period))]
     dt_i[G < 2, G := Inf]
   }
+  
+  if(second_cohort){
+    setnames(dt_i, "G", "G2")
+    if(treatment_assign == "latent"){
+      dt_i[, treat_latent := x*0.2 + x2*0.2 + ep1*confound_ratio + rnorm(sample_size)] #unit with larger X tend to be treated and treated earlier
+      untreated_thres <- quantile(dt_i$treat_latent, untreated_prop)
+      dt_i[treat_latent <= untreated_thres, G := Inf] #unit with low latent is never treated
+      
+      cohort_prop <- (1-untreated_prop)/(time_period-1)
+      last_treat_thres <- untreated_thres
+      for(t in time_period:2){ #unit start getting treated in t = 2
+        treat_thres <- quantile(dt_i$treat_latent, untreated_prop + cohort_prop*(time_period - t + 1))
+        dt_i[treat_latent <= treat_thres & treat_latent > last_treat_thres, G := t]
+        last_treat_thres <- treat_thres
+      }
+      rm(t)
+    } else if (treatment_assign == "uniform"){
+      #when treatment is set to 'uniform', untreated propensity is fixed
+      dt_i[,G := floor((unit-1)/(sample_size/time_period))]
+      dt_i[G < 2, G := Inf]
+    }
+  }
 
   #assign unit FE
   dt_i[, unit_fe := rnorm(sample_size)]
@@ -90,11 +113,9 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   dt <- dt |> merge(dt_i, by = "unit")
   dt <- dt |> merge(dt_t, by = "time")
   
-  dt[, D := as.integer(time >= G)]
-  
   #add time_varying covariates
   if(vary_cov){
-    dt[, xvar := pmin(G, time_period+4)*time+rnorm(sample_size*time_period, 0,30)] #should be confounding....?
+    dt[, xvar := pmin(G, time_period+4)*time^(1/3)*0.1+rnorm(sample_size*time_period, 0,10)] #should be confounding....?
   } else {
     dt[, xvar := 1]
   }
@@ -102,6 +123,7 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   #untreated potential outcomes
   dt[, y0 := unit_fe + time_fe + (x+x2)*x_trend + xvar + rnorm(sample_size*time_period, sd = epsilon_size)]
   
+  dt[, D := as.integer(time >= G)]
   #generate gtatt
   att <- CJ(G = 1:time_period, time = 1:time_period)
   if(hetero == "all"){
@@ -112,15 +134,51 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
     }
   }
   att[time < G, attgt := 0] #no anticipation
-  
   dt <- dt |> merge(att, by = c("time", "G"), all.x = TRUE, all.y = FALSE)
   dt[is.na(attgt), attgt := 0]
   dt[, tau := attgt*s]
   
-  #potential outcome
-  dt[, y1 := y0 + tau]
-  dt[, y := y1*D + y0*(1-D)]
-  dt <- dt[, .SD, .SDcols = c("time", "G", "unit", "x", "x2", "y", "s", "xvar")]
+  if(second_cohort){
+    dt[, D2 := as.integer(time >= G2)]
+    #generate gtatt
+    att2 <- CJ(G2 = 1:time_period, time = 1:time_period)
+    if(second_het == "no"){
+      att2[, attgt2 := 10]
+    } else {
+      if(hetero == "all"){
+        att2[, attgt2 := rnorm(time_period*time_period, mean = 2, sd = 1)]
+      } else if (hetero == "dynamic"){
+        for(event_t in 0:max(att2[,time-G2])){
+          att2[time - G2 == event_t, attgt2 := rnorm(1, mean = 2, sd = 1)]
+        }
+      }
+    }
+    att2[time < G2, attgt2 := 0] #no anticipation
+    
+    #add att2 to att
+    att[, event := 1]
+    att2[, event := 2]
+    att <- rbind(att, att2, fill = TRUE)
+    
+    dt <- dt |> merge(att2, by = c("time", "G2"), all.x = TRUE, all.y = FALSE)
+    dt[is.na(attgt2), attgt2 := 0]
+    dt[, tau2 := attgt2*s]
+    
+    #potential outcome
+    dt[, y10 := y0 + tau]
+    dt[, y01 := y0 + tau2]
+    dt[, y11 := y0 + tau + tau2]
+    dt[, y := y0*(1-D)*(1-D2)+ y10*D*(1-D2) + y01*(1-D)*D2 + y11*D*D2]
+    cols <- c("time", "G", "G2", "unit", "x", "x2", "y", "s", "xvar")
+    
+  } else {
+    #potential outcome
+    dt[, y1 := y0 + tau]
+    dt[, y := y1*D + y0*(1-D)]
+    cols <- c("time", "G", "unit", "x", "x2", "y", "s", "xvar")
+  }
+  
+  dt <- dt[, .SD, .SDcols = cols]
   
   #additional -----------------
   

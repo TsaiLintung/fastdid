@@ -1,4 +1,4 @@
-estimate_did <- function(dt_did, covvars, p, last_coef, cache){
+estimate_did <- function(dt_did, covvars, p, cache){
   
   #estimate did
   param <- as.list(environment())
@@ -10,8 +10,7 @@ estimate_did <- function(dt_did, covvars, p, last_coef, cache){
   return(result)
 }
 
-estimate_did_bp <- function(dt_did, covvars, p,
-                         last_coef = NULL, cache){
+estimate_did_bp <- function(dt_did, covvars, p, cache){
   
   # preprocess --------
   oldn <- dt_did[, .N]
@@ -33,10 +32,10 @@ estimate_did_bp <- function(dt_did, covvars, p,
   if(ipw){
     if(is.null(cache)){ #if no cache, calcuate ipw
       #estimate the logit
-      prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
-                                                    family = stats::binomial(), start = last_coef,
+      prop_score_est <- suppressWarnings(parglm::parglm.fit(covvars, dt_did[, D],
+                                                    family = stats::binomial(), 
                                                     weights = dt_did[, weights],
-                                                    control = parglm.control(nthreads = getDTthreads()),
+                                                    control = parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())), #no parallel if already parallel
                                                     intercept = FALSE))
       class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
       #const is implicitly put into the ipw formula, need to incorporate it manually
@@ -49,8 +48,8 @@ estimate_did_bp <- function(dt_did, covvars, p,
       
       logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
       prop_score_fit <- fitted(prop_score_est)
-      if(max(prop_score_fit) >= 1){warning(paste0("support overlap condition violated for some group_time"))}
-      prop_score_fit <- pmin(1-1e-16, prop_score_fit) #for the ipw
+      if(max(prop_score_fit) >= 1-1e-10){warning(paste0("extreme propensity score: ", max(prop_score_fit), ", support overlap is likely to be violated"))} #<=0 (only in control) is fine for ATT since it is just not used 
+      prop_score_fit <- pmin(1-1e-10, prop_score_fit) #for the ipw
 
       hess <- stats::vcov(prop_score_est) * n #for the influence function
       hess[is.na(hess)|abs(hess) > 1e10] <- 0
@@ -169,13 +168,11 @@ estimate_did_bp <- function(dt_did, covvars, p,
   inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
   inf_func_no_na <- inf_func_no_na * oldn / n #adjust the value such that mean over the whole id size give the right result
   inf_func[data_pos] <- inf_func_no_na
-
-  return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
-              cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
+  
+  return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
 }
 
-estimate_did_rc <- function(dt_did, covvars, p,
-                            last_coef = NULL, cache){
+estimate_did_rc <- function(dt_did, covvars, p, cache){
   
   #TODO: skip if not enough valid data
   
@@ -213,9 +210,9 @@ estimate_did_rc <- function(dt_did, covvars, p,
     
     #estimate the logit
     prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
-                                                  family = stats::binomial(), start = last_coef,
+                                                  family = stats::binomial(),
                                                   weights = dt_did[, weights*(inpre+inpost)*n/(n_pre+n_post)], #when seen in both pre and post have double weight
-                                                  control = parglm.control(nthreads = getDTthreads()),
+                                                  control = parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())),
                                                   intercept = FALSE)) #*(inpre+inpost)
     class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
     #const is implicitly put into the ipw formula, need to incorporate it manually
@@ -248,20 +245,18 @@ estimate_did_rc <- function(dt_did, covvars, p,
   
   if(or){
     
-    stop("or in RC should not be called right now")
-    
     control_bool_post <- dt_did[, D==0 & inpost] #control group and have obs in post period
     control_bool_pre <- dt_did[, D==0 & inpre]
     reg_coef_post <- stats::coef(stats::lm.wfit(x = covvars[control_bool_post,], y = dt_did[control_bool_post,post.y],
                                                 w = dt_did[control_bool_post,weights]))
-    
+
     reg_coef_pre <- stats::coef(stats::lm.wfit(x = covvars[control_bool_pre,], y = dt_did[control_bool_pre,pre.y],
                                                w = dt_did[control_bool_pre,weights]))
-    
+
     if(anyNA(reg_coef_post)|anyNA(reg_coef_pre)){
       stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
     }
-    
+
     #the control function from outcome regression
     dt_did[, or_delta_post := as.vector(tcrossprod(reg_coef_post, covvars))]
     dt_did[, or_delta_pre := as.vector(tcrossprod(reg_coef_pre, covvars))]
@@ -317,27 +312,27 @@ estimate_did_rc <- function(dt_did, covvars, p,
   
   
   if(or){
-    stop("or in RC should not be called right now")
+
     M1_post <- colSums(dt_did[, inpost*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpo
     M1_pre <- colSums(dt_did[, inpre*treat_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wtpr
     M3_post <- colSums(dt_did[, inpost*cont_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wcpo
     M3_pre <- colSums(dt_did[, inpre*cont_ipw_weight/n] * covvars, na.rm = TRUE) / mean_wcpr
-    
+
     or_x_post <- dt_did[, inpost*weights*(1-D)] * covvars
     or_x_pre <- dt_did[, inpre*weights*(1-D)] * covvars
     or_ex_post <- dt_did[, inpost*weights*(1-D)*(post.y - or_delta_post)] * covvars
     or_ex_pre <- dt_did[, inpre*weights*(1-D)*(pre.y - or_delta_pre)] * covvars
     XpX_post <- crossprod(or_x_post, covvars)/n_post
     XpX_pre <- crossprod(or_x_pre, covvars)/n_pre
-    
+
     #calculate alrw = eX (XpX)^-1 by solve XpX*alrw = ex, much faster since avoided inv
     asym_linear_or_post <- t(solve(XpX_post, t(or_ex_post)))
     asym_linear_or_pre <- t(solve(XpX_pre, t(or_ex_pre)))
-    
+
     #or for treat
     inf_treat_or_post <- -asym_linear_or_post %*% M1_post #a negative sign here, since or_delta is subtracted from the att, THE PROBLEM
     inf_treat_or_pre <- -asym_linear_or_pre %*% M1_pre
-    
+
     #or for control
     inf_cont_or_post <- -asym_linear_or_post %*% M3_post
     inf_cont_or_pre <- -asym_linear_or_pre %*% M3_pre
@@ -377,7 +372,12 @@ estimate_did_rc <- function(dt_did, covvars, p,
   inf_func <- rep(0, oldn) #the default needs to be 0 for the matrix multiplication
   inf_func[data_pos] <- inf_func_no_na_post - inf_func_no_na_pre
 
-  return(list(att = att, inf_func = inf_func, logit_coef = logit_coef, #for next gt
-              cache_ps_fit = prop_score_fit, cache_hess = hess)) #for next outcome
+  return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
+}
+
+# utilities ------
+
+reverse_col <- function(x){
+  return(x[,ncol(x):1])
 }
 
