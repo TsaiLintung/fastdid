@@ -27,89 +27,93 @@ fastdid(
   validate = TRUE,
   anticipation = 0,
   base_period = "universal",
-  exper = NULL
+  exper = NULL,
+  full = FALSE,
+  parallel = FALSE,
+  cohortvar2 = NA,
+  event_specific = TRUE,
+  double_control_option = "both"
 )
 }
 \arguments{
-\item{data}{A data.table containing the panel data.}
+\item{data}{data.table, the dataset.}
 
-\item{timevar}{The name of the time variable.}
+\item{timevar}{character, name of the time variable.}
 
-\item{cohortvar}{The name of the cohort (group) variable.}
+\item{cohortvar}{character, name of the cohort (group) variable.}
 
-\item{unitvar}{The name of the unit (id) variable.}
+\item{unitvar}{character, name of the unit (id) variable.}
 
-\item{outcomevar}{The name of the outcome variable.}
+\item{outcomevar}{character vector, name(s) of the outcome variable(s).}
 
-\item{control_option}{The control units used for the DiD estimates. Default is "both".}
+\item{control_option}{character, control units used for the DiD estimates, options are "both", "never", or "notyet".}
 
-\item{result_type}{A character string indicating the type of result to be returned. Default is "group_time".}
+\item{result_type}{character, type of result to return, options are "group_time", "time", "group", "simple", "dynamic" (time since event), "group_group_time", or "dynamic_stagger".}
 
-\item{balanced_event_time}{A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NA}
+\item{balanced_event_time}{number, max event time to balance the cohort composition.}
 
-\item{control_type}{The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust}
+\item{control_type}{character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), or "dr" (doubly-robust).}
 
-\item{allow_unbalance_panel}{Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE}
+\item{allow_unbalance_panel}{logical, allow unbalance panel as input or coerce dataset into one.}
 
-\item{boot}{Logical, indicating whether bootstrapping should be performed. Default is FALSE}
+\item{boot}{logical, whether to use bootstrap standard error.}
 
-\item{biters}{The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.}
+\item{biters}{number, bootstrap iterations. Default is 1000.}
 
-\item{cband}{Logical, indicate whether to use uniform confidence band or point-wise, defulat is FALSE (use point-wise)}
+\item{cband}{logical, whether to use uniform confidence band or point-wise.}
 
-\item{alpha}{The significance level, default is 0.05}
+\item{alpha}{number, the significance level. Default is 0.05.}
 
-\item{weightvar}{The name of the weight variable, if not specified will cluster on unit level (optional).}
+\item{weightvar}{character, name of the weight variable.}
 
-\item{clustervar}{The name of the cluster variable, can only be used when boot == TRUE (optional).}
+\item{clustervar}{character, name of the cluster variable.}
 
-\item{covariatesvar}{A character vector containing the names of time-invariant covariate variables (optional).}
+\item{covariatesvar}{character vector, names of time-invariant covariate variables.}
 
-\item{varycovariatesvar}{A character vector containing the names of time-varying covariate variables (optional).}
+\item{varycovariatesvar}{character vector, names of time-varying covariate variables.}
 
-\item{copy}{whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.}
+\item{copy}{logical, whether to copy the dataset.}
 
-\item{validate}{whether to validate the dataset before processing.}
+\item{validate}{logical, whether to validate the dataset.}
 
-\item{anticipation}{periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).}
+\item{anticipation}{number, periods with anticipation.}
 
-\item{base_period}{same as did}
+\item{base_period}{character, type of base period in pre-preiods, options are "universal", or "varying".}
 
-\item{exper}{the list of experimental features, for features that are not in CSDID originally. Generally less tested.}
+\item{exper}{list, arguments for experimental features.}
+
+\item{full}{logical, whether to return the full result (influence function, call, weighting scheme, etc,.).}
+
+\item{parallel}{logical, whether to use parallization on unix system.}
+
+\item{cohortvar2}{character, name of the second cohort (group) variable.}
+
+\item{event_specific}{logical, whether to recover target treatment effect or use combined effect.}
+
+\item{double_control_option}{character, control units used for the double DiD, options are "both", "never", or "notyet".}
 }
 \value{
-A data.table containing the estimated treatment effects and standard errors.
+A data.table containing the estimated treatment effects and standard errors or a list of all results when `full == TRUE`.
 }
 \description{
-Performs Difference-in-Differences (DID) estimation fast.
+Performs Difference-in-Differences (DID) estimation.
+}
+\details{
+`balanced_event_time` is only meaningful when `result_type == "dynamic`.
+
+`result_type` as `group-group-time` and `dynamic staggered` is only meaningful when using double did.
+
+`biter` and `clustervar` is only used when `boot == TRUE`.
 }
 \examples{
 # simulated data
-simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE)
+simdt <- sim_did(1e+02, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE, seed = 1)
 dt <- simdt$dt
 
 #basic call
 result <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
                   unitvar = "unit", outcomevar = "y",  
                   result_type = "group_time")
-
-#control for covariates
-result2 <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
-                   unitvar = "unit", outcomevar = "y",  
-                   result_type = "group_time",
-                   covariatesvar = c("x", "x2"))
-                  
-#bootstrap and clustering
-result3 <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
-                   unitvar = "unit", outcomevar = "y",  
-                   result_type = "group_time",
-                   boot = TRUE, clustervar = "x")
-
-#estimate for multiple outcomes
-result4 <- fastdid(data = dt, #the dataset
-                   timevar = "time", cohortvar = "G", unitvar = "unit", 
-                   outcomevar = c("y", "y2"), #name of the outcome columns
-                   result_type = "group_time") 
 
 }
 \keyword{computation}

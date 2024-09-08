@@ -1,28 +1,37 @@
 Package: fastdid
 Type: Package
-Title: lightning-fast staggered Difference-in-Difference estimators
-Version: 0.9.4
-Date: 2024-08-05
+Title: Fast Staggered Difference-in-Difference Estimators
+Version: 0.9.9
+Date: 2024-09-08
 Authors@R: c(
   person("Lin-Tung","Tsai",
-         role = c("aut", "cre"),
+         role = c("aut", "cre", "cph"),
          email = "tsaidondon@gmail.com"),
   person(given = "Maxwell",
          family = "Kellogg", ,
-         role = "aut"),
+         role = "ctb"),
   person(given = "Kuan-Ju",
          family = "Tseng", ,
-          role = "aut"))
+          role = "ctb"))
 Maintainer: Lin-Tung Tsai <tsaidondon@gmail.com>
-Description: **fastdid** is a lightning-fast implementation of Callaway and Sant'Anna's (2021)<https://www.sciencedirect.com/science/article/pii/S0304407620303948> staggered Difference-in-Differences (DiD) estimators. DiD setup for millions of units used to take hours to run. With **fastdid**, it takes seconds. 
-License: GPL (>= 2)
+Description: A fast and flexible implementation of Callaway and Sant'Anna's (2021)<https://www.sciencedirect.com/science/article/pii/S0304407620303948> staggered Difference-in-Differences (DiD) estimators and its extensions, fastdid reduces the computation time from hours to seconds, and incorporates extensions such as time-varying covariates and multiple events. 
+License: MIT + file LICENSE
 Imports:
     data.table,
     stringr,
     BMisc,
     collapse,
     dreamerr (>= 1.4.0),
-    parglm
-Suggests: ggplot2, did
+    parglm,
+    ggplot2
+Suggests: 
+    did,
+    knitr,
+    parallel,
+    rmarkdown,
+    tinytest
 Encoding: UTF-8
 RoxygenNote: 7.3.2
+URL: https://github.com/TsaiLintung/fastdid, https://tsailintung.github.io/fastdid/
+BugReports: https://github.com/TsaiLintung/fastdid/issues
+VignetteBuilder: knitr

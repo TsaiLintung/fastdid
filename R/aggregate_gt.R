@@ -1,67 +1,126 @@
+# high level -------------------------------------------------------------------
+
 aggregate_gt <- function(all_gt_result, aux, p){
-  rbindlist(lapply(all_gt_result, aggregate_gt_outcome, aux, p))
+  results <- lapply(all_gt_result, aggregate_gt_outcome, aux, p)
+  return(list(
+    est = rbindlist(lapply(results, function(x) {x$result})),
+    inf_func = lapply(results, function(x) {x$inf_func}),
+    agg_weight_matrix = lapply(results, function(x) {x$weight_matrix})
+  ))
 }
 
 aggregate_gt_outcome <- function(gt_result, aux, p){
-
-  agg_sch <- get_agg_sch(gt_result, aux, p)
   
-  #get att and se
-  agg_att <- get_agg_att(gt_result, agg_sch, p)
-  inf_matrix <- get_agg_inf(gt_result, agg_sch, aux, p)
-  agg_se_result <- get_se(inf_matrix, aux, p)
+  #get aggregation scheme from g-t to target parameters
+  agg_sch <- get_agg_sch(gt_result, aux, p)
+
+  if(!p$event_specific | is.na(p$cohortvar2)){
+    att <- gt_result$att
+    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights)
+  } else {
+    att <- agg_sch$es_weight %*% gt_result$att
+    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights %*% agg_sch$es_weight)
+  }
+  
+  #get att
+  agg_att <- agg_sch$agg_weights %*% att
+  
+  #get influence function matrix
+  
+  inf_weights <- get_weight_influence(att, agg_sch, aux, p)
+  inf_matrix <- inf_func + inf_weights 
+
+  #get se
+  agg_se <- get_se(inf_matrix, aux, p)
   
   # post process
-  result <- data.table(agg_sch$targets, agg_att, agg_se_result$se)
+  result <- data.table(agg_sch$targets, agg_att, agg_se$se)
   names(result) <- c("target", "att", "se")
   result[,`:=`(outcome = gt_result$outname,
-              att_ciub = att+se*agg_se_result$crit_val,
-              att_cilb = att-se*agg_se_result$crit_val)]
+              att_ciub = att+se*agg_se$crit_val,
+              att_cilb = att-se*agg_se$crit_val)]
   
-  return(result)
+  return(list(result = result,
+              inf_func = inf_matrix,
+              weight_matrix = agg_sch$agg_weights))
 }
+
+# scheme ------------------------------------------------------------------------
 
 #scheme for aggregation
 get_agg_sch <- function(gt_result, aux, p){
-  
-  #setup stuff
-  weights <- aux$weights
-  id_cohorts <- aux$dt_inv[, G]
-  result_type <- p$result_type
-  agg_weights <- data.table()
-  
+
   #create group_time
-  id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
+  id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = aux$dt_inv[, G])
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
-  group_time <- gt_result$gt |> merge(pg_dt, by = "G")
-  setorder(group_time, time, G) #change the order to match the order in gtatt
-  gt_count <- group_time[, .N]
+  group_time <- gt_result$gt |> merge(pg_dt, by = "G", sort = FALSE)
+  group_time[, mg := ming(G)]
+  group_time[, G1 := g1(G)]
+  group_time[, G2 := g2(G)]
+  setorder(group_time, time, mg, G1, G2) #change the order to match the order in gtatt
+  if(!all(names(gt_result$att) == group_time[, paste0(G, ".", time)])){stop("some bug makes gt misaligned, please report this to the maintainer. Thanks.")}
   
-  #nothing to do
-  if(result_type == "group_time"){
-    return(list(targets = group_time[, paste0(G, ".", time)]))
+  #get the event-specific matrix, and available ggts
+  if(p$event_specific & !is.na(p$cohortvar2)){
+    es <- get_es_scheme(group_time, aux, p)
+    group_time <- es$group_time #some gt may not have availble effect (ex: g1 == g2)
+    es_weight <- as.matrix(es$es_weight)
+  } else {
+    es_weight <- NULL
   }
-  
+
   #choose the target based on aggregation type
-  group_time[, post := as.numeric(ifelse(time >= G, 1, -1))]
-  if (result_type == "dynamic") {
-    group_time[, target := time-G]
-  } else if (result_type == "group") {
-    group_time[, target := G*post] # group * treated
-  } else if (result_type == "time") {
-    group_time[, target := time*post] #calendar time * treated
-  } else if (result_type == "simple") {
-    group_time[, target := post] #treated / not treated
-  }  
+  tg <- get_agg_targets(group_time, p)
+  group_time <- tg$group_time
+  targets <- tg$targets
   
-  targets <- sort(group_time[, unique(target)])
+  
+  #get aggregation weights
+  agg_weights <- data.table()
+  for(tar in targets){ #the order matters
+
+    group_time[, weight := 0] #weight is 0 if not a target
+    group_time[target == tar & used, weight := pg/sum(pg)] 
+    target_weights <- group_time[, .(weight)] |> transpose()
+
+    agg_weights <- rbind(agg_weights, target_weights)
+  }
+  group_time[, pg := NULL]
+  
+  agg_weights <- as.matrix(agg_weights)
+  
+  return(list(agg_weights = agg_weights, #a matrix of each target and gt's weight in it 
+              targets = targets,
+              group_time = group_time,
+              es_weight = es_weight))
+}
+
+#get the target parameters
+get_agg_targets <- function(group_time, p){
+  group_time[, post := as.numeric(ifelse(time >= g1(G), 1, -1))]
+  switch(p$result_type,
+    dynamic = group_time[, target := time-g1(G)],
+    group = group_time[, target := g1(G)*post], # group * treated
+    time =  group_time[, target := time*post],
+    simple = group_time[, target := post],
+    group_time = group_time[, target := paste0(g1(G), ".", time)],
+    group_group_time = group_time[, target := paste0(G, ".", time)] ,
+    dynamic_stagger = group_time[, target := paste0(time-g1(G), ".", g1(G)-g2(G))]
+  )
+  
+  #allow custom aggregation scheme, this overides other stuff
+  if(!is.na(p$exper$aggregate_scheme)){
+    group_time[, target := eval(str2lang(p$exper$aggregate_scheme))]
+  }
+
+  targets <- group_time[, unique(target)]
   
   #for balanced cohort composition in dynamic setting
   #a cohort us only used if it is seen for all dynamic time
-  if(result_type == "dynamic" & !is.na(p$balanced_event_time)){
+  if(p$result_type == "dynamic" & !is.na(p$balanced_event_time)){
     
-    cohorts <- group_time[, .(max_et = max(time-G),
-                              min_et = min(time-G)), by = "G"]
+    cohorts <- group_time[, .(max_et = max(target), #event time is target if in dynamic
+                              min_et = min(target)), by = "G"]
     cohorts[, used := max_et >= p$balanced_event_time] #the max
     if(!cohorts[, any(used)]){stop("balanced_comp_range outside avalible range")}
     group_time[, used := G %in% cohorts[used == TRUE, G]]
@@ -70,75 +129,67 @@ get_agg_sch <- function(gt_result, aux, p){
     
   } else{group_time[, used := TRUE]}
   
-  for(tar in targets){ #the order matters
-    
-    group_time[, targeted := target == tar & used]
-    
-    total_pg <- group_time[targeted == TRUE, sum(pg)] #all gt that fits in the target
-    group_time[, weight := ifelse(targeted, pg/total_pg, 0)] #weight is 0 if not a target
-    target_weights <- group_time[, .(weight)] |> transpose()
-    
-    group_time[, targeted := NULL]
-    
-    agg_weights <- rbind(agg_weights, target_weights)
-  }
+  return(list(group_time = group_time, targets = targets))
   
-  return(list(agg_weights = as.matrix(agg_weights), #a matrix of each target and gt's weight in it 
-              targets = targets,
-              group_time = group_time))
 }
 
-#aggregated influence function
-get_agg_inf <- function(gt_result, agg_sch, aux, p){
+# influence function ------------------------------------------------------------
+
+get_weight_influence <- function(att, agg_sch, aux, p){
+
+  group <- agg_sch$group_time
   
-  if(p$result_type == "group_time"){return(gt_result$inf_func)}
+  id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = aux$dt_inv[, G])
+  pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
+  group <- group |> merge(pg_dt, by = "G", sort = FALSE)
   
-  inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
-    get_weight_influence(x, gt_result$att, aux$weights, aux$dt_inv[, G], agg_sch$group_time[, .(G, time)])
-  })
+  group[, time := as.integer(time)]
   
-  #aggregated influence function
-  inf_matrix <- (gt_result$inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
-  return(inf_matrix)
+  if(is.na(p$cohortvar2)){
+    group[, G := as.integer(G)]
+    setorder(group, time, G)
+  } else {
+    group[, mg := ming(G)]
+    group[, G1 := g1(G)]
+    group[, G2 := g2(G)]
+    setorder(group, time, mg, G1, G2) #sort
+  }
+
+  if(!p$parallel){
+    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+      get_weight_influence_param(x, group, att, aux, p)
+    })
+  } else {
+    inf_weights <- matrix(unlist(mclapply(asplit(agg_sch$agg_weights, 1), function (x){
+      get_weight_influence_param(x, group, att, aux, p)
+    })), ncol = length(agg_sch$targets))
+  }
+  
+  
+  return(inf_weights)
+  
 }
 
 #influence from weight calculation
-get_weight_influence <- function(agg_weights, gt_att, weights, id_cohorts, group) {
+get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
+
+  keepers <- which(agg_weights != 0)
+  group <- group[keepers,]
+  #moving this outside will create a g*t*id matrix, not really worth the memory
+  keepers_matrix <- as.matrix(aux$weights*sapply(1:nrow(group), function(g){as.integer(aux$dt_inv[, G] == group[g,G]) - group[g,pg]}))
   
-  keepers <- which(agg_weights > 0)
+  # gt weight = pgi / sum(pgi)
+  if1 <- keepers_matrix/sum(group[,pg]) #numerator
+  if2 <- rowSums(keepers_matrix) %*% t(group[,pg])/(sum(group[,pg])^2) #denominator
   
-  id_dt <- data.table(weight = weights/sum(weights), G = id_cohorts)
-  pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
-  group <- group |> merge(pg_dt, by = "G")
-  
-  group[, time := as.integer(time)]
-  group[, G := as.integer(G)]
-  setorder(group, time, G)
-  
-  # effect of estimating weights in the numerator
-  if1 <- sapply(keepers, function(k) {
-    (weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]) /
-      sum(group[keepers,pg])
-  })
-  # effect of estimating weights in the denominator
-  if2 <- base::rowSums(sapply(keepers, function(k) {
-    weights*BMisc::TorF(id_cohorts == group[k,G]) - group[k,pg]
-  })) %*%
-    t(group[keepers,pg]/(sum(group[keepers,pg])^2))
   # return the influence function for the weights
   inf_weight <- (if1 - if2) %*% as.vector(gt_att[keepers])
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps)*10] <- 0 #fill zero 
+
   return(inf_weight)
 }
 
-#aggregated att
-get_agg_att <- function(gt_result, agg_sch, p){
-  if(p$result_type == "group_time"){
-    return(as.vector(gt_result$att))
-  } else {
-    return(agg_sch$agg_weights %*% gt_result$att)
-  }
-}
+# se -------------------------------------------------------------------
 
 #aggregated standard error
 get_se <- function(inf_matrix, aux, p) {
@@ -166,9 +217,6 @@ get_se <- function(inf_matrix, aux, p) {
     #get sigma
     se <- dt_se[,(boot_top-boot_bot)/(qnorm(top_quant) - qnorm(bot_quant))]
     se[se < sqrt(.Machine$double.eps)*10] <- NA
-
-
-    
     
   } else {
 
