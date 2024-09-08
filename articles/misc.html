@@ -101,8 +101,7 @@ of 1% difference from results from the <code>did</code> package. This
 margin of error is mostly for bootstrapped results due to its inherent
 randomess. For point estimates, the difference is smaller than 1e-12,
 and is most likely the result of <a href="https://en.wikipedia.org/wiki/Floating-point_error_mitigation" class="external-link">floating-point
-error</a>. The relevant test files are <a href="https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_2_compare_gt.R" class="external-link">group-time</a>
-and <a href="https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_3_compare_agg.R" class="external-link">aggregates</a>.</p>
+error</a>. The relevant test files are <a href="https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_2_compare_est.R" class="external-link">compare_est.R</a>.</p>
 </div>
 <div class="section level3">
 <h3 id="extensions-coverage-test">Extensions: coverage test<a class="anchor" aria-label="anchor" href="#extensions-coverage-test"></a>
@@ -114,7 +113,7 @@ the 95% confidence intervals have a coverage rate between 94% and
 iteration, we test whether the confidence interval estimated covers the
 group-truth values. We then average the rate across iterations. Due to
 the randomness of coverage, the realized coverage fall outside of the
-thresholds in about 1% of the time. The relevant test file is <a href="https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_5_coverage.R" class="external-link">coverage</a>.</p>
+thresholds in about 1% of the time. The relevant test file is <a href="https://github.com/TsaiLintung/fastdid/blob/main/inst/tinytest/test_99_coverage.R" class="external-link">coverage.R</a>.</p>
 </div>
 <div class="section level3">
 <h3 id="experimental-features-not-tested">Experimental Features: not tested<a class="anchor" aria-label="anchor" href="#experimental-features-not-tested"></a>
