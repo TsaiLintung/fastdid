@@ -64,7 +64,7 @@ plot_did_dynamics(double_result) +
 
 Double DiD also allow for two additional aggregation scheme: group-group-time ("group_group_time") and dynamic-staggered ("dynamic_stagger", event time by event stagger, G1-G2).
 
-```{r, double}
+```{r, agg}
 double_result_ds <-fastdid(data = dt, 
                  timevar = "time", cohortvar = "G", unitvar = "unit",
                  outcomevar = "y", result_type = "dynamic_stagger",
