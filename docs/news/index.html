@@ -51,7 +51,47 @@
       <small>Source: <a href="https://github.com/TsaiLintung/fastdid/blob/HEAD/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
-  </main></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.9" id="version-099">Version 0.9.9<a class="anchor" aria-label="anchor" href="#version-099"></a></h2>
+<ul><li>add double did (see the vignette for the introduction)</li>
+<li>add <code>parallel</code>, parallization for unix systems, useful if the number of g-t is large.</li>
+<li>add <code>full</code>, return full result such as influence function, aggregate scheme, and such</li>
+<li>add <code>min</code>/<code>max_dynamic</code>, <code>custom_scheme</code> to experimental features</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.4" id="version-094">Version 0.9.4<a class="anchor" aria-label="anchor" href="#version-094"></a></h2>
+<blockquote>
+<p>[!WARNING] Some BREAKING change is introduced in this update.</p>
+</blockquote>
+<ul><li>add uniform confidence interval option with <code>cband</code> and significance level <code>alpha</code>, confidence interval are now provided in result as column <code>att_ciub</code> and <code>att_cilb</code>
+</li>
+<li>BREAKING: <code>filtervar</code>, <code>max_control_cohort_diff</code>, <code>min_control_cohort_diff</code> are moved into the experimental features. See the above section for the explanation.</li>
+<li>add <code>max_dynamic</code> and <code>min_dynamic</code> as experimental features.</li>
+<li>more informative error message when estimation fails for a specific <code>gt</code>, some internal interface overhaul</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.3" id="version-093">Version 0.9.3<a class="anchor" aria-label="anchor" href="#version-093"></a></h2>
+<ul><li>add anticipation and varying base period option</li>
+<li>add min and max control cohort difference</li>
+<li>add time-varying control (<a href="https://arxiv.org/abs/2202.02903" class="external-link">reference</a>)</li>
+<li>add filtervar</li>
+</ul><p>0.9.3.1 (2024/5/24): fix the bug with <code>univar == clustervar</code> (TODO: address problems with name-changing and collision). 0.9.3.2 (2024/7/17): fix group_time result when using <code>control_type = "notyet"</code> and make the base period in plots adapt to anticipation. 0.9.3.3 (2024/7/22): fix anticipation out of bound problem, more permanent solution for group_time target problem</p>
+</div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.2" id="version-092">Version 0.9.2<a class="anchor" aria-label="anchor" href="#version-092"></a></h2>
+<ul><li>add support to doubly robust and outcome regression estimators</li>
+<li>add support to unbalanced panels (simple and ipw only)</li>
+<li>add support to balanced composition option in dynamics aggregation</li>
+<li>fixed argument checking that was not working properly</li>
+<li>set the default to copying the entire dataset to avoid unexpected modification of the original data (thanks <a href="https://github.com/grantmcdermott" class="external-link">@grantmcdermott</a> for the suggestion.)</li>
+</ul></div>
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.9.1" id="version-091">Version 0.9.1<a class="anchor" aria-label="anchor" href="#version-091"></a></h2>
+<ul><li>now supprts estimation for multiple outcomes in one go!</li>
+<li>data validation: no longer check missing values for columns not used.</li>
+</ul></div>
+  </main><aside class="col-md-3"><nav id="toc"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">
