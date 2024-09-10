@@ -1,48 +1,22 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/404.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/articles/double.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/articles/index.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/articles/misc.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/articles/usage.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/authors.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/index.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/LICENSE-text.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/LICENSE.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/news/index.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/reference/diagnose_confound_event.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/reference/fastdid.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/reference/index.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/reference/plot_did_dynamics.html</loc>
-  </url>
-  <url>
-    <loc>https://tsailintung.github.io/fastdid/reference/sim_did.html</loc>
-  </url>
+<urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
+<url><loc>https://tsailintung.github.io/fastdid/404.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/LICENSE-text.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/LICENSE.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/articles/did.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/articles/double.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/articles/experimental.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/articles/index.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/articles/misc.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/articles/performance.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/articles/usage.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/articles/validity.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/authors.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/index.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/news/index.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/reference/diagnose_confound_event.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/reference/fastdid.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/reference/index.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/reference/plot_did_dynamics.html</loc></url>
+<url><loc>https://tsailintung.github.io/fastdid/reference/sim_did.html</loc></url>
 </urlset>
+

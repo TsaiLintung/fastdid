@@ -14,7 +14,7 @@ knitr::opts_chunk$set(
 )
 ```
 
-Here we show how to deal with confounding events, see [Tsai (2024)](not_ready_yet) (coming soon!) for the full treatment. We first simulate some data with confounding events. 
+Here we show how to deal with confounding events, see [Tsai (2024)](https://arxiv.org/abs/2409.05184) for the full treatment. We first simulate some data with confounding events. 
 
 ```{r setup}
 library(fastdid)
