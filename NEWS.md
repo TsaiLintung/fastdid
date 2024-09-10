@@ -1,3 +1,7 @@
+# Version 1.0.0
+
+- Release to CRAN!
+
 # Version 0.9.9
 
 - add double did (see the vignette for the introduction)
