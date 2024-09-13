@@ -1,5 +1,5 @@
-#2024-08-22
-message('loading fastdid source ver. ver: 0.9.9 date: 2024-08-22')
+#2024-09-13
+message('loading fastdid source ver. ver: 0.9.9 date: 2024-09-13')
 require(data.table);
  require(stringr);
  require(BMisc);
@@ -113,7 +113,7 @@ get_agg_targets <- function(group_time, p){
     simple = group_time[, target := post],
     group_time = group_time[, target := paste0(g1(G), ".", time)],
     group_group_time = group_time[, target := paste0(G, ".", time)] ,
-    dynamic_sq = group_time[, target := paste0(time-g1(G), ".", g1(G)-g2(G))]
+    dynamic_stagger = group_time[, target := paste0(time-g1(G), ".", g1(G)-g2(G))]
   )
   
   #allow custom aggregation scheme, this overides other stuff
@@ -278,7 +278,7 @@ coerce_dt <- function(dt, p){
   if(p$allow_unbalance_panel){
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, G)
-    dt_inv_raw[, new_unit := 1:.N] #let unit start from 1 .... N, useful for knowing which unit is missing
+    dt_inv_raw[, new_unit := seq_len(.N)] #let unit start from 1 .... N, useful for knowing which unit is missing
     dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit", sort = FALSE)
     dt[, unit := new_unit]
   }
@@ -300,10 +300,10 @@ coerce_dt <- function(dt, p){
   }
   
   time_step <- 1 #time may not jump at 1
-  if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){
+  if(any(time_periods[seq(2,length(time_periods),1)] - time_periods[seq_len(length(time_periods))-1] != 1)){
     time_step <- time_periods[2]-time_periods[1]
     time_periods <- (time_periods-1)/time_step+1
-    if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
+    if(any(time_periods[seq(2,length(time_periods),1)] - time_periods[seq_len(length(time_periods))-1] != 1)){stop("time step is not uniform")}
     dt[G != 1, G := (G-1)/time_step+1]
     
     dt[time != 1, time := (time-1)/time_step+1]
@@ -357,7 +357,7 @@ get_auxdata <- function(dt, p){
   
   #the time-invariant parts 
   if(!p$allow_unbalance_panel){
-    dt_inv <- dt[1:id_size]
+    dt_inv <- dt[seq_len(id_size)]
   } else {
     dt_inv <- dt[dt[, .I[1], by = unit]$V1] #the first observation
     setorder(dt_inv, unit) #can't move this outside
@@ -372,7 +372,7 @@ get_auxdata <- function(dt, p){
     for(i in time_periods){
       start <- (i-1)*id_size+1
       end <- i*id_size
-      varycovariates[[i]] <- dt[seq(start,end), .SD, .SDcols = p$varycovariatesvar]
+      varycovariates[[i]] <- dt[seq(start,end, by = 1), .SD, .SDcols = p$varycovariatesvar]
     }
   } else {
     varycovariates <- NA
@@ -498,67 +498,6 @@ recover_time <- function(time, t){
 # a <- list(b = 1, c = 2)
 # class(a) <- c("locked")
 
-#' Diagnose Event Confoundedness
-#'
-#' @param data A data.table containing the panel data.
-#' @param timevar The name of the time variable.
-#' @param cohortvar The name of the cohort (group) variable.
-#' @param control_option The control units used for the DiD estimates. Default is "both".
-#' @param weightvar The name of the weight variable, if not specified will cluster on unit level (optional).
-#' @param cohortvar2 The name of the second cohort (group) variable.
-#' @param anticipation Period of anticipation
-#' 
-#' @return A data.table containing the contamination ratio for each group-time.
-#' @export
-#'
-#' @examples
-#' # simulated data
-#' simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, 
-#' second_outcome = TRUE, second_cohort = TRUE)
-#' dt <- simdt$dt
-#' 
-#' diagnose_confound_event(dt, "time", "G", "G2")
-#'
-#' @keywords difference-in-differences fast computation panel data estimation did
-diagnose_confound_event <- function(data, timevar, cohortvar, cohortvar2, control_option = "both", weightvar = NA, anticipation = 0){
-  
-  if(is.na(weightvar)){
-    dt <- data[, .(w = .N), by = c(timevar, cohortvar, cohortvar2)]
-  } else {
-    dt <- data[, .(w = sum(get(weightvar))), by = c(timevar, cohortvar, cohortvar2)]
-  }
-  setnames(dt, c("time", "G", "G2", "w"))
-  dt[, D2 := as.numeric(time >= G2)]
-  if(control_option == "notyet"){dt <- dt[!is.infinite(G)]}
-  
-  expo <- data.table() 
-  for(g in dt[, unique(G)]){
-    for(t in dt[, unique(time)]){ 
-      
-      min_control_cohort <- ifelse(control_option == "never", Inf, max(g,t)+anticipation+1)
-      
-      base <- g-1-anticipation
-      dt[,`:=`(tp = 0, cp = 0, tb = 0, cb = 0)]
-      dt[G == g & time == t, tp := w/sum(w)]
-      dt[G >= min_control_cohort & time == t, cp := w/sum(w)]
-      dt[G == g & time == base, tb := w/sum(w)]
-      dt[G >= min_control_cohort & time == base, cb := w/sum(w)]
-      if(any(dt[, lapply(.SD, sum), .SDcols = c("tp", "cp", "tb", "cb")] == 0)){next} #rule out invalid gt
-      
-      gamma <- dt[, sum(D2*(tp-cp-tb+cb))] #btw, this is how simple staggered DiD can be without conditional PT
-      w = dt[G == g & time == t, sum(w)] #weight for the simple aggregation
-      expo <- expo |> rbind(data.table(G = g, time = t, gamma = gamma, w = w))
-      
-    }
-  }
-  
-  diag_result <- list(gtexpo = expo)
-  #TODO: make this list instead
-  class(diag_result) <- c("confound_diagnosis") #add class for generics
-  return(diag_result)
-  
-}
-
 
 
 # utils -----------------------------------
@@ -681,6 +620,8 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
   g2 <- group_time[ggt, G2]
   gg <- group_time[ggt, G]
   
+  if(is.infinite(g1)){return(NULL)}
+  
   if(t < g2){ #direct pure effect
     
     group_time[ggt, weight := 1] #just use the observed effect
@@ -689,10 +630,14 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     
     base_period <- g2 - 1
     if(base_period == t){return(NULL)}
+    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+1)
     
     #get the cohorts
     tb <- group_time[,G == gg & time == base_period]
-    c <-  group_time[, G1 == g1 & G2 > max(t,base_period) & G2 != g2]
+    c <-  group_time[, G1 == g1 & G2 >= min_control_cohort & G2 != g2]
+    if(p$control_option == "notyet"){
+      c[group_time[, is.infinite(G2)]] <- FALSE
+    }
     cp <- group_time[, c & time == t]
     cb <- group_time[, c & time == base_period]
     
@@ -709,11 +654,15 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     
     base_period <- g1 - 1
     if(base_period == t){return(NULL)}
+    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+1)
     
     #get the cohorts
     tp <- group_time[,.I == ggt]
     tb <- group_time[,G == gg & time == base_period]
-    c <-  group_time[,G2 == g2 & G1 > max(t,base_period) & G1 != g1]
+    c <-  group_time[,G2 == g2 & G1 >= min_control_cohort & G1 != g1]
+    if(p$control_option == "notyet"){
+      c[group_time[, is.infinite(G1)]] <- FALSE
+    }
     cp <- group_time[, c & time == t]
     cb <- group_time[, c & time == base_period]
     
@@ -1211,7 +1160,7 @@ get_base_period <- function(g,t,p){
 }
 
 get_did_setup <- function(g, t, base_period, aux, p){
-  
+
   treated_cohorts <- aux$cohorts[!is.infinite(ming(aux$cohorts))]
 
   min_control_cohort <- ifelse(p$control_option == "never", Inf, max(t, base_period)+p$anticipation+1)
@@ -1234,20 +1183,24 @@ get_did_setup <- function(g, t, base_period, aux, p){
     did_setup[!aux$filters[[t]]] <- NA #only use units with filter == TRUE at target period
   }
   
+  if(length(did_setup) != aux$id_size){stop("internal bug: something wrong with did setup (again?)")}
+  
   return(did_setup)
 }
 
 get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
   start <- cohort_sizes[ming(G) < start_cohort, sum(cohort_size)]+1 
   end <- cohort_sizes[ming(G) <= end_cohort, sum(cohort_size)]
-  return(start:end)
+  if(start > end){return(c())}
+  return(seq(start, end, by = 1))
 }
 
-get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for double did, need to match exact g-g-t
+get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for double did to match exact g-g-t
   index <- which(cohort_sizes[,G] == treat_cohort)
   start <- ifelse(index == 1, 1, cohort_sizes[1:(index-1), sum(cohort_size)]+1)
   end <- cohort_sizes[1:index, sum(cohort_size)]
-  return(start:end)
+  if(start > end){return(c())}
+  return(seq(start, end, by = 1))
 }
 
 get_covvars <- function(base_period, t, aux, p){
@@ -1277,35 +1230,36 @@ get_covvars <- function(base_period, t, aux, p){
 
 #' Fast Staggered DID Estimation
 #'
-#' Performs Difference-in-Differences (DID) estimation fast.
+#' Performs Difference-in-Differences (DID) estimation.
 #'
-#' @param data A data.table containing the panel data.
-#' @param timevar The name of the time variable.
-#' @param cohortvar The name of the cohort (group) variable.
-#' @param unitvar The name of the unit (id) variable.
-#' @param outcomevar The name of the outcome variable.
-#' @param control_option The control units used for the DiD estimates. Default is "both".
-#' @param result_type A character string indicating the type of result to be returned. Default is "group_time".
-#' @param balanced_event_time A numeric scalar that indicates the max event time to balance the cohort composition, only meaningful when result_type == "dynamic". Default is NA
-#' @param control_type The method for controlling for covariates. "ipw" for inverse probability weighting, "reg" for outcome regression, or "dr" for doubly-robust
-#' @param allow_unbalance_panel Whether allow unbalance panel as input (if false will coerce the dataset to a balanced panel). Default is FALSE 
-#' @param boot Logical, indicating whether bootstrapping should be performed. Default is FALSE
-#' @param biters The number of bootstrap iterations. Only relevant if boot = TRUE. Default is 1000.
-#' @param cband Logical, indicate whether to use uniform confidence band or point-wise, defulat is FALSE (use point-wise)
-#' @param alpha The significance level, default is 0.05
-#' @param weightvar The name of the weight variable, if not specified will cluster on unit level (optional).
-#' @param clustervar The name of the cluster variable, can only be used when boot == TRUE (optional).
-#' @param covariatesvar A character vector containing the names of time-invariant covariate variables (optional).
-#' @param varycovariatesvar A character vector containing the names of time-varying covariate variables (optional).
-#' @param copy whether to copy the dataset before processing, set to false to speed up the process, but the input data will be altered.
-#' @param validate whether to validate the dataset before processing.
-#' @param anticipation periods with aniticipation (delta in CS, default is 0, reference period is g - delta - 1).
-#' @param exper the list of experimental features, for features that are not in CSDID originally. Generally less tested. 
-#' @param base_period same as did
-#' @param full return the full result, like the influence function, call, etc,. Default is false. 
-#' @param parallel whether to use parallization (only available on unix systesm like Mac or Linux.)
-#' @param cohortvar2 The name of the second cohort (group) variable.
-#' @param event_specific Whether to recover event_specific treatment effect or report combined effect. 
+#' @param data data.table, the dataset.
+#' @param timevar character, name of the time variable.
+#' @param cohortvar character, name of the cohort (group) variable.
+#' @param unitvar character, name of the unit (id) variable.
+#' @param outcomevar character vector, name(s) of the outcome variable(s).
+#' @param control_option character, control units used for the DiD estimates, options are "both", "never", or "notyet". 
+#' @param result_type character, type of result to return, options are "group_time", "time", "group", "simple", "dynamic" (time since event), "group_group_time", or "dynamic_stagger". 
+#' @param balanced_event_time number, max event time to balance the cohort composition.
+#' @param control_type character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), or "dr" (doubly-robust).
+#' @param allow_unbalance_panel logical, allow unbalance panel as input or coerce dataset into one. 
+#' @param boot logical, whether to use bootstrap standard error. 
+#' @param biters number, bootstrap iterations. Default is 1000.
+#' @param cband logical, whether to use uniform confidence band or point-wise.
+#' @param alpha number, the significance level. Default is 0.05.
+#' @param weightvar character, name of the weight variable.
+#' @param clustervar character, name of the cluster variable. 
+#' @param covariatesvar character vector, names of time-invariant covariate variables. 
+#' @param varycovariatesvar character vector, names of time-varying covariate variables.
+#' @param copy logical, whether to copy the dataset. 
+#' @param validate logical, whether to validate the dataset. 
+#' @param anticipation number, periods with anticipation. 
+#' @param exper list, arguments for experimental features. 
+#' @param base_period character, type of base period in pre-preiods, options are "universal", or "varying".
+#' @param full logical, whether to return the full result (influence function, call, weighting scheme, etc,.). 
+#' @param parallel logical, whether to use parallization on unix system. 
+#' @param cohortvar2 character, name of the second cohort (group) variable.
+#' @param event_specific logical, whether to recover target treatment effect or use combined effect.
+#' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet". 
 #' 
 #' @import data.table stringr dreamerr ggplot2
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean
@@ -1313,36 +1267,25 @@ get_covvars <- function(base_period, t, aux, p){
 #' @importFrom parallel mclapply
 #' @importFrom BMisc multiplier_bootstrap
 #' @importFrom parglm parglm.fit parglm.control
-#' @return A data.table containing the estimated treatment effects and standard errors.
+#' @return A data.table containing the estimated treatment effects and standard errors or a list of all results when `full == TRUE`.
 #' @export
+#'
+#' @details
+#' `balanced_event_time` is only meaningful when `result_type == "dynamic`.
+#' 
+#' `result_type` as `group-group-time` and `dynamic staggered` is only meaningful when using double did.
+#' 
+#' `biter` and `clustervar` is only used when `boot == TRUE`.
 #'
 #' @examples
 #' # simulated data
-#' simdt <- sim_did(1e+03, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE)
+#' simdt <- sim_did(1e+02, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE, seed = 1)
 #' dt <- simdt$dt
 #' 
 #' #basic call
 #' result <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
 #'                   unitvar = "unit", outcomevar = "y",  
 #'                   result_type = "group_time")
-#' 
-#' #control for covariates
-#' result2 <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
-#'                    unitvar = "unit", outcomevar = "y",  
-#'                    result_type = "group_time",
-#'                    covariatesvar = c("x", "x2"))
-#'                   
-#' #bootstrap and clustering
-#' result3 <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
-#'                    unitvar = "unit", outcomevar = "y",  
-#'                    result_type = "group_time",
-#'                    boot = TRUE, clustervar = "x")
-#'
-#' #estimate for multiple outcomes
-#' result4 <- fastdid(data = dt, #the dataset
-#'                    timevar = "time", cohortvar = "G", unitvar = "unit", 
-#'                    outcomevar = c("y", "y2"), #name of the outcome columns
-#'                    result_type = "group_time") 
 #'
 #' @keywords difference-in-differences fast computation panel data estimation did
 fastdid <- function(data,
@@ -1353,7 +1296,7 @@ fastdid <- function(data,
                     copy = TRUE, validate = TRUE,
                     anticipation = 0,  base_period = "universal",
                     exper = NULL, full = FALSE, parallel = FALSE, 
-                    cohortvar2 = NA, event_specific = TRUE){
+                    cohortvar2 = NA, event_specific = TRUE, double_control_option="both"){
   
   # preprocess --------------------------------------------------------
   
@@ -1396,7 +1339,6 @@ fastdid <- function(data,
   
   #convert "targets" back to meaningful parameters
   est_results <- convert_targets(agg_result$est, p, coerce_result$t) 
-  class(est_results) <- c("fastdid_est", class(est_results))
   
   if(!p$full){
     return(est_results)
@@ -1413,37 +1355,28 @@ fastdid <- function(data,
   }
 }
 
-#' @export
-plot.fastdid_result <- function(x,...){return(plot(x$estimate,...))}
-
-#' @export
-plot.fastdid_est <- function(x,...){
-  #dispatch to functions by result_type
-  if("event_time" %in% names(x)){
-    plot <- plot_did_dynamics(x)
-  } else if ("cohort" %in% names(x) & "time" %in% names(x)){
-    stop("don't have plot for group-time for now")
-  } else if ("cohort" %in% names(x)){
-    plot <- plot_did_dynamics(x, "cohort")
-  } else if ("time" %in% names(x)){
-    plot <- plot_did_dynamics(x, "time")
-  }
-  
-  if(x[,uniqueN(outcome)] > 1){
-    plot <- plot + facet_wrap(~outcome, scales = "free")
-  }
-  
-  return(plot)
-}
-
-#' Create plot for Difference-in-Differences (DiD) analysis.
+#' Plot event study
 #'
-#' This function generates an plot based on the results of a DiD analysis.
+#' Plot event study results.
 #'
-#' @param x A data table containing the results of the DiD analysis. It should include columns for 'att' (average treatment effect), 'se' (standard error), and 'event_time' (time points).
-#' @param margin the x-axis of the plot
+#' @param x A data table generated with [fastdid] with one-dimensional index.
+#' @param margin character, the x-axis of the plot
 #'
-#' @return A ggplot2 object representing the event study plot.
+#' @return A ggplot2 object
+#' @examples
+#' 
+#' # simulated data
+#' simdt <- sim_did(1e+02, 10, seed = 1)
+#' dt <- simdt$dt
+#' 
+#' #estimation
+#' result <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
+#'                   unitvar = "unit", outcomevar = "y",  
+#'                   result_type = "dynamic")
+#' 
+#' #plot
+#' plot_did_dynamics(result)
+#' 
 #' @export
 plot_did_dynamics <-function(x, margin = "event_time"){
   
@@ -1460,6 +1393,8 @@ plot_did_dynamics <-function(x, margin = "event_time"){
       base_row <- data.table(att = 0, se = 0, event_time = base_time, att_ciub = 0, att_cilb = 0)
     }
     x <- x |> rbind(base_row, fill = TRUE)
+  } else {
+    x <- x[type == "post"]
   }
   
   plot <- x |> 
@@ -1478,26 +1413,6 @@ plot_did_dynamics <-function(x, margin = "event_time"){
   
 }
 
-# confound diagnosis ---------------------
-
-#' @export
-print.confound_diagnosis <- function(x,...) {
-  cat(paste0("event correlation: ", mean(x)))
-}
-
-#' @export
-plot.confound_diagnosis <- function(x,...) {
-
-  x$gtexpo[time >= G] |>  ggplot( aes(x = as.factor(time-G), y = as.factor(G), fill = gamma)) +  geom_tile() + 
-     scale_fill_distiller(palette = "RdBu", limits = c(-1, 1)) + 
-     labs(subtitle = paste0("event correlation: ", mean(x)), y = "G", x = "event_time") 
-}
-
-#' @export
-mean.confound_diagnosis <- function(x,...){
-  return(x$gtexpo[time>=G,weighted.mean(gamma, w)])
-}
-
 NULL
 
 # quiets concerns of R CMD check re: the .'s that appear in pipelines and data.table variables
@@ -1512,7 +1427,7 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
                          "copy", "validate", "max_control_cohort_diff", "anticipation", "min_control_cohort_diff", "base_period", "post", "att_ciub", "att_cilb", "cband", "alpha",
                          "G2", "G1", "mg", "cohort1", "cohort2", "event_time_1", "event_time_2",
                          "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2", "parallel",
-                         "tp", "cp", "tb", "cb", "no_na", "event_stagger"))
+                         "tp", "cp", "tb", "cb", "no_na", "event_stagger", "double_control_option"))
 
 
 #' Simulate a Difference-in-Differences (DiD) dataset
@@ -1535,6 +1450,7 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
 #' @param vary_cov include time-varying covariates
 #' @param second_cohort include confounding events
 #' @param confound_ratio extent of event confoundedness
+#' @param second_het heterogeneity of the second event
 #'
 #' @return A list containing the simulated dataset (dt) and the treatment effect values (att).
 #'
@@ -1542,13 +1458,10 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
 #' # Simulate a DiD dataset with default settings
 #' data <- sim_did(sample_size = 100, time_period = 5)
 #'
-#' # Simulate a DiD dataset with customized settings
-#' data <- sim_did(sample_size = 200, time_period = 8, cov = "int", hetero = "dynamic")
-#'
 #' @export
 sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size = 0.001,
                     cov = "no", hetero = "all", second_outcome = FALSE, second_cov = FALSE, vary_cov = FALSE, na = "none", 
-                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent", second_cohort = FALSE, confound_ratio = 1){
+                    balanced = TRUE, seed = NA, stratify = FALSE, treatment_assign = "latent", second_cohort = FALSE, confound_ratio = 1, second_het = "all"){
   
   if(!is.na(seed)){set.seed(seed)}
   
@@ -1661,11 +1574,15 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
     dt[, D2 := as.integer(time >= G2)]
     #generate gtatt
     att2 <- CJ(G2 = 1:time_period, time = 1:time_period)
-    if(hetero == "all"){
-      att2[, attgt2 := rnorm(time_period*time_period, mean = 2, sd = 1)]
-    } else if (hetero == "dynamic"){
-      for(event_t in 0:max(att2[,time-G2])){
-        att2[time - G2 == event_t, attgt2 := rnorm(1, mean = 2, sd = 1)]
+    if(second_het == "no"){
+      att2[, attgt2 := 10]
+    } else {
+      if(hetero == "all"){
+        att2[, attgt2 := rnorm(time_period*time_period, mean = 2, sd = 1)]
+      } else if (hetero == "dynamic"){
+        for(event_t in 0:max(att2[,time-G2])){
+          att2[time - G2 == event_t, attgt2 := rnorm(1, mean = 2, sd = 1)]
+        }
       }
     }
     att2[time < G2, attgt2 := 0] #no anticipation
@@ -1743,7 +1660,7 @@ validate_argument <- function(dt, p){
   checkvar_message <- "__ARG__ must be NA or a character scalar if a name of columns from the dataset."
   check_set_arg(weightvar, clustervar, "NA | match", .choices = dt_names, .message = checkvar_message, .up = 1)
   
-  check_set_arg(control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) #kinda bad names since did's notyet include both notyet and never
+  check_set_arg(control_option, double_control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) #kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1) 
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
   check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)
