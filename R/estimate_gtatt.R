@@ -92,7 +92,7 @@ get_base_period <- function(g,t,p){
 }
 
 get_did_setup <- function(g, t, base_period, aux, p){
-  
+
   treated_cohorts <- aux$cohorts[!is.infinite(ming(aux$cohorts))]
 
   min_control_cohort <- ifelse(p$control_option == "never", Inf, max(t, base_period)+p$anticipation+1)
@@ -115,20 +115,24 @@ get_did_setup <- function(g, t, base_period, aux, p){
     did_setup[!aux$filters[[t]]] <- NA #only use units with filter == TRUE at target period
   }
   
+  if(length(did_setup) != aux$id_size){stop("internal bug: something wrong with did setup (again?)")}
+  
   return(did_setup)
 }
 
 get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
   start <- cohort_sizes[ming(G) < start_cohort, sum(cohort_size)]+1 
   end <- cohort_sizes[ming(G) <= end_cohort, sum(cohort_size)]
-  return(start:end)
+  if(start > end){return(c())}
+  return(seq(start, end, by = 1))
 }
 
-get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for double did, need to match exact g-g-t
+get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for double did to match exact g-g-t
   index <- which(cohort_sizes[,G] == treat_cohort)
   start <- ifelse(index == 1, 1, cohort_sizes[1:(index-1), sum(cohort_size)]+1)
   end <- cohort_sizes[1:index, sum(cohort_size)]
-  return(start:end)
+  if(start > end){return(c())}
+  return(seq(start, end, by = 1))
 }
 
 get_covvars <- function(base_period, t, aux, p){

@@ -98,6 +98,12 @@ expect_equal(fastdid(dt[nrow(dt):1], timevar = "time", cohortvar = "G", unitvar 
               info = "reversed")
 
 dt2 <- data.table::copy(dt)
+dt2 <- dt2[G < 4]
+expect_silent(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", control_option = "notyet"),
+              info = "limited treated group")
+
+
+dt2 <- data.table::copy(dt)
 dt2[, time := time*2 + 3]
 dt2[, G := G*2 + 3]
 base_result2 <- data.table::copy(base_result)
