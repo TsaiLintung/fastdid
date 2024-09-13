@@ -4,10 +4,10 @@
   [![R-CMD-check](https://github.com/TsaiLintung/fastdid/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/TsaiLintung/fastdid/actions/workflows/R-CMD-check.yaml)
   <!-- badges: end -->
 
-fastdid implements the Difference-in-Differences (DiD) estimators in [Callaway and Sant'Anna's (2021)](https://www.sciencedirect.com/science/article/pii/S0304407620303948), it is
+fastdid implements the Difference-in-Differences (DiD) estimators in [Callaway and Sant'Anna's (2021)](https://www.sciencedirect.com/science/article/pii/S0304407620303948). fastdid is
 
   - fast, reducing the computation time with millions of units from hours to [seconds](https://tsailintung.github.io/fastdid/articles/misc.html#performance),
-  - flexible, with extensions such as [time-varying covariates](https://arxiv.org/abs/2406.15288) and [multiple events](not_ready_yet) (coming soon!). 
+  - flexible, allowing extensions such as [time-varying covariates](https://arxiv.org/abs/2406.15288) and [multiple events](https://arxiv.org/abs/2409.05184). 
 
 # Getting Started
 
