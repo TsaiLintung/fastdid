@@ -1,5 +1,5 @@
 ---
-title: "double"
+title: "Introduction to Double DiD"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{double}
