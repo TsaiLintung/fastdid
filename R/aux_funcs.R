@@ -27,7 +27,7 @@ coerce_dt <- function(dt, p){
   if(p$allow_unbalance_panel){
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, G)
-    dt_inv_raw[, new_unit := 1:.N] #let unit start from 1 .... N, useful for knowing which unit is missing
+    dt_inv_raw[, new_unit := seq_len(.N)] #let unit start from 1 .... N, useful for knowing which unit is missing
     dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit", sort = FALSE)
     dt[, unit := new_unit]
   }
@@ -49,10 +49,10 @@ coerce_dt <- function(dt, p){
   }
   
   time_step <- 1 #time may not jump at 1
-  if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){
+  if(any(time_periods[seq(2,length(time_periods),1)] - time_periods[seq_len(length(time_periods))-1] != 1)){
     time_step <- time_periods[2]-time_periods[1]
     time_periods <- (time_periods-1)/time_step+1
-    if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
+    if(any(time_periods[seq(2,length(time_periods),1)] - time_periods[seq_len(length(time_periods))-1] != 1)){stop("time step is not uniform")}
     dt[G != 1, G := (G-1)/time_step+1]
     
     dt[time != 1, time := (time-1)/time_step+1]
@@ -106,7 +106,7 @@ get_auxdata <- function(dt, p){
   
   #the time-invariant parts 
   if(!p$allow_unbalance_panel){
-    dt_inv <- dt[1:id_size]
+    dt_inv <- dt[seq_len(id_size)]
   } else {
     dt_inv <- dt[dt[, .I[1], by = unit]$V1] #the first observation
     setorder(dt_inv, unit) #can't move this outside
@@ -121,7 +121,7 @@ get_auxdata <- function(dt, p){
     for(i in time_periods){
       start <- (i-1)*id_size+1
       end <- i*id_size
-      varycovariates[[i]] <- dt[seq(start,end), .SD, .SDcols = p$varycovariatesvar]
+      varycovariates[[i]] <- dt[seq(start,end, by = 1), .SD, .SDcols = p$varycovariatesvar]
     }
   } else {
     varycovariates <- NA

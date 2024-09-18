@@ -42,6 +42,15 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
                       cohortvar2 = "G2"),
               info = "double, dynamic_sq")
 
+# non-standard data ---------------------------------------------------------
+
+dt2 <- data.table::copy(dt)
+dt2 <- dt2[G < 4]
+expect_silent(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                      cohortvar2 = "G2", allow_unbalance_panel = TRUE, control_option = "notyet"),
+              info = "double, limited treated group")
+
+
 dt2 <- data.table::copy(dt)
 keep <- sample(c(rep(TRUE, 15),FALSE), dt2[,.N], TRUE)
 dt2 <- dt2[keep]

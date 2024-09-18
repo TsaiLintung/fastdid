@@ -9,6 +9,8 @@
 - add `full`, return full result such as influence function, aggregate scheme, and such
 - add `min`/`max_dynamic`, `custom_scheme` to experimental features
 
+0.9.9.1 (2024/9/13): fix a bug that affects not-yet control with max treated group != max time
+
 # Version  0.9.4
 
 > Some BREAKING change is introduced in this update. 
