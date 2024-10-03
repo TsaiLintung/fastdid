@@ -24,15 +24,16 @@ ming <- function(GG){
 
 coerce_dt_doub <- function(dt, p){
   
-  #chcek if there is availble never-treated group
-  if(!is.infinite(dt[, max(ming(G))]) & p$control_option != "notyet"){
-    warning("no never-treated availble, effectively using not-yet-treated control")
-  }
-  
   setnames(dt, "G", "G1")
   dt[, mg := pmin(G1, G2)]
   setorder(dt, time, mg, G1, G2, unit)  #for sort one quick access
  
+  #check if there is availble never-treated group
+  if(!is.infinite(dt[, max(mg)])){
+    if(p$control_option == "both"){warning("no never-treated availble, effectively using not-yet-but-eventually-treated as control")}
+    if(p$control_option == "never"){stop("no never-treated availble.")}
+  }
+  
   if(p$allow_unbalance_panel){ #let unit start from 1 .... N, useful for knowing which unit is missing
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, mg, G1, G2)

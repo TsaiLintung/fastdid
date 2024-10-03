@@ -53,6 +53,17 @@ expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",
                info = "missing values")
 
 
+dt2 <- data.table::copy(dt)
+dt2 <- dt2[!is.infinite(G)]
+expect_warning(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
+                       control_option = "both"),
+               info = "no never but both")
+
+dt2 <- data.table::copy(dt)
+dt2 <- dt2[!is.infinite(G)]
+expect_error(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time",
+                       control_option = "never"),
+               info = "no never but never")
 
 # already_treated
 dt_at <- data.table::copy(dt)
