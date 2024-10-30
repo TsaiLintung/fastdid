@@ -1,5 +1,5 @@
 ---
-title: "misc"
+title: "Miscellaneous Topics"
 output: rmarkdown::html_vignette
 vignette: >
   %\VignetteIndexEntry{misc}
@@ -18,13 +18,13 @@ knitr::opts_chunk$set(
 
 `fastdid` is magnitudes faster than [did](https://github.com/bcallaway11/did), and 15x faster than the fastest alternative [DiDforBigData](https://github.com/setzler/DiDforBigData) (dfbd for short) for large dataset. fastdid also uses less memory. Here is a comparison of run time for fastdid, did, and dfbd using a panel of 10 periods and varying samples sizes.
 
-![](https://i.imgur.com/s5v32Rw.png)
+<img src="https://i.imgur.com/s5v32Rw.png" width="700px"/>
 
 Unfortunately, the Author's computer fails to run **did** at 1 million units. For a rough idea, **DiDforBigData** is about 100x faster than **did** in Bradley Setzler's [benchmark](https://setzler.github.io/DiDforBigData/articles/Background.html). Other staggered DiD implementations are even slower than **did**. 
 
 For memory:
 
-![](https://i.imgur.com/7emkgOz.png)
+<img src="https://i.imgur.com/7emkgOz.png" width="700px"/>
 
 For the benchmark, a baseline group-time ATT is estimated with no covariates control, no bootstrap, and no explicit parallelization. Computing time is measured by `microbenchmark` and peak RAM by `peakRAM`.
 

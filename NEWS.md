@@ -1,3 +1,15 @@
+# fastdid 1.0.2
+
+- Fixed Typo for CRAN
+
+# fastdid 1.0.1
+
+- Fixed Typo for CRAN
+
+# Version 1.0.0
+
+- Release to CRAN!
+
 # Version 0.9.9
 
 - add double did (see the vignette for the introduction)

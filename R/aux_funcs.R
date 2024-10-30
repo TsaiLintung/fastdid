@@ -20,8 +20,9 @@ coerce_dt <- function(dt, p){
   if(!is.na(p$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
   
   #chcek if there is availble never-treated group
-  if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){
-    warning("no never-treated availble, effectively using not-yet-treated control")
+  if(!is.infinite(dt[, max(G)])){
+    if(p$control_option == "both"){warning("no never-treated availble, effectively using not-yet-but-eventually-treated as control")}
+    if(p$control_option == "never"){stop("no never-treated availble.")}
   }
   
   if(p$allow_unbalance_panel){
