@@ -133,14 +133,14 @@ expect_silent(fastdid(dt2, timevar = "t", cohortvar = "g", unitvar = "u",outcome
               info = "other column names")
 
 #make sure dt is not copied if copy == FALSE
-if(at_home()){
+#if(at_home()){
   dtc <- data.table::copy(dt)
   address <- tracemem(dtc) |> stringr::str_remove_all(">|<")
   out <- capture.output(fastdid(dtc, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y",  result_type = "group_time", copy = FALSE))
   #if a copy happen there will be a message at the start, so out[1] won't be the header. 
   expect_true(!stringr::str_detect(stringr::str_flatten_comma(out), address),
               info = "no unintentional copy")
-}
+#}
 
 if(.Platform$OS.type == "unix" & at_home() & requireNamespace("parallel")){
   expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", parallel = TRUE),
