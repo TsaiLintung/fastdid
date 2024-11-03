@@ -1,3 +1,5 @@
+# fastdid 1.0.3
+
 # fastdid 1.0.2
 
 - Fixed Typo for CRAN
