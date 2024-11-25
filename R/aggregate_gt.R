@@ -73,6 +73,7 @@ get_agg_sch <- function(gt_result, aux, p){
   } else {
     es_det_weight <- NULL
     es_sto_weight <- NULL
+    pre_es_group_time <- NULL
   }
 
   #choose the target based on aggregation type
@@ -188,7 +189,6 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
   # return the influence function for the weights
   inf_weight <- (if1 - if2) %*% as.vector(gt_att[keepers])
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps)*10] <- 0 #fill zero 
-  if(any(is.na(inf_weight))){browser()}
   return(inf_weight)
 }
 

@@ -180,6 +180,7 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     
   } 
   
+  if(all(group_time[, det_weight+sto_weight] == 0)){return(NULL)} #not redundant!
   return(list(det = group_time[, det_weight], sto = group_time[, sto_weight]))
   
 }

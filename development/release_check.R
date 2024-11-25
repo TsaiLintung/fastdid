@@ -15,7 +15,5 @@ run_test_dir()
 build(path = "development")
 check()
 
-cov <- package_coverage(function_exclusions = c("sim_did", "locked"))
-
 source("development/build_source.R")
-build_source("0.9.9")
+build_source("1.0.4")
