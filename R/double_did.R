@@ -104,9 +104,10 @@ get_es_scheme <- function(group_time, aux, p){
   valid_ggt <- which(!sapply(es_weight_list, is.null))
   es_group_time <- es_group_time[valid_ggt] #remove the ones without
   es_weight_list <- es_weight_list[valid_ggt]
-  es_weight <- do.call(rbind, es_weight_list) #not sure if the dim is right
+  es_det_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$det})) 
+  es_sto_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$sto}))
   
-  return(list(group_time = es_group_time, es_weight = es_weight))
+  return(list(group_time = es_group_time, es_det_weight = es_det_weight, es_sto_weight = es_sto_weight))
   
 }
 
@@ -115,7 +116,8 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
   
   group_time <- copy(group_time) #avoid accidental modification
   
-  group_time[, weight := 0] #reset 
+  group_time[, det_weight := 0] #reset 
+  group_time[, sto_weight := 0] #reset 
   t <- group_time[ggt, time]
   g1 <- group_time[ggt, G1]
   g2 <- group_time[ggt, G2]
@@ -125,7 +127,7 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
   
   if(t < g2){ #direct pure effect
     
-    group_time[ggt, weight := 1] #just use the observed effect
+    group_time[ggt, det_weight := 1] #just use the observed effect
     
   } else if(g1 < g2) { #imputation = treat-pre + (control-post - control-pre)
     
@@ -146,9 +148,9 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     if(sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
     
     #assign the weights
-    group_time[tb, weight := pg/sum(pg)]
-    group_time[cp, weight := pg/sum(pg)]
-    group_time[cb, weight := -pg/sum(pg)]
+    group_time[tb, det_weight := 1]
+    group_time[cp, sto_weight := pg/sum(pg)]
+    group_time[cb, sto_weight := -pg/sum(pg)]
     
     
   } else if (g1 > g2) { #double did = (treat-post - treat-base) - (control-post - control-pre)
@@ -171,14 +173,14 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     if(sum(tp) == 0 | sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
     
     #assign the weights
-    group_time[tp, weight := pg/sum(pg)]
-    group_time[tb, weight := -pg/sum(pg)]
-    group_time[cp, weight := -pg/sum(pg)]
-    group_time[cb, weight := pg/sum(pg)]
+    group_time[tp, det_weight := 1]
+    group_time[tb, det_weight := -1]
+    group_time[cp, sto_weight := -pg/sum(pg)]
+    group_time[cb, sto_weight := pg/sum(pg)]
     
   } 
   
-  if(all(group_time[, weight] == 0)){return(NULL)}
-  return(group_time[, weight])
+  if(all(group_time[, det_weight+sto_weight] == 0)){return(NULL)} #not redundant!
+  return(list(det = group_time[, det_weight], sto = group_time[, sto_weight]))
   
 }

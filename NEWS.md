@@ -1,3 +1,11 @@
+# fastdid 1.0.4
+
+- Fixed Double DiD inference: account for stolastic part of the double DiD weight 
+
+# fastdid 1.0.3
+
+- Fixed Check for CRAN
+
 # fastdid 1.0.2
 
 - Fixed Typo for CRAN

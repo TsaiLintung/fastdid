@@ -1,7 +1,7 @@
 Package: fastdid
 Type: Package
 Title: Fast Staggered Difference-in-Difference Estimators
-Version: 1.0.2
+Version: 1.0.3
 Date: 2024-10-25
 Authors@R: c(
   person("Lin-Tung","Tsai",
