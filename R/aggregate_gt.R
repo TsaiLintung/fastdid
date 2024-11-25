@@ -13,13 +13,15 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   
   #get aggregation scheme from g-t to target parameters
   agg_sch <- get_agg_sch(gt_result, aux, p)
-
-  if(!p$event_specific | is.na(p$cohortvar2)){
-    att <- gt_result$att
-    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights)
-  } else {
-    att <- agg_sch$es_weight %*% gt_result$att
-    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights %*% agg_sch$es_weight)
+  
+  att <- gt_result$att
+  inf_func <- gt_result$inf_func 
+  
+  if(p$event_specific & !is.na(p$cohortvar2)){
+    es_weight <- agg_sch$es_sto_weight+agg_sch$es_det_weight
+    es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p)
+    att <- (es_weight) %*% att
+    inf_func <- (inf_func %*% t(es_weight)) + es_inf_weights
   }
   
   #get att
@@ -27,8 +29,8 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   
   #get influence function matrix
   
-  inf_weights <- get_weight_influence(att, agg_sch, aux, p)
-  inf_matrix <- inf_func + inf_weights 
+  inf_weights <- get_weight_influence(att, agg_sch$group_time, agg_sch$agg_weights, aux, p)
+  inf_matrix <- (inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
 
   #get se
   agg_se <- get_se(inf_matrix, aux, p)
@@ -63,17 +65,20 @@ get_agg_sch <- function(gt_result, aux, p){
   #get the event-specific matrix, and available ggts
   if(p$event_specific & !is.na(p$cohortvar2)){
     es <- get_es_scheme(group_time, aux, p)
+    pre_es_group_time <- group_time
+    pre_es_group_time[, pg := NULL]
     group_time <- es$group_time #some gt may not have availble effect (ex: g1 == g2)
-    es_weight <- as.matrix(es$es_weight)
+    es_det_weight <- as.matrix(es$es_det_weight)
+    es_sto_weight <- as.matrix(es$es_sto_weight)
   } else {
-    es_weight <- NULL
+    es_det_weight <- NULL
+    es_sto_weight <- NULL
   }
 
   #choose the target based on aggregation type
   tg <- get_agg_targets(group_time, p)
   group_time <- tg$group_time
   targets <- tg$targets
-  
   
   #get aggregation weights
   agg_weights <- data.table()
@@ -82,17 +87,17 @@ get_agg_sch <- function(gt_result, aux, p){
     group_time[, weight := 0] #weight is 0 if not a target
     group_time[target == tar & used, weight := pg/sum(pg)] 
     target_weights <- group_time[, .(weight)] |> transpose()
-
     agg_weights <- rbind(agg_weights, target_weights)
   }
   group_time[, pg := NULL]
   
   agg_weights <- as.matrix(agg_weights)
-  
   return(list(agg_weights = agg_weights, #a matrix of each target and gt's weight in it 
               targets = targets,
               group_time = group_time,
-              es_weight = es_weight))
+              pre_es_group_time = pre_es_group_time,
+              es_det_weight = es_det_weight,
+              es_sto_weight = es_sto_weight))
 }
 
 #get the target parameters
@@ -135,9 +140,7 @@ get_agg_targets <- function(group_time, p){
 
 # influence function ------------------------------------------------------------
 
-get_weight_influence <- function(att, agg_sch, aux, p){
-
-  group <- agg_sch$group_time
+get_weight_influence <- function(att, group, agg_weights, aux, p){
   
   id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = aux$dt_inv[, G])
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
@@ -156,15 +159,14 @@ get_weight_influence <- function(att, agg_sch, aux, p){
   }
 
   if(!p$parallel){
-    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+    inf_weights <- sapply(asplit(agg_weights, 1), function (x){
       get_weight_influence_param(x, group, att, aux, p)
     })
   } else {
-    inf_weights <- matrix(unlist(mclapply(asplit(agg_sch$agg_weights, 1), function (x){
+    inf_weights <- matrix(unlist(mclapply(asplit(agg_weights, 1), function (x){
       get_weight_influence_param(x, group, att, aux, p)
-    })), ncol = length(agg_sch$targets))
+    })), ncol = dim(agg_weights)[1])
   }
-  
   
   return(inf_weights)
   
@@ -172,9 +174,10 @@ get_weight_influence <- function(att, agg_sch, aux, p){
 
 #influence from weight calculation
 get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
-
   keepers <- which(agg_weights != 0)
   group <- group[keepers,]
+  if(nrow(group) == 0){return(rep(0, length(aux$weights)))} #for direct double did 
+
   #moving this outside will create a g*t*id matrix, not really worth the memory
   keepers_matrix <- as.matrix(aux$weights*sapply(1:nrow(group), function(g){as.integer(aux$dt_inv[, G] == group[g,G]) - group[g,pg]}))
   
@@ -185,7 +188,7 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
   # return the influence function for the weights
   inf_weight <- (if1 - if2) %*% as.vector(gt_att[keepers])
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps)*10] <- 0 #fill zero 
-
+  if(any(is.na(inf_weight))){browser()}
   return(inf_weight)
 }
 
