@@ -144,9 +144,10 @@ get_auxdata <- function(dt, p){
   filters <- list()
   if(!is.na(p$exper$filtervar)){
     for(t in time_periods){
-      filters[[t]] <- rep(NA, id_size)
-      data_pos <- dt[time == t, unit] #units observed in i
-      filters[[t]][data_pos] <- unlist(dt[time == t,  .SD, .SDcols = p$exper$filtervar])
+      #filters[[t]] <- rep(NA, id_size)
+      #data_pos <- dt[time == t, unit] #units observed in i
+      filters[[t]] <- unlist(dt[time == t,  .SD, .SDcols = p$exper$filtervar])
+      if(p$allow_unbalance_panel){stop("unbalance panel not supported with filtervar")}
     }
   } else {
     filters <- NA
