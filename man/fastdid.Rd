@@ -26,6 +26,7 @@ fastdid(
   copy = TRUE,
   validate = TRUE,
   anticipation = 0,
+  anticipation2 = 0,
   base_period = "universal",
   exper = NULL,
   full = FALSE,
@@ -77,6 +78,7 @@ fastdid(
 \item{validate}{logical, whether to validate the dataset.}
 
 \item{anticipation}{number, periods with anticipation.}
+\item{anticipation2}{number, periods with anticipation for the second event.}
 
 \item{base_period}{character, type of base period in pre-preiods, options are "universal", or "varying".}
 

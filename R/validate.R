@@ -25,7 +25,7 @@ validate_argument <- function(dt, p){
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1) 
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
   check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)
-  check_arg(anticipation, alpha, "scalar numeric", .up = 1)
+  check_arg(anticipation, anticipation2, alpha, "scalar numeric", .up = 1)
   
   if(!is.na(balanced_event_time)){
     if(result_type != "dynamic"){stop("balanced_event_time is only meaningful with result_type == 'dynamic'")}
