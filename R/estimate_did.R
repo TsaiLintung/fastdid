@@ -189,6 +189,21 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   dt_did[, inpost := as.numeric(!is.na(post.y))]
   n_pre <- dt_did[, sum(!is.na(pre.y))]
   n_post <- dt_did[, sum(!is.na(post.y))]
+
+  if(n_pre == 0 || n_post == 0){
+    warning("No observations in pre or post period; skipping this 2x2 DiD")
+    return(list(att = NA, inf_func = rep(0, oldn), cache = NULL))
+  }
+
+  # check for enough treated and control observations in each period
+  n_cont_pre <- dt_did[, sum(D == 0 & inpre)]
+  n_cont_post <- dt_did[, sum(D == 0 & inpost)]
+  n_treat_pre <- dt_did[, sum(D == 1 & inpre)]
+  n_treat_post <- dt_did[, sum(D == 1 & inpost)]
+
+  if(any(c(n_cont_pre, n_cont_post, n_treat_pre, n_treat_post) == 0)){
+    stop("Not enough treated or control observations in pre or post period")
+  }
   
   sum_weight_pre <- dt_did[, sum(inpre*weights)]
   sum_weight_post <- dt_did[, sum(inpost*weights)]
@@ -244,9 +259,14 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   # or --------
   
   if(or){
-    
+
     control_bool_post <- dt_did[, D==0 & inpost] #control group and have obs in post period
     control_bool_pre <- dt_did[, D==0 & inpre]
+
+    # ensure sufficient observations for outcome regression
+    if(sum(control_bool_post) <= ncol(covvars) || sum(control_bool_pre) <= ncol(covvars)){
+      stop("Not enough control observations to estimate outcome regression")
+    }
     reg_coef_post <- stats::coef(stats::lm.wfit(x = covvars[control_bool_post,], y = dt_did[control_bool_post,post.y],
                                                 w = dt_did[control_bool_post,weights]))
 

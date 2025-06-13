@@ -1,3 +1,7 @@
+# fastdid 1.0.5
+
+ - Various bug fixes
+
 # fastdid 1.0.4
 
 - Fixed Double DiD inference: account for stolastic part of the double DiD weight 

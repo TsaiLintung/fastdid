@@ -131,9 +131,9 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     
   } else if(g1 < g2) { #imputation = treat-pre + (control-post - control-pre)
     
-    base_period <- g2 - 1
+    base_period <- g2 - 1 - p$anticipation2
     if(base_period == t){return(NULL)}
-    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+1)
+    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+p$anticipation2+1)
     
     #get the cohorts
     tb <- group_time[,G == gg & time == base_period]
@@ -155,9 +155,9 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     
   } else if (g1 > g2) { #double did = (treat-post - treat-base) - (control-post - control-pre)
     
-    base_period <- g1 - 1
+    base_period <- g1 - 1 - p$anticipation
     if(base_period == t){return(NULL)}
-    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+1)
+    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+p$anticipation+1)
     
     #get the cohorts
     tp <- group_time[,.I == ggt]

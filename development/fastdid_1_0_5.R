@@ -1,5 +1,5 @@
-#2024-09-13
-message('loading fastdid source ver. ver: 0.9.9 date: 2024-09-13')
+#2025-05-09
+message('loading fastdid source ver. ver: 1.0.5 date: 2025-05-09')
 require(data.table);
  require(stringr);
  require(BMisc);
@@ -21,13 +21,15 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   
   #get aggregation scheme from g-t to target parameters
   agg_sch <- get_agg_sch(gt_result, aux, p)
-
-  if(!p$event_specific | is.na(p$cohortvar2)){
-    att <- gt_result$att
-    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights)
-  } else {
-    att <- agg_sch$es_weight %*% gt_result$att
-    inf_func <- gt_result$inf_func %*% t(agg_sch$agg_weights %*% agg_sch$es_weight)
+  
+  att <- gt_result$att
+  inf_func <- gt_result$inf_func 
+  
+  if(p$event_specific & !is.na(p$cohortvar2)){
+    es_weight <- agg_sch$es_sto_weight+agg_sch$es_det_weight
+    es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p)
+    att <- (es_weight) %*% att
+    inf_func <- (inf_func %*% t(es_weight)) + es_inf_weights
   }
   
   #get att
@@ -35,8 +37,8 @@ aggregate_gt_outcome <- function(gt_result, aux, p){
   
   #get influence function matrix
   
-  inf_weights <- get_weight_influence(att, agg_sch, aux, p)
-  inf_matrix <- inf_func + inf_weights 
+  inf_weights <- get_weight_influence(att, agg_sch$group_time, agg_sch$agg_weights, aux, p)
+  inf_matrix <- (inf_func %*% t(agg_sch$agg_weights)) + inf_weights 
 
   #get se
   agg_se <- get_se(inf_matrix, aux, p)
@@ -71,17 +73,21 @@ get_agg_sch <- function(gt_result, aux, p){
   #get the event-specific matrix, and available ggts
   if(p$event_specific & !is.na(p$cohortvar2)){
     es <- get_es_scheme(group_time, aux, p)
+    pre_es_group_time <- group_time
+    pre_es_group_time[, pg := NULL]
     group_time <- es$group_time #some gt may not have availble effect (ex: g1 == g2)
-    es_weight <- as.matrix(es$es_weight)
+    es_det_weight <- as.matrix(es$es_det_weight)
+    es_sto_weight <- as.matrix(es$es_sto_weight)
   } else {
-    es_weight <- NULL
+    es_det_weight <- NULL
+    es_sto_weight <- NULL
+    pre_es_group_time <- NULL
   }
 
   #choose the target based on aggregation type
   tg <- get_agg_targets(group_time, p)
   group_time <- tg$group_time
   targets <- tg$targets
-  
   
   #get aggregation weights
   agg_weights <- data.table()
@@ -90,17 +96,17 @@ get_agg_sch <- function(gt_result, aux, p){
     group_time[, weight := 0] #weight is 0 if not a target
     group_time[target == tar & used, weight := pg/sum(pg)] 
     target_weights <- group_time[, .(weight)] |> transpose()
-
     agg_weights <- rbind(agg_weights, target_weights)
   }
   group_time[, pg := NULL]
   
   agg_weights <- as.matrix(agg_weights)
-  
   return(list(agg_weights = agg_weights, #a matrix of each target and gt's weight in it 
               targets = targets,
               group_time = group_time,
-              es_weight = es_weight))
+              pre_es_group_time = pre_es_group_time,
+              es_det_weight = es_det_weight,
+              es_sto_weight = es_sto_weight))
 }
 
 #get the target parameters
@@ -143,9 +149,7 @@ get_agg_targets <- function(group_time, p){
 
 # influence function ------------------------------------------------------------
 
-get_weight_influence <- function(att, agg_sch, aux, p){
-
-  group <- agg_sch$group_time
+get_weight_influence <- function(att, group, agg_weights, aux, p){
   
   id_dt <- data.table(weight = aux$weights/sum(aux$weights), G = aux$dt_inv[, G])
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
@@ -164,15 +168,14 @@ get_weight_influence <- function(att, agg_sch, aux, p){
   }
 
   if(!p$parallel){
-    inf_weights <- sapply(asplit(agg_sch$agg_weights, 1), function (x){
+    inf_weights <- sapply(asplit(agg_weights, 1), function (x){
       get_weight_influence_param(x, group, att, aux, p)
     })
   } else {
-    inf_weights <- matrix(unlist(mclapply(asplit(agg_sch$agg_weights, 1), function (x){
+    inf_weights <- matrix(unlist(mclapply(asplit(agg_weights, 1), function (x){
       get_weight_influence_param(x, group, att, aux, p)
-    })), ncol = length(agg_sch$targets))
+    })), ncol = dim(agg_weights)[1])
   }
-  
   
   return(inf_weights)
   
@@ -180,9 +183,10 @@ get_weight_influence <- function(att, agg_sch, aux, p){
 
 #influence from weight calculation
 get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
-
   keepers <- which(agg_weights != 0)
   group <- group[keepers,]
+  if(nrow(group) == 0){return(rep(0, length(aux$weights)))} #for direct double did 
+
   #moving this outside will create a g*t*id matrix, not really worth the memory
   keepers_matrix <- as.matrix(aux$weights*sapply(1:nrow(group), function(g){as.integer(aux$dt_inv[, G] == group[g,G]) - group[g,pg]}))
   
@@ -193,7 +197,6 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
   # return the influence function for the weights
   inf_weight <- (if1 - if2) %*% as.vector(gt_att[keepers])
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps)*10] <- 0 #fill zero 
-
   return(inf_weight)
 }
 
@@ -271,8 +274,9 @@ coerce_dt <- function(dt, p){
   if(!is.na(p$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
   
   #chcek if there is availble never-treated group
-  if(!is.infinite(dt[, max(G)]) & p$control_option != "notyet"){
-    warning("no never-treated availble, effectively using not-yet-treated control")
+  if(!is.infinite(dt[, max(G)])){
+    if(p$control_option == "both"){warning("no never-treated availble, effectively using not-yet-but-eventually-treated as control")}
+    if(p$control_option == "never"){stop("no never-treated availble.")}
   }
   
   if(p$allow_unbalance_panel){
@@ -394,9 +398,10 @@ get_auxdata <- function(dt, p){
   filters <- list()
   if(!is.na(p$exper$filtervar)){
     for(t in time_periods){
-      filters[[t]] <- rep(NA, id_size)
-      data_pos <- dt[time == t, unit] #units observed in i
-      filters[[t]][data_pos] <- unlist(dt[time == t,  .SD, .SDcols = p$exper$filtervar])
+      #filters[[t]] <- rep(NA, id_size)
+      #data_pos <- dt[time == t, unit] #units observed in i
+      filters[[t]] <- unlist(dt[time == t,  .SD, .SDcols = p$exper$filtervar])
+      if(p$allow_unbalance_panel){stop("unbalance panel not supported with filtervar")}
     }
   } else {
     filters <- NA
@@ -473,7 +478,7 @@ convert_targets <- function(results, p, t){
            results[, time := recover_time(time, t)]
            results[, `:=`(cohort = NULL)]
          },
-         dynamic_sq = {
+         dynamic_stagger = {
            results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
            results[, event_stagger :=  as.numeric(str_split_i(target, "\\.", 2))]
          }
@@ -524,15 +529,16 @@ ming <- function(GG){
 
 coerce_dt_doub <- function(dt, p){
   
-  #chcek if there is availble never-treated group
-  if(!is.infinite(dt[, max(ming(G))]) & p$control_option != "notyet"){
-    warning("no never-treated availble, effectively using not-yet-treated control")
-  }
-  
   setnames(dt, "G", "G1")
   dt[, mg := pmin(G1, G2)]
   setorder(dt, time, mg, G1, G2, unit)  #for sort one quick access
  
+  #check if there is availble never-treated group
+  if(!is.infinite(dt[, max(mg)])){
+    if(p$control_option == "both"){warning("no never-treated availble, effectively using not-yet-but-eventually-treated as control")}
+    if(p$control_option == "never"){stop("no never-treated availble.")}
+  }
+  
   if(p$allow_unbalance_panel){ #let unit start from 1 .... N, useful for knowing which unit is missing
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, mg, G1, G2)
@@ -603,9 +609,10 @@ get_es_scheme <- function(group_time, aux, p){
   valid_ggt <- which(!sapply(es_weight_list, is.null))
   es_group_time <- es_group_time[valid_ggt] #remove the ones without
   es_weight_list <- es_weight_list[valid_ggt]
-  es_weight <- do.call(rbind, es_weight_list) #not sure if the dim is right
+  es_det_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$det})) 
+  es_sto_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$sto}))
   
-  return(list(group_time = es_group_time, es_weight = es_weight))
+  return(list(group_time = es_group_time, es_det_weight = es_det_weight, es_sto_weight = es_sto_weight))
   
 }
 
@@ -614,7 +621,8 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
   
   group_time <- copy(group_time) #avoid accidental modification
   
-  group_time[, weight := 0] #reset 
+  group_time[, det_weight := 0] #reset 
+  group_time[, sto_weight := 0] #reset 
   t <- group_time[ggt, time]
   g1 <- group_time[ggt, G1]
   g2 <- group_time[ggt, G2]
@@ -624,7 +632,7 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
   
   if(t < g2){ #direct pure effect
     
-    group_time[ggt, weight := 1] #just use the observed effect
+    group_time[ggt, det_weight := 1] #just use the observed effect
     
   } else if(g1 < g2) { #imputation = treat-pre + (control-post - control-pre)
     
@@ -645,9 +653,9 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     if(sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
     
     #assign the weights
-    group_time[tb, weight := pg/sum(pg)]
-    group_time[cp, weight := pg/sum(pg)]
-    group_time[cb, weight := -pg/sum(pg)]
+    group_time[tb, det_weight := 1]
+    group_time[cp, sto_weight := pg/sum(pg)]
+    group_time[cb, sto_weight := -pg/sum(pg)]
     
     
   } else if (g1 > g2) { #double did = (treat-post - treat-base) - (control-post - control-pre)
@@ -670,15 +678,15 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     if(sum(tp) == 0 | sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
     
     #assign the weights
-    group_time[tp, weight := pg/sum(pg)]
-    group_time[tb, weight := -pg/sum(pg)]
-    group_time[cp, weight := -pg/sum(pg)]
-    group_time[cb, weight := pg/sum(pg)]
+    group_time[tp, det_weight := 1]
+    group_time[tb, det_weight := -1]
+    group_time[cp, sto_weight := -pg/sum(pg)]
+    group_time[cb, sto_weight := pg/sum(pg)]
     
   } 
   
-  if(all(group_time[, weight] == 0)){return(NULL)}
-  return(group_time[, weight])
+  if(all(group_time[, det_weight+sto_weight] == 0)){return(NULL)} #not redundant!
+  return(list(det = group_time[, det_weight], sto = group_time[, sto_weight]))
   
 }
 
@@ -1427,7 +1435,8 @@ utils::globalVariables(c('.','agg_weight','att','att_cont','att_treat','attgt','
                          "copy", "validate", "max_control_cohort_diff", "anticipation", "min_control_cohort_diff", "base_period", "post", "att_ciub", "att_cilb", "cband", "alpha",
                          "G2", "G1", "mg", "cohort1", "cohort2", "event_time_1", "event_time_2",
                          "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2", "parallel",
-                         "tp", "cp", "tb", "cb", "no_na", "event_stagger", "double_control_option"))
+                         "tp", "cp", "tb", "cb", "no_na", "event_stagger", "double_control_option",
+                         "det_weight", "sto_weight"))
 
 
 #' Simulate a Difference-in-Differences (DiD) dataset
