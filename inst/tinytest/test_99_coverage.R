@@ -1,7 +1,7 @@
 #setup
 
-#takes a lot of time so only at home # takes too much time, don't run any time
-if(FALSE & at_home() & .Platform$OS.type == "unix" & requireNamespace("parallel")){
+#takes a lot of time so only at home # takes too much time, don't run every time
+if(FALSE){
   
   #gotta go fast 
   setDTthreads(0)
