@@ -71,11 +71,21 @@ estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
   #the 2x2 dataset
   cohort_did <- data.table(did_setup, y[[t]], y[[base_period]], aux$weights)
   names(cohort_did) <- c("D", "post.y", "pre.y", "weights")
-  
+
+  # skip if no valid observation in either period when allowing for
+  # unbalanced panels
+  if(sum(!is.na(cohort_did$pre.y)) == 0 || sum(!is.na(cohort_did$post.y)) == 0){
+    return(NULL)
+  }
+
   # estimate --------------------
   result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, caches[[gt_name]]),
-                     error = function(e){stop("2-by-2 DiD failed for internal group-time ",g , 
-                                              "-", t, ": ", e)})
+                     error = function(e){
+                       warning("Skipping group-time ", g, "-", t,
+                               ": ", e$message)
+                       return(NULL)
+                     })
+  if(is.null(result)){return(NULL)}
   return(list(gt = gt, result = result))
   
 }

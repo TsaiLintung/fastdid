@@ -189,6 +189,11 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   dt_did[, inpost := as.numeric(!is.na(post.y))]
   n_pre <- dt_did[, sum(!is.na(pre.y))]
   n_post <- dt_did[, sum(!is.na(post.y))]
+
+  if(n_pre == 0 || n_post == 0){
+    warning("No observations in pre or post period; skipping this 2x2 DiD")
+    return(list(att = NA, inf_func = rep(0, oldn), cache = NULL))
+  }
   
   sum_weight_pre <- dt_did[, sum(inpre*weights)]
   sum_weight_post <- dt_did[, sum(inpost*weights)]
