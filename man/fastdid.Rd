@@ -78,6 +78,7 @@ fastdid(
 \item{validate}{logical, whether to validate the dataset.}
 
 \item{anticipation}{number, periods with anticipation.}
+
 \item{anticipation2}{number, periods with anticipation for the second event.}
 
 \item{base_period}{character, type of base period in pre-preiods, options are "universal", or "varying".}
@@ -112,10 +113,12 @@ Performs Difference-in-Differences (DID) estimation.
 simdt <- sim_did(1e+02, 10, cov = "cont", second_cov = TRUE, second_outcome = TRUE, seed = 1)
 dt <- simdt$dt
 
-#basic call
-result <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
-                  unitvar = "unit", outcomevar = "y",  
-                  result_type = "group_time")
+# basic call
+result <- fastdid(
+  data = dt, timevar = "time", cohortvar = "G",
+  unitvar = "unit", outcomevar = "y",
+  result_type = "group_time"
+)
 
 }
 \keyword{computation}

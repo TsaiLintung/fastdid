@@ -23,12 +23,14 @@ Plot event study results.
 simdt <- sim_did(1e+02, 10, seed = 1)
 dt <- simdt$dt
 
-#estimation
-result <- fastdid(data = dt, timevar = "time", cohortvar = "G", 
-                  unitvar = "unit", outcomevar = "y",  
-                  result_type = "dynamic")
+# estimation
+result <- fastdid(
+  data = dt, timevar = "time", cohortvar = "G",
+  unitvar = "unit", outcomevar = "y",
+  result_type = "dynamic"
+)
 
-#plot
+# plot
 plot_did_dynamics(result)
 
 }
