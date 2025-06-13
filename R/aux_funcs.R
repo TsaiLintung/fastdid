@@ -134,9 +134,9 @@ get_auxdata <- function(dt, p){
     varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
     varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar) & !is.na(varnames) & !is.null(varnames)]
     dt[, no_na := TRUE]
-    for(col in varnames){ #nothing can be 
+    for(col in varnames){
       if(is.na(col)){next}
-      dt[is.na(get(col)), no_na := TRUE]
+      dt[is.na(get(col)), no_na := FALSE]
     }
   }
   
@@ -224,7 +224,7 @@ convert_targets <- function(results, p, t){
            results[, time := recover_time(time, t)]
            results[, `:=`(cohort = NULL)]
          },
-         dynamic_sq = {
+         dynamic_stagger = {
            results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
            results[, event_stagger :=  as.numeric(str_split_i(target, "\\.", 2))]
          }
