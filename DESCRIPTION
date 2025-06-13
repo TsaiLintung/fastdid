@@ -1,17 +1,17 @@
 Package: fastdid
 Type: Package
 Title: Fast Staggered Difference-in-Difference Estimators
-Version: 1.0.3
-Date: 2024-10-25
+Version: 1.0.5
+Date: 2025-06-13
 Authors@R: c(
   person("Lin-Tung","Tsai",
          role = c("aut", "cre", "cph"),
          email = "tsaidondon@gmail.com"),
   person(given = "Maxwell",
-         family = "Kellogg", ,
+         family = "Kellogg",
          role = "ctb"),
   person(given = "Kuan-Ju",
-         family = "Tseng", ,
+         family = "Tseng",
           role = "ctb"))
 Maintainer: Lin-Tung Tsai <tsaidondon@gmail.com>
 Description: A fast and flexible implementation of Callaway and Sant'Anna's (2021)<doi:10.1016/j.jeconom.2020.12.001> staggered Difference-in-Differences (DiD) estimators, 'fastdid' reduces the computation time from hours to seconds, and incorporates extensions such as time-varying covariates and multiple events. 
