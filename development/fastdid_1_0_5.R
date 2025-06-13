@@ -478,7 +478,7 @@ convert_targets <- function(results, p, t){
            results[, time := recover_time(time, t)]
            results[, `:=`(cohort = NULL)]
          },
-         dynamic_sq = {
+         dynamic_stagger = {
            results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
            results[, event_stagger :=  as.numeric(str_split_i(target, "\\.", 2))]
          }

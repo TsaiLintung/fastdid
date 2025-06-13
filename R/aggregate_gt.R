@@ -233,7 +233,7 @@ get_se <- function(inf_matrix, aux, p) {
   point_crit_val <- qnorm(1-p$alpha/2)
   if(p$cband){
     boot_tv <- apply(boot_results, 1, function(b){max(abs(b/se), na.rm = TRUE)})
-    boot_tv <= boot_tv[is.finite(boot_tv)]
+    boot_tv <- boot_tv[is.finite(boot_tv)]
     crit_val <- quantile(boot_tv, 1-p$alpha, type = 1, na.rm = TRUE) #alp set at 0.95 for now
   } 
   if(is.na(crit_val)|is.infinite(crit_val)|crit_val < point_crit_val){
