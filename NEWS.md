@@ -1,6 +1,8 @@
 # fastdid 1.0.5
 
-- Fixed filtervar
+ - Fixed filtervar
+ - Added checks in repeated cross-section DiD to warn when estimation lacks
+   sufficient treated or control observations
 
 # fastdid 1.0.4
 
