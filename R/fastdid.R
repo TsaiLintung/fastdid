@@ -22,8 +22,9 @@
 #' @param varycovariatesvar character vector, names of time-varying covariate variables.
 #' @param copy logical, whether to copy the dataset. 
 #' @param validate logical, whether to validate the dataset. 
-#' @param anticipation number, periods with anticipation. 
-#' @param exper list, arguments for experimental features. 
+#' @param anticipation number, periods with anticipation.
+#' @param anticipation2 number, periods with anticipation for the second event.
+#' @param exper list, arguments for experimental features.
 #' @param base_period character, type of base period in pre-preiods, options are "universal", or "varying".
 #' @param full logical, whether to return the full result (influence function, call, weighting scheme, etc,.). 
 #' @param parallel logical, whether to use parallization on unix system. 
@@ -64,8 +65,8 @@ fastdid <- function(data,
                     control_type = "ipw", allow_unbalance_panel = FALSE, boot=FALSE, biters = 1000, cband = FALSE, alpha = 0.05,
                     weightvar=NA,clustervar=NA, covariatesvar = NA, varycovariatesvar = NA, 
                     copy = TRUE, validate = TRUE,
-                    anticipation = 0,  base_period = "universal",
-                    exper = NULL, full = FALSE, parallel = FALSE, 
+                   anticipation = 0, anticipation2 = 0, base_period = "universal",
+                   exper = NULL, full = FALSE, parallel = FALSE,
                     cohortvar2 = NA, event_specific = TRUE, double_control_option="both"){
   
   # preprocess --------------------------------------------------------
