@@ -16,6 +16,7 @@ Authors@R: c(
 Maintainer: Lin-Tung Tsai <tsaidondon@gmail.com>
 Description: A fast and flexible implementation of Callaway and Sant'Anna's (2021)<doi:10.1016/j.jeconom.2020.12.001> staggered Difference-in-Differences (DiD) estimators, 'fastdid' reduces the computation time from hours to seconds, and incorporates extensions such as time-varying covariates and multiple events. 
 License: MIT + file LICENSE
+Depends: R (>= 4.1.0)
 Imports:
     data.table (>= 1.15.0),
     stringr,
