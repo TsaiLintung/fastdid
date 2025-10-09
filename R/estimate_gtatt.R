@@ -134,6 +134,9 @@ get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohor
   start <- cohort_sizes[ming(G) < start_cohort, sum(cohort_size)]+1 
   end <- cohort_sizes[ming(G) <= end_cohort, sum(cohort_size)]
   if(start > end){return(c())}
+  if(start > end){
+    stop("Invalid sequence in get_control_pos: start (", start, ") > end (", end, "). This may indicate an issue with cohort structure.")
+  }
   return(seq(start, end, by = 1))
 }
 
@@ -142,6 +145,9 @@ get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for dou
   start <- ifelse(index == 1, 1, cohort_sizes[1:(index-1), sum(cohort_size)]+1)
   end <- cohort_sizes[1:index, sum(cohort_size)]
   if(start > end){return(c())}
+  if(start > end){
+    stop("Invalid sequence in get_treat_pos: start (", start, ") > end (", end, "). This may indicate an issue with cohort structure for treat_cohort = ", treat_cohort, ".")
+  }
   return(seq(start, end, by = 1))
 }
 

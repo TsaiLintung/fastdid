@@ -87,6 +87,10 @@ get_auxdata <- function(dt, p){
       for(i in time_periods){
         start <- (i-1)*id_size+1
         end <- i*id_size
+        if(start > end){
+          stop("Invalid sequence when extracting outcomes: start (", start, ") > end (", end, ") for time period ", i, 
+               ". This suggests an issue with the data structure (id_size=", id_size, ").")
+        }
         outcomes[[i]] <- dt[seq(start,end), get(outcol)]
       }
     } else {
@@ -122,6 +126,10 @@ get_auxdata <- function(dt, p){
     for(i in time_periods){
       start <- (i-1)*id_size+1
       end <- i*id_size
+      if(start > end){
+        stop("Invalid sequence when extracting varying covariates: start (", start, ") > end (", end, ") for time period ", i, 
+             ". This suggests an issue with the data structure (id_size=", id_size, ").")
+      }
       varycovariates[[i]] <- dt[seq(start,end, by = 1), .SD, .SDcols = p$varycovariatesvar]
     }
   } else {

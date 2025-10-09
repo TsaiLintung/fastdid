@@ -27,12 +27,22 @@ validate_argument <- function(dt, p) {
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
   check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)
   check_arg(anticipation, anticipation2, alpha, "scalar numeric", .up = 1)
+  
+  if (anticipation < 0) {
+    stop("anticipation must be non-negative (>= 0), got: ", anticipation)
+  }
+  if (anticipation2 < 0) {
+    stop("anticipation2 must be non-negative (>= 0), got: ", anticipation2)
+  }
 
   if (!is.na(balanced_event_time)) {
     if (result_type != "dynamic") {
       stop("balanced_event_time is only meaningful with result_type == 'dynamic'")
     }
     check_arg(balanced_event_time, "numeric scalar", .up = 1)
+    if (balanced_event_time < 0) {
+      stop("balanced_event_time must be non-negative (>= 0), got: ", balanced_event_time)
+    }
   }
   if (allow_unbalance_panel == TRUE & control_type == "dr") {
     stop("fastdid does not support DR when allowing for unbalanced panels.")

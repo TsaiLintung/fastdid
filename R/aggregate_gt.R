@@ -146,7 +146,17 @@ get_agg_targets <- function(group_time, p) {
     }
     group_time[, used := G %in% cohorts[used == TRUE, G]]
 
-    targets <- targets[targets <= p$balanced_event_time & targets >= cohorts[used == TRUE, min(min_et)]]
+    min_event_time <- cohorts[used == TRUE, min(min_et)]
+    max_event_time <- p$balanced_event_time
+    
+    if (min_event_time > max_event_time) {
+      stop("Invalid balanced_event_time: The minimum available event time (", min_event_time, 
+           ") is greater than balanced_event_time (", max_event_time, "). ",
+           "Please specify a balanced_event_time >= ", min_event_time, 
+           " or use a smaller value that matches your data structure.")
+    }
+    
+    targets <- targets[targets <= p$balanced_event_time & targets >= min_event_time]
   } else {
     group_time[, used := TRUE]
   }
