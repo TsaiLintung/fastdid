@@ -273,7 +273,7 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     reg_coef_pre <- stats::coef(stats::lm.wfit(x = covvars[control_bool_pre,], y = dt_did[control_bool_pre,pre.y],
                                                w = dt_did[control_bool_pre,weights]))
 
-    if(anyNA(reg_coef_post)|anyNA(reg_coef_pre)){
+    if(anyNA(reg_coef_post) || anyNA(reg_coef_pre)){
       stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
     }
 

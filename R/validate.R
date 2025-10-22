@@ -44,16 +44,16 @@ validate_argument <- function(dt, p) {
       stop("balanced_event_time must be non-negative (>= 0), got: ", balanced_event_time)
     }
   }
-  if (allow_unbalance_panel == TRUE & control_type == "dr") {
+  if (allow_unbalance_panel == TRUE && control_type == "dr") {
     stop("fastdid does not support DR when allowing for unbalanced panels.")
   }
   # if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
   #   stop("fastdid currently only supprts time varying covariates when not allowing for unbalanced panels.")
   # }
-  if (any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)) {
+  if (any(covariatesvar %in% varycovariatesvar) && !allNA(varycovariatesvar) && !allNA(covariatesvar)) {
     stop("time-varying var and invariant var have overlaps.")
   }
-  if (!boot & (!allNA(clustervar) | cband == TRUE)) {
+  if (!boot && (!allNA(clustervar) || cband == TRUE)) {
     stop("clustering and uniform confidence interval only available with bootstrap")
   }
 
@@ -97,7 +97,7 @@ validate_dt <- function(dt, p) {
   }
 
   # doesn't allow missing value
-  if (is.na(p$exper$only_balance_2by2) | !p$exper$only_balance_2by2) {
+  if (is.na(p$exper$only_balance_2by2) || !p$exper$only_balance_2by2) {
     for (col in varnames) {
       na_obs <- whichNA(dt[, get(col)])
       if (length(na_obs) != 0) {
@@ -112,14 +112,14 @@ validate_dt <- function(dt, p) {
   }
 
 
-  if (!allNA(p$covariatesvar) | !allNA(p$varycovariatesvar)) {
+  if (!allNA(p$covariatesvar) || !allNA(p$varycovariatesvar)) {
     for (cov in c(p$covariatesvar, p$varycovariatesvar)) {
       if (is.na(cov)) {
         next
       }
       # check covaraites is not constant
       if (fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1) stop(cov, " have no variation")
-      if (!(is.numeric(dt[, get(cov)]) | is.integer(dt[, get(cov)]))) {
+      if (!(is.numeric(dt[, get(cov)]) || is.integer(dt[, get(cov)]))) {
         stop(cov, " is not numeric or integer, do not support fixed effects.")
       }
     }

@@ -7,7 +7,7 @@ get_exper_default <- function(exper, exper_args){
     }
   }
   
-  if(!is.na(exper$only_balance_2by2) & exper$only_balance_2by2){ #will create this col in the get_aux part
+  if(!is.na(exper$only_balance_2by2) && exper$only_balance_2by2){ #will create this col in the get_aux part
     exper$filtervar <- "no_na"
     exper$filtervar_post <- "no_na"
   }
@@ -50,10 +50,10 @@ coerce_dt <- function(dt, p){
   }
   
   time_step <- 1 #time may not jump at 1
-  if(any(time_periods[seq(2,length(time_periods),1)] - time_periods[seq_len(length(time_periods))-1] != 1)){
+  if(length(time_periods) > 1 && any(time_periods[2:length(time_periods)] - time_periods[1:(length(time_periods)-1)] != 1)){
     time_step <- time_periods[2]-time_periods[1]
     time_periods <- (time_periods-1)/time_step+1
-    if(any(time_periods[seq(2,length(time_periods),1)] - time_periods[seq_len(length(time_periods))-1] != 1)){stop("time step is not uniform")}
+    if(any(time_periods[2:length(time_periods)] - time_periods[1:(length(time_periods)-1)] != 1)){stop("time step is not uniform")}
     dt[G != 1, G := (G-1)/time_step+1]
     
     dt[time != 1, time := (time-1)/time_step+1]
@@ -137,7 +137,7 @@ get_auxdata <- function(dt, p){
   }
   
   #create na indicator for filtering
-  if(!is.na(p$exper$only_balance_2by2) & p$exper$only_balance_2by2){
+  if(!is.na(p$exper$only_balance_2by2) && p$exper$only_balance_2by2){
     if("no_na" %in% names(dt)){stop("no_na is already in dt, consider using another column name")}
     varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
     varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar) & !is.na(varnames) & !is.null(varnames)]

@@ -56,13 +56,13 @@ estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
   #find base time
   gt_name <- paste0(g,".",t)
   base_period <- get_base_period(g,t,p)
-  if(t == base_period | #no treatment effect for the base period
-     !base_period %in% aux$time_period){ #base period out of bounds
+  if(t == base_period || #no treatment effect for the base period
+     !base_period %in% aux$time_periods){ #base period out of bounds
     return(NULL)
   } 
   #find treatment and control group
   did_setup <- get_did_setup(g,t, base_period, aux, p)
-  valid_tc_groups <- any(did_setup == 1) & any(did_setup == 0) #if takes up too much time, consider use collapse anyv, but right now quite ok
+  valid_tc_groups <- any(did_setup == 1) && any(did_setup == 0) #if takes up too much time, consider use collapse anyv, but right now quite ok
   if(!isTRUE(valid_tc_groups)){return(NULL)} #no treatment group or control group #isTRUE for na as false
   
   #covariates matrix
@@ -133,27 +133,28 @@ get_did_setup <- function(g, t, base_period, aux, p){
 get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
   start <- cohort_sizes[ming(G) < start_cohort, sum(cohort_size)]+1 
   end <- cohort_sizes[ming(G) <= end_cohort, sum(cohort_size)]
-  if(start > end){return(c())}
   if(start > end){
-    stop("Invalid sequence in get_control_pos: start (", start, ") > end (", end, "). This may indicate an issue with cohort structure.")
+    return(c())  # Return empty vector when no valid control cohorts
   }
   return(seq(start, end, by = 1))
 }
 
 get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for double did to match exact g-g-t
   index <- which(cohort_sizes[,G] == treat_cohort)
+  if(length(index) == 0){
+    stop("Cohort ", treat_cohort, " not found in cohort_sizes")
+  }
   start <- ifelse(index == 1, 1, cohort_sizes[1:(index-1), sum(cohort_size)]+1)
   end <- cohort_sizes[1:index, sum(cohort_size)]
-  if(start > end){return(c())}
   if(start > end){
-    stop("Invalid sequence in get_treat_pos: start (", start, ") > end (", end, "). This may indicate an issue with cohort structure for treat_cohort = ", treat_cohort, ".")
+    return(c())  # Return empty vector when no valid treat positions
   }
   return(seq(start, end, by = 1))
 }
 
 get_covvars <- function(base_period, t, aux, p){
   
-  if(all(is.na(p$covariatesvar)) & all(is.na(p$varycovariatesvar))){return(NA)}
+  if(all(is.na(p$covariatesvar)) && all(is.na(p$varycovariatesvar))){return(NA)}
   covvars <- data.table()
   
   #add time-varying covariates

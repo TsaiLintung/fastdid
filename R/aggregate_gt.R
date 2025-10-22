@@ -22,7 +22,7 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
   att <- gt_result$att
   inf_func <- gt_result$inf_func
 
-  if (p$event_specific & !is.na(p$cohortvar2)) {
+  if (p$event_specific && !is.na(p$cohortvar2)) {
     es_weight <- agg_sch$es_sto_weight + agg_sch$es_det_weight
     es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p)
     att <- (es_weight) %*% att
@@ -73,7 +73,7 @@ get_agg_sch <- function(gt_result, aux, p) {
   }
 
   # get the event-specific matrix, and available ggts
-  if (p$event_specific & !is.na(p$cohortvar2)) {
+  if (p$event_specific && !is.na(p$cohortvar2)) {
     es <- get_es_scheme(group_time, aux, p)
     pre_es_group_time <- group_time
     pre_es_group_time[, pg := NULL]
@@ -135,7 +135,7 @@ get_agg_targets <- function(group_time, p) {
 
   # for balanced cohort composition in dynamic setting
   # a cohort us only used if it is seen for all dynamic time
-  if (p$result_type == "dynamic" & !is.na(p$balanced_event_time)) {
+  if (p$result_type == "dynamic" && !is.na(p$balanced_event_time)) {
     cohorts <- group_time[, .(
       max_et = max(target), # event time is target if in dynamic
       min_et = min(target)
@@ -205,7 +205,7 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
   } # for direct double did
 
   # moving this outside will create a g*t*id matrix, not really worth the memory
-  keepers_matrix <- as.matrix(aux$weights * sapply(1:nrow(group), function(g) {
+  keepers_matrix <- as.matrix(aux$weights * sapply(seq_len(nrow(group)), function(g) {
     as.integer(aux$dt_inv[, G] == group[g, G]) - group[g, pg]
   }))
 
@@ -260,7 +260,7 @@ get_se <- function(inf_matrix, aux, p) {
     boot_tv <- boot_tv[is.finite(boot_tv)]
     crit_val <- quantile(boot_tv, 1 - p$alpha, type = 1, na.rm = TRUE) # alp set at 0.95 for now
   }
-  if (is.na(crit_val) | is.infinite(crit_val) | crit_val < point_crit_val) {
+  if (is.na(crit_val) || is.infinite(crit_val) || crit_val < point_crit_val) {
     crit_val <- point_crit_val
   }
 
