@@ -44,6 +44,14 @@ validate_argument <- function(dt, p) {
       stop("balanced_event_time must be non-negative (>= 0), got: ", balanced_event_time)
     }
   }
+  
+  # Validate result_type for double DiD
+  if (result_type %in% c("group_group_time", "dynamic_stagger")) {
+    if (is.na(cohortvar2)) {
+      stop("result_type '", result_type, "' can only be used with double DiD (cohortvar2 must be specified)")
+    }
+  }
+  
   if (allow_unbalance_panel == TRUE && control_type == "dr") {
     stop("fastdid does not support DR when allowing for unbalanced panels.")
   }
@@ -90,9 +98,14 @@ validate_dt <- function(dt, p) {
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
 
+  # Validate balanced_event_time against actual data
   if (!is.na(p$balanced_event_time)) {
-    if (p$balanced_event_time > dt[, max(time - G)]) {
-      stop("balanced_event_time is larger than the max event time in the data")
+    # Early check: ensure balanced_event_time doesn't exceed max possible event time in data
+    max_event_time <- dt[, max(time - G)]
+    if (p$balanced_event_time > max_event_time) {
+      stop("balanced_event_time (", p$balanced_event_time, 
+           ") is larger than the maximum event time in the data (", max_event_time, "). ",
+           "Please specify a value between 0 and ", max_event_time, ".")
     }
   }
 
@@ -102,7 +115,8 @@ validate_dt <- function(dt, p) {
       na_obs <- whichNA(dt[, get(col)])
       if (length(na_obs) != 0) {
         warning("missing values detected in ", col, ", removing ", length(na_obs), " observation.")
-        dt <- dt[!na_obs]
+        # whichNA returns integer row indices; remove those rows with negative indexing
+        dt <- dt[-na_obs]
       }
     }
   }
@@ -135,10 +149,16 @@ validate_dt <- function(dt, p) {
   # check if any is missing
   if (!p$allow_unbalance_panel) {
     unit_count <- dt[, .(count = .N), by = unit]
+    
     if (any(unit_count[, count < raw_time_size])) {
       mis_unit <- unit_count[count < raw_time_size]
       warning(nrow(mis_unit), " units is missing in some periods, enforcing balanced panel by dropping them")
       dt <- dt[!unit %in% mis_unit[, unit]]
+      
+      # Validate we still have data after dropping
+      if (nrow(dt) == 0) {
+        stop("No observations remain after enforcing balanced panel. Consider setting allow_unbalance_panel = TRUE")
+      }
     }
   }
 

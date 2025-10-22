@@ -50,12 +50,27 @@ coerce_dt <- function(dt, p){
   }
   
   time_step <- 1 #time may not jump at 1
-  if(length(time_periods) > 1 && any(time_periods[2:length(time_periods)] - time_periods[1:(length(time_periods)-1)] != 1)){
-    time_step <- time_periods[2]-time_periods[1]
-    time_periods <- (time_periods-1)/time_step+1
-    if(any(time_periods[2:length(time_periods)] - time_periods[1:(length(time_periods)-1)] != 1)){stop("time step is not uniform")}
-    dt[G != 1, G := (G-1)/time_step+1]
+  if(length(time_periods) > 1 && any(time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)] != 1)){
+    # Calculate all intervals between consecutive time periods
+    all_intervals <- time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)]
     
+    # Check if all intervals are identical (uniform step)
+    if(length(unique(all_intervals)) > 1){
+      stop("Time step is not uniform. Time periods: ", paste(head(time_periods, 10), collapse = ", "),
+           if(length(time_periods) > 10) "..." else "",
+           ". Intervals between periods: ", paste(unique(all_intervals), collapse = ", "),
+           ". fastdid requires uniformly-spaced time periods.")
+    }
+    
+    time_step <- all_intervals[1]
+    time_periods <- (time_periods-1)/time_step+1
+    
+    # Verify that normalization worked (should always be consecutive integers now)
+    if(any(time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)] != 1)){
+      stop("Internal error: time normalization failed. Please report this issue.")
+    }
+    
+    dt[G != 1, G := (G-1)/time_step+1]
     dt[time != 1, time := (time-1)/time_step+1]
   }
   
@@ -76,6 +91,14 @@ get_auxdata <- function(dt, p){
   
   time_periods <- dt[, unique(time)]
   id_size <- dt[, uniqueN(unit)]
+  
+  # Validate basic data structure
+  if(id_size <= 0){
+    stop("Invalid data structure: id_size is ", id_size, ". Dataset must contain at least one unit.")
+  }
+  if(length(time_periods) == 0){
+    stop("Invalid data structure: no time periods found in the dataset.")
+  }
   
   #construct the outcomes list for fast access later
   #loop for multiple outcome

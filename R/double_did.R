@@ -37,7 +37,7 @@ coerce_dt_doub <- function(dt, p){
   if(p$allow_unbalance_panel){ #let unit start from 1 .... N, useful for knowing which unit is missing
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, mg, G1, G2)
-    dt_inv_raw[, new_unit := 1:.N] 
+    dt_inv_raw[, new_unit := seq_len(.N)] 
     dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit", sort = FALSE)
     dt[, unit := new_unit]
   }
@@ -55,10 +55,25 @@ coerce_dt_doub <- function(dt, p){
   }
 
   time_step <- 1 #time may not jump at 1
-  if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){
-    time_step <- time_periods[2]-time_periods[1]
+  if(any(time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)] != 1)){
+    # Calculate all intervals between consecutive time periods
+    all_intervals <- time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)]
+    
+    # Check if all intervals are identical (uniform step)
+    if(length(unique(all_intervals)) > 1){
+      stop("Time step is not uniform. Time periods: ", paste(head(time_periods, 10), collapse = ", "),
+           if(length(time_periods) > 10) "..." else "",
+           ". Intervals between periods: ", paste(unique(all_intervals), collapse = ", "),
+           ". fastdid requires uniformly-spaced time periods.")
+    }
+    
+    time_step <- all_intervals[1]
     time_periods <- (time_periods-1)/time_step+1
-    if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
+    
+    # Verify that normalization worked (should always be consecutive integers now)
+    if(any(time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)] != 1)){
+      stop("Internal error: time normalization failed. Please report this issue.")
+    }
     
     for(g in gcol){
       dt[get(g) != 1, c(g) := (get(g)-1)/time_step+1]
@@ -170,7 +185,7 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     cb <- group_time[, c & time == base_period]
     
     #if any group have no available cohort, skip
-    if(sum(tp) == 0 | sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
+    if(sum(tp) == 0 || sum(tb) == 0 || sum(cp) == 0 || sum(cb) == 0){return(NULL)}
     
     #assign the weights
     group_time[tp, det_weight := 1]

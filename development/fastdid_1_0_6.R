@@ -213,7 +213,7 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
   } # for direct double did
 
   # moving this outside will create a g*t*id matrix, not really worth the memory
-  keepers_matrix <- as.matrix(aux$weights * sapply(1:nrow(group), function(g) {
+  keepers_matrix <- as.matrix(aux$weights * sapply(seq_len(nrow(group)), function(g) {
     as.integer(aux$dt_inv[, G] == group[g, G]) - group[g, pg]
   }))
 
@@ -573,7 +573,7 @@ coerce_dt_doub <- function(dt, p){
   if(p$allow_unbalance_panel){ #let unit start from 1 .... N, useful for knowing which unit is missing
     dt_inv_raw <- dt[dt[, .I[1], by = unit]$V1]
     setorder(dt_inv_raw, mg, G1, G2)
-    dt_inv_raw[, new_unit := 1:.N] 
+    dt_inv_raw[, new_unit := seq_len(.N)] 
     dt <- dt |> merge(dt_inv_raw[,.(unit, new_unit)], by = "unit", sort = FALSE)
     dt[, unit := new_unit]
   }
@@ -591,10 +591,10 @@ coerce_dt_doub <- function(dt, p){
   }
 
   time_step <- 1 #time may not jump at 1
-  if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){
+  if(any(time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)] != 1)){
     time_step <- time_periods[2]-time_periods[1]
     time_periods <- (time_periods-1)/time_step+1
-    if(any(time_periods[2:length(time_periods)] - time_periods[1:length(time_periods)-1] != 1)){stop("time step is not uniform")}
+    if(any(time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)] != 1)){stop("time step is not uniform")}
     
     for(g in gcol){
       dt[get(g) != 1, c(g) := (get(g)-1)/time_step+1]

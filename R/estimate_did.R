@@ -46,7 +46,6 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
         warning("some propensity score estimation resulted in NA coefficients, likely cause by perfect colinearity")
       }
       
-      logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
       prop_score_fit <- fitted(prop_score_est)
       if(max(prop_score_fit) >= 1-1e-10){warning(paste0("extreme propensity score: ", max(prop_score_fit), ", support overlap is likely to be violated"))} #<=0 (only in control) is fine for ATT since it is just not used 
       prop_score_fit <- pmin(1-1e-10, prop_score_fit) #for the ipw
@@ -66,6 +65,7 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
     dt_did[, ps := prop_score_fit]
     dt_did[, treat_ipw_weight := weights*D]
     dt_did[, cont_ipw_weight := weights*ps*(1-D)/(1-ps)]
+    if(max(dt_did[, cont_ipw_weight]) > 100){warning("extreme IPW weights detected (max: ", round(max(dt_did[, cont_ipw_weight]), 2), "), estimates may be unstable")}
 
   } else {
 
@@ -236,7 +236,6 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     hess <- stats::vcov(prop_score_est) * n #for the influence function
     
     logit_coef <-  prop_score_est$coefficients 
-    logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
     prop_score_fit <- fitted(prop_score_est)
     if(max(prop_score_fit) >= 1){warning(paste0("support overlap condition violated for some group_time"))}
     prop_score_fit <- pmin(1-1e-16, prop_score_fit) #for the ipw
@@ -245,6 +244,7 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     dt_did[, ps := prop_score_fit]
     dt_did[, treat_ipw_weight := weights*D]
     dt_did[, cont_ipw_weight := weights*ps*(1-D)/(1-ps)]
+    if(max(dt_did[, cont_ipw_weight]) > 100){warning("extreme IPW weights detected (max: ", round(max(dt_did[, cont_ipw_weight]), 2), "), estimates may be unstable")}
     
   } else {
     
@@ -398,6 +398,8 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
 # utilities ------
 
 reverse_col <- function(x){
-  return(x[,ncol(x):1])
+  nc <- ncol(x)
+  if (is.null(nc) || nc == 0) return(x)
+  return(x[, rev(seq_len(nc))])
 }
 

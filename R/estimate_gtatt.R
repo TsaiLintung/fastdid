@@ -133,7 +133,9 @@ get_did_setup <- function(g, t, base_period, aux, p){
 get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
   start <- cohort_sizes[ming(G) < start_cohort, sum(cohort_size)]+1 
   end <- cohort_sizes[ming(G) <= end_cohort, sum(cohort_size)]
-  if(start > end){
+  
+  # Validate sequence parameters
+  if(start > end || start <= 0 || end <= 0){
     return(c())  # Return empty vector when no valid control cohorts
   }
   return(seq(start, end, by = 1))
@@ -146,7 +148,9 @@ get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for dou
   }
   start <- ifelse(index == 1, 1, cohort_sizes[1:(index-1), sum(cohort_size)]+1)
   end <- cohort_sizes[1:index, sum(cohort_size)]
-  if(start > end){
+  
+  # Validate sequence parameters
+  if(start > end || start <= 0 || end <= 0){
     return(c())  # Return empty vector when no valid treat positions
   }
   return(seq(start, end, by = 1))
