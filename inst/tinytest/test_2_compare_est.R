@@ -271,6 +271,7 @@ rm(result, did_result)
 dt2 <- data.table::copy(dt)
 keep <- sample(c(rep(TRUE, 15),FALSE), dt2[,.N], TRUE)
 dt2 <- dt2[keep]
+dt2[, weight := pmax(rnorm(.N, 0.8, 0.2), 0.3)]
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                   allow_unbalance_panel = TRUE)
@@ -296,6 +297,22 @@ did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time"
 
 expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "unbalanced method, unbalance panel, simple")
+rm(result, did_result)
+
+# unbalanced, weighted ------------------------------
+
+result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                  allow_unbalance_panel = TRUE, weightvar = "weight")
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt2,base_period = "universal",est_method = "ipw",cband = FALSE,
+                          #xformla = ~x,
+                          control_group = "notyettreated",
+                          allow_unbalanced_panel = TRUE,
+                          clustervars = NULL,
+                          weightsname = "weight",
+                          bstrap = FALSE)
+
+expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+             info = "unbalanced method, unbalance panel, weighted")
 rm(result, did_result)
 
 # unbalanced, ipw  ------------------------------------------
