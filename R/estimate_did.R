@@ -32,11 +32,10 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
   if(ipw){
     if(is.null(cache)){ #if no cache, calcuate ipw
       #estimate the logit
-      prop_score_est <- suppressWarnings(parglm::parglm.fit(covvars, dt_did[, D],
+      prop_score_est <- stats::glm.fit(covvars, dt_did[, D],
                                                     family = stats::binomial(), 
                                                     weights = dt_did[, weights],
-                                                    control = parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())), #no parallel if already parallel
-                                                    intercept = FALSE))
+                                                    intercept = FALSE)
       class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
       #const is implicitly put into the ipw formula, need to incorporate it manually
 
@@ -50,7 +49,6 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
       prop_score_fit <- fitted(prop_score_est)
       if(max(prop_score_fit) >= 1-1e-10){warning(paste0("extreme propensity score: ", max(prop_score_fit), ", support overlap is likely to be violated"))} #<=0 (only in control) is fine for ATT since it is just not used 
       prop_score_fit <- pmin(1-1e-10, prop_score_fit) #for the ipw
-
       hess <- stats::vcov(prop_score_est) * n #for the influence function
       hess[is.na(hess)|abs(hess) > 1e10] <- 0
       
@@ -224,10 +222,9 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     #no caching since composition changes by period
     
     #estimate the logit
-    prop_score_est <- suppressWarnings(parglm.fit(covvars, dt_did[, D],
+    prop_score_est <- suppressWarnings(stats::glm.fit(covvars, dt_did[, D],
                                                   family = stats::binomial(),
                                                   weights = dt_did[, weights*(inpre+inpost)*n/(n_pre+n_post)], #when seen in both pre and post have double weight
-                                                  control = parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())),
                                                   intercept = FALSE)) #*(inpre+inpost)
     class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
     #const is implicitly put into the ipw formula, need to incorporate it manually

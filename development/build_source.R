@@ -1,7 +1,7 @@
 build_source <- function(ver){
   source_files <- list.files("R", include.dirs = FALSE, full.names = TRUE)
 
-  dep <- c("data.table", "stringr", "BMisc", "collapse", "dreamerr", "parglm")
+  dep <- c("data.table", "stringr", "BMisc", "collapse", "dreamerr")
   
   sink(paste0("development/fastdid_", str_replace_all(ver, "\\.", "_"), ".R"))
   cat(paste0("#", as.character(Sys.Date()), "\n"))

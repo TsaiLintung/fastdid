@@ -33,11 +33,10 @@
 #' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet".
 #'
 #' @import data.table stringr dreamerr ggplot2
-#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean
+#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean glm.fit
 #' @importFrom collapse allNA fnrow whichNA fnunique fsum na_insert
 #' @importFrom parallel mclapply
 #' @importFrom BMisc multiplier_bootstrap
-#' @importFrom parglm parglm.fit parglm.control
 #' @return A data.table containing the estimated treatment effects and standard errors or a list of all results when `full == TRUE`.
 #' @export
 #'
