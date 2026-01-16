@@ -102,7 +102,7 @@ dt_irregular[time == 7, time := 15]
 expect_error(fastdid(dt_irregular, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", result_type = "group_time"),
              info = "irregular time steps")
 
-# Non-uniform time intervals (e.g., 1, 2, 4, 8)
+# Non-uniform time intervals (e.g., 1, 2, 4, 8) 
 dt_irregular2 <- data.table::copy(dt)
 dt_irregular2[, time_new := c(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)[time]]
 dt_irregular2[, G_new := ifelse(is.infinite(G), Inf, c(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)[G])]
@@ -257,6 +257,15 @@ dt_zero_weights[, w := 0]
 expect_error(fastdid(dt_zero_weights, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", 
                      result_type = "group_time", weightvar = "w"),
              info = "zero weights should error")
+
+
+# time varying weight -------------
+
+dt_vary_weights <- data.table::copy(dt)
+dt_vary_weights[, w := runif(.N, 0.1, 0.9)]
+expect_error(fastdid(dt_vary_weights, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", 
+                     result_type = "group_time", weightvar = "w"),
+             info = "time-varying weights should error")
 
 # test with time gaps that are uniform ----------------------------
 

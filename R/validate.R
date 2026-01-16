@@ -55,9 +55,11 @@ validate_argument <- function(dt, p) {
   if (allow_unbalance_panel == TRUE && control_type == "dr") {
     stop("fastdid does not support DR when allowing for unbalanced panels.")
   }
-  # if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
-  #   stop("fastdid currently only supprts time varying covariates when not allowing for unbalanced panels.")
-  # }
+
+  if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
+     stop("fastdid currently only supprts time varying covariates when not allowing for unbalanced panels.")
+  }
+  
   if (any(covariatesvar %in% varycovariatesvar) && !allNA(varycovariatesvar) && !allNA(covariatesvar)) {
     stop("time-varying var and invariant var have overlaps.")
   }
@@ -178,6 +180,7 @@ validate_dt <- function(dt, p) {
     }
   }
 
+  # test is weights 
 
 
   return(dt)

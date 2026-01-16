@@ -7,6 +7,7 @@ simdt <- sim_did(1e+03, 10, cov = "cont", hetero = "all", balanced = TRUE, secon
                  seed = 1, stratify = FALSE,
                  second_cov = TRUE)
 dt <- simdt$dt
+dt[, weight := pmax(rnorm(.N, 0.8, 0.2), 0.3), by = "unit"] # weight is time-inv
 
 est_diff_ratio <- function(result, did_result){
   did_result_dt <- data.table::data.table(cohort = did_result$group, time = did_result$t, did_att = did_result$att, did_se = did_result$se)
@@ -29,7 +30,7 @@ est_diff_ratio_agg <- function(result, did_result){
 # simple -------------------
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time")
-did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time", data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
                           #xformla = ~x,
                           control_group = "notyettreated",
                           clustervars = NULL,
@@ -94,7 +95,6 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "covariates reg")
 rm(result, did_result)
 
-
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                   control_type = "dr",
                   covariatesvar = c("x"))
@@ -122,6 +122,21 @@ did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time"
 expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "anticipation")
 rm(result, did_result)
+
+# simple weight -------------------
+
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time", weightvar = "weight")
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time", data = dt,base_period = "universal",est_method = "ipw",cband = FALSE,
+                          #xformla = ~x,
+                          control_group = "notyettreated",
+                          clustervars = NULL,
+                          weightsname = "weight",
+                          bstrap = FALSE)
+
+expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+             info = "weighted")
+rm(result, did_result)
+
 
 # alternative base period -----------------
 
@@ -190,8 +205,6 @@ did_result <- did::att_gt(yname = "y2",gname = "G",idname = "unit",tname = "time
 expect_equal(est_diff_ratio(result[outcome == "y2"], did_result), c(0,0), tolerance = tol,
              info = "multiple outcome with covariates")
 rm(result, did_result)
-
-
 
 # dynamic -------------------
 
@@ -271,7 +284,7 @@ rm(result, did_result)
 dt2 <- data.table::copy(dt)
 keep <- sample(c(rep(TRUE, 15),FALSE), dt2[,.N], TRUE)
 dt2 <- dt2[keep]
-dt2[, weight := pmax(rnorm(.N, 0.8, 0.2), 0.3)]
+
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                   allow_unbalance_panel = TRUE)
@@ -301,14 +314,31 @@ rm(result, did_result)
 
 # unbalanced, weighted ------------------------------
 
-result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                   allow_unbalance_panel = TRUE, weightvar = "weight")
-did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt2,base_period = "universal",est_method = "ipw",cband = FALSE,
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "reg",cband = FALSE,
                           #xformla = ~x,
                           control_group = "notyettreated",
                           allow_unbalanced_panel = TRUE,
                           clustervars = NULL,
                           weightsname = "weight",
+                          faster_mode = FALSE,
+                          bstrap = FALSE)
+
+expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
+             info = "unbalanced method, unbalance panel, weighted")
+rm(result, did_result)
+
+
+result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
+                  allow_unbalance_panel = TRUE, weightvar = "weight")
+did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt2,base_period = "universal",est_method = "reg",cband = FALSE,
+                          #xformla = ~x,
+                          control_group = "notyettreated",
+                          allow_unbalanced_panel = TRUE,
+                          clustervars = NULL,
+                          weightsname = "weight",
+                          faster_mode = FALSE,
                           bstrap = FALSE)
 
 expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,

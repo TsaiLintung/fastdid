@@ -171,12 +171,10 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
 }
 
 estimate_did_rc <- function(dt_did, covvars, p, cache){
-  
-  #TODO: skip if not enough valid data
+
   
   # preprocess --------
-  
-  
+   
   oldn <- dt_did[, .N]
   data_pos <-  which(dt_did[, !is.na(D)])
   dt_did <- dt_did[data_pos]
@@ -194,18 +192,11 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   }
 
   # check for enough treated and control observations in each period
-  n_cont_pre <- dt_did[, sum(D == 0 & inpre)]
-  n_cont_post <- dt_did[, sum(D == 0 & inpost)]
-  n_treat_pre <- dt_did[, sum(D == 1 & inpre)]
-  n_treat_post <- dt_did[, sum(D == 1 & inpost)]
-
-  if(any(c(n_cont_pre, n_cont_post, n_treat_pre, n_treat_post) == 0)){
+  group_count <- dt_did[, sum(D == 0 & inpre)] * dt_did[, sum(D == 0 & inpost)] * dt_did[, sum(D == 1 & inpre)] * dt_did[, sum(D == 1 & inpost)]
+  if(group_count == 0){
     stop("Not enough treated or control observations in pre or post period")
   }
-  
-  sum_weight_pre <- dt_did[, sum(inpre*weights)]
-  sum_weight_post <- dt_did[, sum(inpost*weights)]
-  
+
   if(is.matrix(covvars)){
     ipw <- p$control_type %in% c("ipw", "dr") 
     or <- p$control_type %in% c("reg", "dr")
