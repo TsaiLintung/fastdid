@@ -127,6 +127,13 @@ validate_dt <- function(dt, p) {
     warning("some covariates is time-varying, fastdid only use the first observation for covariates.")
   }
 
+  if (!is.na(p$weightvar) && dt[,.(uniqueN(get(p$weightvar))), by = "unit"] [V1>1,] |> nrow() > 0) {
+    stop("weightvar is time-varying, fastdid does not support time-varying weights.")
+  }
+
+  if (!is.na(p$weightvar) && nrow(dt[get(p$weightvar) == 0, ] > 0)) {
+    stop("some weights are zero.")
+  }
 
   if (!allNA(p$covariatesvar) || !allNA(p$varycovariatesvar)) {
     for (cov in c(p$covariatesvar, p$varycovariatesvar)) {

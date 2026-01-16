@@ -192,8 +192,8 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   }
 
   # check for enough treated and control observations in each period
-  group_count <- dt_did[, sum(D == 0 & inpre)] * dt_did[, sum(D == 0 & inpost)] * dt_did[, sum(D == 1 & inpre)] * dt_did[, sum(D == 1 & inpost)]
-  if(group_count == 0){
+  any_zero <- dt_did[, sum(D == 0 & inpre)==0] | dt_did[, sum(D == 0 & inpost)==0] | dt_did[, sum(D == 1 & inpre)==0] | dt_did[, sum(D == 1 & inpost)==0]
+  if(any_zero){
     stop("Not enough treated or control observations in pre or post period")
   }
 

@@ -46,3 +46,21 @@ did_result4 <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time
                           clustervars = NULL,
                           faster_mode = FALSE,
                           bstrap = FALSE)
+
+did_result5 <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "reg",cband = FALSE,
+                          #xformla = ~x,
+                          control_group = "notyettreated",
+                          allow_unbalanced_panel = TRUE,
+                          clustervars = "x",
+                          faster_mode = TRUE,
+                          biters = 20000,
+                          bstrap = TRUE)
+
+did_result6<- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "reg",cband = FALSE,
+                          #xformla = ~x,
+                          control_group = "notyettreated",
+                          allow_unbalanced_panel = TRUE,
+                          clustervars = "x",
+                          faster_mode = FALSE,
+                          biters = 20000,
+                          bstrap = TRUE)

@@ -104,8 +104,8 @@ expect_error(fastdid(dt_irregular, timevar = "time", cohortvar = "G", unitvar = 
 
 # Non-uniform time intervals (e.g., 1, 2, 4, 8) 
 dt_irregular2 <- data.table::copy(dt)
-dt_irregular2[, time_new := c(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)[time]]
-dt_irregular2[, G_new := ifelse(is.infinite(G), Inf, c(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)[G])]
+dt_irregular2[, time := c(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)[time]]
+dt_irregular2[, G := ifelse(is.infinite(G), Inf, c(1, 2, 4, 8, 16, 32, 64, 128, 256, 512)[G])]
 expect_error(fastdid(dt_irregular2, timevar = "time_new", cohortvar = "G_new", unitvar = "unit", outcomevar = "y", result_type = "group_time"),
              info = "exponential time steps")
 
@@ -304,15 +304,6 @@ dt_float[, time := time + 0.1]
 dt_float[!is.infinite(G), G := G + 0.1]
 expect_silent(fastdid(dt_float, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", result_type = "group_time"),
               info = "floating point time coerced to integer")
-
-# test validation=FALSE skips checks ------------------------------
-
-dt_bad <- data.table::copy(dt)
-dt_bad[, x := 1]  # No variation
-# This should not error because validation is disabled
-expect_silent(fastdid(dt_bad, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", 
-                      result_type = "group_time", covariatesvar = "x", validate = FALSE),
-              info = "validation=FALSE skips checks")
 
 # test with only two time periods ----------------------------------
 

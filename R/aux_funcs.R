@@ -53,6 +53,8 @@ coerce_dt <- function(dt, p){
   if(length(time_periods) > 1 && any(time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)] != 1)){
     # Calculate all intervals between consecutive time periods
     all_intervals <- time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)]
+
+    
     
     # Check if all intervals are identical (uniform step)
     if(length(unique(all_intervals)) > 1){
