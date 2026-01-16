@@ -1,3 +1,7 @@
+# fastdid 1.0.6
+
+ - Remove archived parglm dependency
+
 # fastdid 1.0.5
 
  - Various bug fixes
