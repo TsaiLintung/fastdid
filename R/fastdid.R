@@ -31,6 +31,7 @@
 #' @param cohortvar2 character, name of the second cohort (group) variable.
 #' @param event_specific logical, whether to recover target treatment effect or use combined effect.
 #' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet".
+#' @param add_base_period logical, whether to add a placeholder base period in dynamic results.
 #'
 #' @import data.table stringr dreamerr ggplot2
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean glm.fit
@@ -68,7 +69,7 @@ fastdid <- function(data,
                     copy = TRUE, validate = TRUE,
                     anticipation = 0, anticipation2 = 0, base_period = "universal",
                     exper = NULL, full = FALSE, parallel = FALSE,
-                    cohortvar2 = NA, event_specific = TRUE, double_control_option = "both") {
+                    cohortvar2 = NA, event_specific = TRUE, double_control_option = "both", add_base_period = FALSE) {
   # preprocess --------------------------------------------------------
 
   if (!is.data.table(data)) {

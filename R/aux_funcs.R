@@ -265,6 +265,10 @@ convert_targets <- function(results, p, t){
   
   results[, target := NULL]
   
+  if(p$add_base_period){
+    results <- results |> rbind(data.table(event_time = -1 - p$anticipation, att = 0, se = 0, outcome = p$outcomevar, att_ciub = 0, att_cilb = 0))
+  }
+  
   return(results)
 }
 

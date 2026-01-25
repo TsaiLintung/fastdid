@@ -33,7 +33,8 @@ fastdid(
   parallel = FALSE,
   cohortvar2 = NA,
   event_specific = TRUE,
-  double_control_option = "both"
+  double_control_option = "both",
+  add_base_period = FALSE
 )
 }
 \arguments{
@@ -94,6 +95,8 @@ fastdid(
 \item{event_specific}{logical, whether to recover target treatment effect or use combined effect.}
 
 \item{double_control_option}{character, control units used for the double DiD, options are "both", "never", or "notyet".}
+
+\item{add_base_period}{logical, whether to add a placeholder base period in dynamic results.}
 }
 \value{
 A data.table containing the estimated treatment effects and standard errors or a list of all results when `full == TRUE`.

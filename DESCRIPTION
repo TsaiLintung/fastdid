@@ -31,7 +31,7 @@ Suggests:
     rmarkdown,
     tinytest
 Encoding: UTF-8
-RoxygenNote: 7.3.2
+RoxygenNote: 7.3.3
 URL: https://github.com/TsaiLintung/fastdid, https://tsailintung.github.io/fastdid/
 BugReports: https://github.com/TsaiLintung/fastdid/issues
 VignetteBuilder: knitr

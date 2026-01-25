@@ -25,7 +25,7 @@ validate_argument <- function(dt, p) {
   check_set_arg(control_option, double_control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) # kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1)
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
-  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)
+  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, add_base_period, "scalar logical", .up = 1)
   check_arg(anticipation, anticipation2, alpha, "scalar numeric", .up = 1)
   
   if (anticipation < 0) {
@@ -42,6 +42,12 @@ validate_argument <- function(dt, p) {
     check_arg(balanced_event_time, "numeric scalar", .up = 1)
     if (balanced_event_time < 0) {
       stop("balanced_event_time must be non-negative (>= 0), got: ", balanced_event_time)
+    }
+  }
+
+  if (add_base_period == TRUE) {
+    if (result_type != "dynamic") {
+      stop("add_base_period is only possible with result_type == 'dynamic'")
     }
   }
   

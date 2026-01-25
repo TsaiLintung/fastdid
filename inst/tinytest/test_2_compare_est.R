@@ -170,12 +170,12 @@ rm(result, did_result)
 
 result <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                   clustervar = "x",
-                  boot = TRUE, biters = 10000)
+                  boot = TRUE, biters = 25000)
 did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt,base_period = "universal",est_method = "reg",cband = FALSE,
                           control_group = "notyettreated",
                           clustervars = "x",
                           faster_mode = FALSE,
-                          bstrap = TRUE, biters = 10000)
+                          bstrap = TRUE, biters = 25000)
 
 expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "bootstrap clustered")
