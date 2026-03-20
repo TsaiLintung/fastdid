@@ -71,6 +71,10 @@ coerce_dt_doub <- function(dt, p){
   #deal with time, coerce time to 1,2,3,4,5.......
   time_periods <- dt[, unique(time)]
 
+  if(length(time_periods) == 0){
+    stop("no data after coercing the dataset")
+  }
+
   time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
   if(time_offset != 0){
     dt[, c(gcol) := lapply(.SD, function(x) x - time_offset), .SDcols = gcol]

@@ -18,7 +18,11 @@ get_exper_default <- function(exper, exper_args){
 coerce_dt <- function(dt, p){
   
   if(!allNA(p$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
-  
+
+  if(nrow(dt) == 0){
+    stop("no data after coercing the dataset")
+  }
+
   #chcek if there is availble never-treated group
   if(!is.infinite(dt[, max(G)])){
     if(p$control_option == "both"){warning("no never-treated availble, effectively using not-yet-but-eventually-treated as control")}
@@ -80,11 +84,7 @@ coerce_dt <- function(dt, p){
   t <- list()
   t$time_step <- time_step
   t$time_offset <- time_offset
-  
-  if(nrow(dt) == 0){
-    stop("no data after coercing the dataset")
-  }
-  
+
   return(list(dt = dt, p = p, t = t))
   
 }

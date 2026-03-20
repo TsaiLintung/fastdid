@@ -107,11 +107,3 @@ devtools::install()
 ```
 
 **Test framework**: `tinytest` — test files auto-discovered in `tests/`. CI via GitHub Actions (`.github/workflows/`): R-CMD-check on macOS/Windows/Ubuntu, coverage, pkgdown.
-
----
-
-## Notes / Active Development Areas (NOTE.md)
-
-- Multiple (>2) simultaneous events: partially supported via double DiD, further extensions planned
-- `fastglm` integration under consideration for faster GLM fitting
-- Base period handling in time-varying covariates being explored

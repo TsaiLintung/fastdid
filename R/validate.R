@@ -178,18 +178,22 @@ validate_dt <- function(dt, p) {
   }
 
   # drop always_treated units
-  always_treated <- dt[G <= min(time), unique(unit)]
-  if (length(always_treated) > 0) {
-    warning(length(always_treated), " units is treated in the first period, dropping them")
-    dt <- dt[!unit %in% always_treated]
+  if (nrow(dt) > 0) {
+    min_time <- dt[, min(time)]
+    always_treated <- dt[G <= min_time, unique(unit)]
+    if (length(always_treated) > 0) {
+      warning(length(always_treated), " units is treated in the first period, dropping them")
+      dt <- dt[!unit %in% always_treated]
+    }
   }
 
   # for double did part: check all confounding event columns
-  if (!allNA(p$cohortvar2)) {
+  if (!allNA(p$cohortvar2) && nrow(dt) > 0) {
+    min_time <- dt[, min(time)]
     M <- 1L + length(p$cohortvar2)
     for(d in 2L:M){
       Gd_col <- paste0("G", d)
-      always_treated <- dt[get(Gd_col) <= min(time), unique(unit)]
+      always_treated <- dt[get(Gd_col) <= min_time, unique(unit)]
       if (length(always_treated) > 0) {
         warning(length(always_treated), " units is treated in the first period by event ", d, ", dropping them")
         dt <- dt[!unit %in% always_treated]

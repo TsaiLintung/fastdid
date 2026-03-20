@@ -90,7 +90,7 @@ fastdid(
 
 \item{parallel}{logical, whether to use parallization on unix system.}
 
-\item{cohortvar2}{character, name of the second cohort (group) variable.}
+\item{cohortvar2}{character or character vector, name(s) of the confounding event cohort variable(s). For M>2 events, provide a vector of length M-1 (e.g., `c("G2", "G3")` for M=3 events).}
 
 \item{event_specific}{logical, whether to recover target treatment effect or use combined effect.}
 

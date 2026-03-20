@@ -28,7 +28,7 @@
 #' @param base_period character, type of base period in pre-preiods, options are "universal", or "varying".
 #' @param full logical, whether to return the full result (influence function, call, weighting scheme, etc,.).
 #' @param parallel logical, whether to use parallization on unix system.
-#' @param cohortvar2 character, name of the second cohort (group) variable.
+#' @param cohortvar2 character or character vector, name(s) of the confounding event cohort variable(s). For M>2 events, provide a vector of length M-1 (e.g., `c("G2", "G3")` for M=3 events).
 #' @param event_specific logical, whether to recover target treatment effect or use combined effect.
 #' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet".
 #' @param add_base_period logical, whether to add a placeholder base period in dynamic results.
