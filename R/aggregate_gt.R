@@ -22,7 +22,8 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
   att <- gt_result$att
   inf_func <- gt_result$inf_func
 
-  if (p$event_specific && !is.na(p$cohortvar2)) {
+  # influence from double did is calculated before the influence from aggregation 
+  if (p$event_specific && !is.na(p$cohortvar2)) { 
     es_weight <- agg_sch$es_sto_weight + agg_sch$es_det_weight
     es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p)
     att <- (es_weight) %*% att
