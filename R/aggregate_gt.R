@@ -146,7 +146,7 @@ get_agg_targets <- function(group_time, p) {
     ), by = "G"]
     cohorts[, used := max_et >= p$balanced_event_time] # the max
     if (!cohorts[, any(used)]) {
-      stop("balanced_comp_range outside avalible range")
+      stop("balanced_comp_range outside available range")
     }
     group_time[, used := G %in% cohorts[used == TRUE, G]]
 

@@ -23,10 +23,10 @@ coerce_dt <- function(dt, p){
     stop("no data after coercing the dataset")
   }
 
-  #chcek if there is availble never-treated group
+  #check if there is available never-treated group
   if(!is.infinite(dt[, max(G)])){
-    if(p$control_option == "both"){warning("no never-treated availble, effectively using not-yet-but-eventually-treated as control")}
-    if(p$control_option == "never"){stop("no never-treated availble.")}
+    if(p$control_option == "both"){warning("no never-treated available, effectively using not-yet-but-eventually-treated as control")}
+    if(p$control_option == "never"){stop("no never-treated available.")}
   }
   
   if(p$allow_unbalance_panel){
@@ -41,11 +41,8 @@ coerce_dt <- function(dt, p){
   
   #deal with time, coerice time to 1,2,3,4,5.......
   time_periods <- dt[, unique(time)]
-  time_size <- length(time_periods)
-  
-  #TODO: this part is kinda ugly
+
   time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
-  gcol <- str_subset(names(dt), ifelse(is.na(p$cohortvar2), "G", "G1|G2")) 
   if(time_offset != 0){
     dt[, G := G-time_offset]
     

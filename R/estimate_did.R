@@ -138,7 +138,7 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
     XpX <- crossprod(or_x, covvars)/n
 
     #calculate alrw = eX (XpX)^-1 by solve XpX*alrw = ex, much faster since avoided inv
-    asym_linear_or <- t(solve(XpX, t(or_ex)))# |> reverse_col()
+    asym_linear_or <- t(solve(XpX, t(or_ex)))
 
     #or for treat
     inf_treat_or <- -asym_linear_or %*% M1 #a negative sign here, since or_delta is subtracted from the att
@@ -157,7 +157,6 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
 
 
   #get overall influence function
-  #if(dt_did[, mean(cont_ipw_weight)] < 1e-10){warning("little/no overlap in covariates between control and treat group, estimates are unstable.")}
   inf_cont <- (inf_cont_did+inf_cont_ipw+inf_cont_or)/dt_did[, mean(cont_ipw_weight)]
   inf_treat <- (inf_treat_did+inf_treat_or)/dt_did[,mean(treat_ipw_weight)]
   inf_func_no_na <- inf_treat - inf_cont
@@ -225,8 +224,8 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     
     logit_coef <-  prop_score_est$coefficients 
     prop_score_fit <- fitted(prop_score_est)
-    if(max(prop_score_fit) >= 1){warning(paste0("support overlap condition violated for some group_time"))}
-    prop_score_fit <- pmin(1-1e-16, prop_score_fit) #for the ipw
+    if(max(prop_score_fit) >= 1-1e-10){warning(paste0("extreme propensity score: ", max(prop_score_fit), ", support overlap is likely to be violated"))}
+    prop_score_fit <- pmin(1-1e-10, prop_score_fit) #for the ipw
     
     #get the results into the main did dt
     dt_did[, ps := prop_score_fit]
@@ -383,11 +382,4 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
 }
 
-# utilities ------
-
-reverse_col <- function(x){
-  nc <- ncol(x)
-  if (is.null(nc) || nc == 0) return(x)
-  return(x[, rev(seq_len(nc))])
-}
 

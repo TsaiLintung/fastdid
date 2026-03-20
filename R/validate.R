@@ -63,7 +63,7 @@ validate_argument <- function(dt, p) {
   }
 
   if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
-     stop("fastdid currently only supprts time varying covariates when not allowing for unbalanced panels.")
+     stop("fastdid currently only supports time varying covariates when not allowing for unbalanced panels.")
   }
   
   if (any(covariatesvar %in% varycovariatesvar) && !allNA(varycovariatesvar) && !allNA(covariatesvar)) {
@@ -75,7 +75,7 @@ validate_argument <- function(dt, p) {
 
   if (parallel) {
     if (.Platform$OS.type != "unix") {
-      stop("parallel option only available on unix sysytems")
+      stop("parallel option only available on unix systems")
     }
     if (!requireNamespace("parallel")) {
       stop("parallel requires the parallel package")
@@ -86,7 +86,7 @@ validate_argument <- function(dt, p) {
   varnames <- unlist(p[str_subset(names(p), "var")])
   varnames <- varnames[!is.na(varnames)]
   if (any(duplicated(varnames))) {
-    stop("-var arguments can not have duplicated names. (no need to specicify cluster on unit-level, it is automatically done.)")
+    stop("-var arguments can not have duplicated names. (no need to specify cluster on unit-level, it is automatically done.)")
   }
 }
 

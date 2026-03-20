@@ -158,11 +158,11 @@ get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for dou
 
 get_covvars <- function(base_period, t, aux, p){
   
-  if(all(is.na(p$covariatesvar)) && all(is.na(p$varycovariatesvar))){return(NA)}
+  if(allNA(p$covariatesvar) && allNA(p$varycovariatesvar)){return(NA)}
   covvars <- data.table()
   
   #add time-varying covariates
-  if(!all(is.na(p$varycovariatesvar))){
+  if(!allNA(p$varycovariatesvar)){
     
     precov <- aux$varycovariates[[base_period]]
     names(precov) <- paste0("pre_", names(precov))
@@ -172,7 +172,7 @@ get_covvars <- function(base_period, t, aux, p){
   }
   
   #add time-invariant covariates
-  if(!all(is.na(p$covariatesvar))){
+  if(!allNA(p$covariatesvar)){
     covvars <- cbind(aux$covariates, covvars)
   }
   
