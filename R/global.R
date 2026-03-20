@@ -11,7 +11,8 @@ utils::globalVariables(c(
     "timevar", "cohortvar", "unitvar", "outcomevar", "control_option", "result_type", "balanced_event_time", "control_type",
     "allow_unbalance_panel", "boot", "biters", "weightvar", "clustervar", "covariatesvar", "varycovariatesvar", "filtervar",
     "copy", "validate", "max_control_cohort_diff", "anticipation", "anticipation2", "min_control_cohort_diff", "base_period", "post", "att_ciub", "att_cilb", "cband", "alpha",
-    "G2", "G1", "mg", "cohort1", "cohort2", "event_time_1", "event_time_2",
+    "G2", "G1", "G3", "G4", "G5", "G6", "G7", "G8", "G9", "G10",
+    "mg", "cohort1", "cohort2", "cohort3", "cohort4", "cohort5", "event_time_1", "event_time_2",
     "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2", "parallel",
     "tp", "cp", "tb", "cb", "no_na", "event_stagger", "double_control_option",
     "det_weight", "sto_weight"

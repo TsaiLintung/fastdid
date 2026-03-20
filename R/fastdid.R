@@ -97,8 +97,9 @@ fastdid <- function(data,
 
   # change name for main columns
   setnames(dt, c(timevar, cohortvar, unitvar), c("time", "G", "unit"))
-  if (!is.na(p$cohortvar2)) {
-    setnames(dt, p$cohortvar2, "G2")
+  if (!allNA(p$cohortvar2)) {
+    new_names <- paste0("G", seq(2L, 1L + length(p$cohortvar2)))
+    setnames(dt, p$cohortvar2, new_names)
   }
 
   # validate and throw away not legal data

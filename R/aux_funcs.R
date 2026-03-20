@@ -17,7 +17,7 @@ get_exper_default <- function(exper, exper_args){
 
 coerce_dt <- function(dt, p){
   
-  if(!is.na(p$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
+  if(!allNA(p$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
   
   #chcek if there is availble never-treated group
   if(!is.infinite(dt[, max(G)])){
@@ -248,12 +248,13 @@ convert_targets <- function(results, p, t){
          group_group_time = {
            results[, cohort := str_split_i(target, "\\.", 1)]
            results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
-           
-           results[, cohort1 := g1(cohort)]
-           results[, cohort2 := g2(cohort)]
-           
-           results[, cohort1 := recover_time(cohort1, t)]
-           results[, cohort2 := recover_time(cohort2, t)]
+
+           M <- 1L + length(p$cohortvar2)
+           for(d in seq_len(M)){
+             col_name <- paste0("cohort", d)
+             results[, (col_name) := recover_time(gd(cohort, d), t)]
+           }
+
            results[, time := recover_time(time, t)]
            results[, `:=`(cohort = NULL)]
          },

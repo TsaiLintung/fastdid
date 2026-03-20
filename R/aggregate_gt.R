@@ -23,7 +23,7 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
   inf_func <- gt_result$inf_func
 
   # influence from double did is calculated before the influence from aggregation 
-  if (p$event_specific && !is.na(p$cohortvar2)) { 
+  if (p$event_specific && !allNA(p$cohortvar2)) {
     es_weight <- agg_sch$es_sto_weight + agg_sch$es_det_weight
     es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p)
     att <- (es_weight) %*% att
@@ -66,15 +66,18 @@ get_agg_sch <- function(gt_result, aux, p) {
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
   group_time <- gt_result$gt |> merge(pg_dt, by = "G", sort = FALSE)
   group_time[, mg := ming(G)]
-  group_time[, G1 := g1(G)]
-  group_time[, G2 := g2(G)]
-  setorder(group_time, time, mg, G1, G2) # change the order to match the order in gtatt
+  M <- if(allNA(p$cohortvar2)) 1L else 1L + length(p$cohortvar2)
+  gcol <- paste0("G", seq_len(M))
+  for(d in seq_len(M)){
+    group_time[, (paste0("G", d)) := gd(G, d)]
+  }
+  do.call(setorderv, c(list(group_time), list(c("time", "mg", gcol)))) # match order in gtatt
   if (!all(names(gt_result$att) == group_time[, paste0(G, ".", time)])) {
     stop("some bug makes gt misaligned, please report this to the maintainer. Thanks.")
   }
 
   # get the event-specific matrix, and available ggts
-  if (p$event_specific && !is.na(p$cohortvar2)) {
+  if (p$event_specific && !allNA(p$cohortvar2)) {
     es <- get_es_scheme(group_time, aux, p)
     pre_es_group_time <- group_time
     pre_es_group_time[, pg := NULL]
@@ -124,7 +127,7 @@ get_agg_targets <- function(group_time, p) {
     simple = group_time[, target := post],
     group_time = group_time[, target := paste0(g1(G), ".", time)],
     group_group_time = group_time[, target := paste0(G, ".", time)],
-    dynamic_stagger = group_time[, target := paste0(time - g1(G), ".", g1(G) - g2(G))]
+    dynamic_stagger = group_time[, target := paste0(time - g1(G), ".", g1(G) - gprime(G))]
   )
 
   # allow custom aggregation scheme, this overides other stuff
@@ -174,14 +177,17 @@ get_weight_influence <- function(att, group, agg_weights, aux, p) {
 
   group[, time := as.integer(time)]
 
-  if (is.na(p$cohortvar2)) {
+  if (allNA(p$cohortvar2)) {
     group[, G := as.integer(G)]
     setorder(group, time, G)
   } else {
+    M <- 1L + length(p$cohortvar2)
+    gcol_w <- paste0("G", seq_len(M))
     group[, mg := ming(G)]
-    group[, G1 := g1(G)]
-    group[, G2 := g2(G)]
-    setorder(group, time, mg, G1, G2) # sort
+    for(d in seq_len(M)){
+      group[, (paste0("G", d)) := gd(G, d)]
+    }
+    do.call(setorderv, c(list(group), list(c("time", "mg", gcol_w)))) # sort
   }
 
   if (!p$parallel) {

@@ -53,7 +53,7 @@ validate_argument <- function(dt, p) {
   
   # Validate result_type for double DiD
   if (result_type %in% c("group_group_time", "dynamic_stagger")) {
-    if (is.na(cohortvar2)) {
+    if (allNA(cohortvar2)) {
       stop("result_type '", result_type, "' can only be used with double DiD (cohortvar2 must be specified)")
     }
   }
@@ -184,12 +184,16 @@ validate_dt <- function(dt, p) {
     dt <- dt[!unit %in% always_treated]
   }
 
-  # for double did part
-  if (!is.na(p$cohortvar2)) {
-    always_treated <- dt[G2 <= min(time), unique(unit)]
-    if (length(always_treated) > 0) {
-      warning(length(always_treated), " units is treated in the first period, dropping them")
-      dt <- dt[!unit %in% always_treated]
+  # for double did part: check all confounding event columns
+  if (!allNA(p$cohortvar2)) {
+    M <- 1L + length(p$cohortvar2)
+    for(d in 2L:M){
+      Gd_col <- paste0("G", d)
+      always_treated <- dt[get(Gd_col) <= min(time), unique(unit)]
+      if (length(always_treated) > 0) {
+        warning(length(always_treated), " units is treated in the first period by event ", d, ", dropping them")
+        dt <- dt[!unit %in% always_treated]
+      }
     }
   }
 
