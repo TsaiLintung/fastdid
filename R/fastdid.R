@@ -38,6 +38,7 @@
 #' @importFrom collapse allNA fnrow whichNA fnunique fsum na_insert
 #' @importFrom parallel mclapply
 #' @importFrom BMisc multiplier_bootstrap
+#' @importFrom utils head
 #' @return A data.table containing the estimated treatment effects and standard errors or a list of all results when `full == TRUE`.
 #' @export
 #'

@@ -314,7 +314,7 @@ expect_silent(fastdid(dt_two_periods, timevar = "time", cohortvar = "G", unitvar
 # test robust to different data.table key -------------------------
 
 dt_keyed <- data.table::copy(dt)
-setkey(dt_keyed, unit, time)
+data.table::setkey(dt_keyed, unit, time)
 expect_silent(fastdid(dt_keyed, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", result_type = "group_time"),
               info = "data.table with key works")
 

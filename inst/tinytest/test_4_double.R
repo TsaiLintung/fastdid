@@ -95,7 +95,7 @@ N3 <- 500; TT3 <- 6
 g3_main  <- sample(c(2L, 3L, 4L, Inf), N3, replace = TRUE, prob = c(0.2, 0.2, 0.2, 0.4))
 g3_conf1 <- sample(c(2L, 3L, 5L, Inf), N3, replace = TRUE, prob = c(0.2, 0.2, 0.2, 0.4))
 g3_conf2 <- sample(c(3L, 4L, 6L, Inf), N3, replace = TRUE, prob = c(0.2, 0.2, 0.2, 0.4))
-dt_m3 <- data.table(
+dt_m3 <- data.table::data.table(
   unit = rep(1:N3, each = TT3),
   time = rep(1:TT3, N3),
   G    = rep(g3_main,  each = TT3),

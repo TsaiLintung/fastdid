@@ -3,6 +3,9 @@
 ^\.Rproj\.user$
 ^\.Rproj\.user$
 ^development
+^\.claude$
+^CLAUDE\.md$
+^NOTE\.md$
 
 ^\.github$
 ^cran-comments\.md$

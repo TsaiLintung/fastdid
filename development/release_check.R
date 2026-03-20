@@ -16,4 +16,4 @@ build(path = "development")
 check()
 
 source("development/build_source.R")
-build_source("1.0.6")
+build_source("1.1.0")
