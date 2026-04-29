@@ -24,7 +24,16 @@
 #' @param validate logical, whether to validate the dataset.
 #' @param anticipation number, periods with anticipation.
 #' @param anticipation2 number, periods with anticipation for the second event.
-#' @param exper list, arguments for experimental features.
+#' @param exper list, arguments for experimental features. Supported options:
+#'   \describe{
+#'     \item{`only_est_min`}{numeric scalar, minimum event time to estimate (`result_type == "dynamic"` only, not compatible with double DiD).}
+#'     \item{`only_est_max`}{numeric scalar, maximum event time to estimate (`result_type == "dynamic"` only, not compatible with double DiD).}
+#'     \item{`filtervar`}{character, name of a logical column; only units with TRUE at the base period are used.}
+#'     \item{`filtervar_post`}{character, name of a logical column; only units with TRUE at the post period are used.}
+#'     \item{`only_balance_2by2`}{logical, keep only units observed in both periods of each 2x2 DiD.}
+#'     \item{`aggregate_scheme`}{character, a custom aggregation expression evaluated as `group_time[, target := <expr>]`.}
+#'     \item{`max_control_cohort_diff`}{numeric, maximum cohort difference between treated and control groups.}
+#'   }
 #' @param base_period character, type of base period in pre-preiods, options are "universal", or "varying".
 #' @param full logical, whether to return the full result (influence function, call, weighting scheme, etc,.).
 #' @param parallel logical, whether to use parallization on unix system.
@@ -34,7 +43,8 @@
 #' @param add_base_period logical, whether to add a placeholder base period in dynamic results.
 #'
 #' @import data.table stringr dreamerr ggplot2
-#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean glm.fit
+#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean
+#' @importFrom parglm parglm.fit parglm.control
 #' @importFrom collapse allNA fnrow whichNA fnunique fsum na_insert
 #' @importFrom parallel mclapply
 #' @importFrom BMisc multiplier_bootstrap
@@ -43,11 +53,13 @@
 #' @export
 #'
 #' @details
-#' `balanced_event_time` is only meaningful when `result_type == "dynamic`.
+#' `balanced_event_time`, `add_base_period`, and the `exper` options `only_est_min`/`only_est_max` are only meaningful when `result_type == "dynamic"`.
 #'
-#' `result_type` as `group-group-time` and `dynamic staggered` is only meaningful when using double did.
+#' `result_type` as `"group_group_time"` and `"dynamic_stagger"` are only meaningful when using double DiD (`cohortvar2` is set).
 #'
-#' `biter` and `clustervar` is only used when `boot == TRUE`.
+#' `cohortvar2` accepts a character vector of length M-1 to support M>2 treatment events.
+#'
+#' `biters` and `clustervar` are only used when `boot == TRUE`.
 #'
 #' @examples
 #' # simulated data

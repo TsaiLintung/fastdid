@@ -84,7 +84,16 @@ fastdid(
 
 \item{base_period}{character, type of base period in pre-preiods, options are "universal", or "varying".}
 
-\item{exper}{list, arguments for experimental features.}
+\item{exper}{list, arguments for experimental features. Supported options:
+\describe{
+  \item{`only_est_min`}{numeric scalar, minimum event time to estimate (`result_type == "dynamic"` only, not compatible with double DiD).}
+  \item{`only_est_max`}{numeric scalar, maximum event time to estimate (`result_type == "dynamic"` only, not compatible with double DiD).}
+  \item{`filtervar`}{character, name of a logical column; only units with TRUE at the base period are used.}
+  \item{`filtervar_post`}{character, name of a logical column; only units with TRUE at the post period are used.}
+  \item{`only_balance_2by2`}{logical, keep only units observed in both periods of each 2x2 DiD.}
+  \item{`aggregate_scheme`}{character, a custom aggregation expression evaluated as `group_time[, target := <expr>]`.}
+  \item{`max_control_cohort_diff`}{numeric, maximum cohort difference between treated and control groups.}
+}}
 
 \item{full}{logical, whether to return the full result (influence function, call, weighting scheme, etc,.).}
 
@@ -105,11 +114,13 @@ A data.table containing the estimated treatment effects and standard errors or a
 Performs Difference-in-Differences (DID) estimation.
 }
 \details{
-`balanced_event_time` is only meaningful when `result_type == "dynamic`.
+`balanced_event_time`, `add_base_period`, and the `exper` options `only_est_min`/`only_est_max` are only meaningful when `result_type == "dynamic"`.
 
-`result_type` as `group-group-time` and `dynamic staggered` is only meaningful when using double did.
+`result_type` as `"group_group_time"` and `"dynamic_stagger"` are only meaningful when using double DiD (`cohortvar2` is set).
 
-`biter` and `clustervar` is only used when `boot == TRUE`.
+`cohortvar2` accepts a character vector of length M-1 to support M>2 treatment events.
+
+`biters` and `clustervar` are only used when `boot == TRUE`.
 }
 \examples{
 # simulated data

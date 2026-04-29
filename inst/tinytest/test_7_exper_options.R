@@ -47,8 +47,8 @@ res_min_max <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", 
                        exper = list(only_est_min = -3, only_est_max = 3))
 
 in_range <- base[event_time >= -3 & event_time <= 3]
-setorder(in_range, event_time)
-setorder(res_min_max, event_time)
+data.table::setorder(in_range, event_time)
+data.table::setorder(res_min_max, event_time)
 
 expect_equal(res_min_max$att, in_range$att, tolerance = 1e-10,
              info = "att within range matches baseline when using only_est_min/only_est_max")
@@ -66,8 +66,8 @@ res_min <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outc
                    exper = list(only_est_min = 0))
 
 in_range_min <- base[event_time >= 0]
-setorder(in_range_min, event_time)
-setorder(res_min, event_time)
+data.table::setorder(in_range_min, event_time)
+data.table::setorder(res_min, event_time)
 
 expect_equal(res_min$att, in_range_min$att, tolerance = 1e-10,
              info = "att within range matches baseline when using only_est_min alone")
@@ -78,8 +78,8 @@ res_max <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit", outc
                    exper = list(only_est_max = 2))
 
 in_range_max <- base[event_time <= 2]
-setorder(in_range_max, event_time)
-setorder(res_max, event_time)
+data.table::setorder(in_range_max, event_time)
+data.table::setorder(res_max, event_time)
 
 expect_equal(res_max$att, in_range_max$att, tolerance = 1e-10,
              info = "att within range matches baseline when using only_est_max alone")

@@ -1,8 +1,8 @@
 Package: fastdid
 Type: Package
 Title: Fast Staggered Difference-in-Difference Estimators
-Version: 1.0.6
-Date: 2025-12-25
+Version: 1.0.7
+Date: 2026-04-29
 Authors@R: c(
   person("Lin-Tung","Tsai",
          role = c("aut", "cre", "cph"),
@@ -23,6 +23,7 @@ Imports:
     BMisc,
     collapse,
     dreamerr (>= 1.4.0),
+    parglm,
     ggplot2
 Suggests: 
     did,

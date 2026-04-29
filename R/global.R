@@ -15,5 +15,5 @@ utils::globalVariables(c(
     "mg", "cohort1", "cohort2", "cohort3", "cohort4", "cohort5", "event_time_1", "event_time_2",
     "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2", "parallel",
     "tp", "cp", "tb", "cb", "no_na", "event_stagger", "double_control_option",
-    "det_weight", "sto_weight", "add_base_period", "cohortvar2"
+    "det_weight", "sto_weight", "add_base_period", "cohortvar2", "exper"
 ))
