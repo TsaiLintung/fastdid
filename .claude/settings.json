@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash",
+      "Bash(grep:*)",
+      "Bash(Rscript:*)"
+    ]
+  }
+}

@@ -32,10 +32,11 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
   if(ipw){
     if(is.null(cache)){ #if no cache, calcuate ipw
       #estimate the logit
-      prop_score_est <- stats::glm.fit(covvars, dt_did[, D],
-                                                    family = stats::binomial(), 
+      prop_score_est <- suppressWarnings(parglm::parglm.fit(covvars, dt_did[, D],
+                                                    family = stats::binomial(),
                                                     weights = dt_did[, weights],
-                                                    intercept = FALSE)
+                                                    control = parglm::parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())),
+                                                    intercept = FALSE))
       class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
       #const is implicitly put into the ipw formula, need to incorporate it manually
 
@@ -45,7 +46,6 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
         warning("some propensity score estimation resulted in NA coefficients, likely cause by perfect colinearity")
       }
       
-      logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
       prop_score_fit <- fitted(prop_score_est)
       if(max(prop_score_fit) >= 1-1e-10){warning(paste0("extreme propensity score: ", max(prop_score_fit), ", support overlap is likely to be violated"))} #<=0 (only in control) is fine for ATT since it is just not used 
       prop_score_fit <- pmin(1-1e-10, prop_score_fit) #for the ipw
@@ -64,6 +64,7 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
     dt_did[, ps := prop_score_fit]
     dt_did[, treat_ipw_weight := weights*D]
     dt_did[, cont_ipw_weight := weights*ps*(1-D)/(1-ps)]
+    if(max(dt_did[, cont_ipw_weight]) > 100){warning("extreme IPW weights detected (max: ", round(max(dt_did[, cont_ipw_weight]), 2), "), estimates may be unstable")}
 
   } else {
 
@@ -138,7 +139,7 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
     XpX <- crossprod(or_x, covvars)/n
 
     #calculate alrw = eX (XpX)^-1 by solve XpX*alrw = ex, much faster since avoided inv
-    asym_linear_or <- t(solve(XpX, t(or_ex)))# |> reverse_col()
+    asym_linear_or <- t(solve(XpX, t(or_ex)))
 
     #or for treat
     inf_treat_or <- -asym_linear_or %*% M1 #a negative sign here, since or_delta is subtracted from the att
@@ -157,7 +158,6 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
 
 
   #get overall influence function
-  #if(dt_did[, mean(cont_ipw_weight)] < 1e-10){warning("little/no overlap in covariates between control and treat group, estimates are unstable.")}
   inf_cont <- (inf_cont_did+inf_cont_ipw+inf_cont_or)/dt_did[, mean(cont_ipw_weight)]
   inf_treat <- (inf_treat_did+inf_treat_or)/dt_did[,mean(treat_ipw_weight)]
   inf_func_no_na <- inf_treat - inf_cont
@@ -171,12 +171,10 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
 }
 
 estimate_did_rc <- function(dt_did, covvars, p, cache){
-  
-  #TODO: skip if not enough valid data
+
   
   # preprocess --------
-  
-  
+   
   oldn <- dt_did[, .N]
   data_pos <-  which(dt_did[, !is.na(D)])
   dt_did <- dt_did[data_pos]
@@ -194,18 +192,11 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   }
 
   # check for enough treated and control observations in each period
-  n_cont_pre <- dt_did[, sum(D == 0 & inpre)]
-  n_cont_post <- dt_did[, sum(D == 0 & inpost)]
-  n_treat_pre <- dt_did[, sum(D == 1 & inpre)]
-  n_treat_post <- dt_did[, sum(D == 1 & inpost)]
-
-  if(any(c(n_cont_pre, n_cont_post, n_treat_pre, n_treat_post) == 0)){
+  any_zero <- dt_did[, sum(D == 0 & inpre)==0] | dt_did[, sum(D == 0 & inpost)==0] | dt_did[, sum(D == 1 & inpre)==0] | dt_did[, sum(D == 1 & inpost)==0]
+  if(any_zero){
     stop("Not enough treated or control observations in pre or post period")
   }
-  
-  sum_weight_pre <- dt_did[, sum(inpre*weights)]
-  sum_weight_post <- dt_did[, sum(inpost*weights)]
-  
+
   if(is.matrix(covvars)){
     ipw <- p$control_type %in% c("ipw", "dr") 
     or <- p$control_type %in% c("reg", "dr")
@@ -222,9 +213,10 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     #no caching since composition changes by period
     
     #estimate the logit
-    prop_score_est <- suppressWarnings(stats::glm.fit(covvars, dt_did[, D],
+    prop_score_est <- suppressWarnings(parglm::parglm.fit(covvars, dt_did[, D],
                                                   family = stats::binomial(),
                                                   weights = dt_did[, weights*(inpre+inpost)*n/(n_pre+n_post)], #when seen in both pre and post have double weight
+                                                  control = parglm::parglm.control(nthreads = ifelse(p$parallel, 1, getDTthreads())),
                                                   intercept = FALSE)) #*(inpre+inpost)
     class(prop_score_est) <- "glm" #trick the vcov function to think that this is a glm object to dispatch the write method
     #const is implicitly put into the ipw formula, need to incorporate it manually
@@ -233,15 +225,15 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     hess <- stats::vcov(prop_score_est) * n #for the influence function
     
     logit_coef <-  prop_score_est$coefficients 
-    logit_coef[is.na(logit_coef)|abs(logit_coef) > 1e10] <- 0 #put extreme value and na to 0
     prop_score_fit <- fitted(prop_score_est)
-    if(max(prop_score_fit) >= 1){warning(paste0("support overlap condition violated for some group_time"))}
-    prop_score_fit <- pmin(1-1e-16, prop_score_fit) #for the ipw
+    if(max(prop_score_fit) >= 1-1e-10){warning(paste0("extreme propensity score: ", max(prop_score_fit), ", support overlap is likely to be violated"))}
+    prop_score_fit <- pmin(1-1e-10, prop_score_fit) #for the ipw
     
     #get the results into the main did dt
     dt_did[, ps := prop_score_fit]
     dt_did[, treat_ipw_weight := weights*D]
     dt_did[, cont_ipw_weight := weights*ps*(1-D)/(1-ps)]
+    if(max(dt_did[, cont_ipw_weight]) > 100){warning("extreme IPW weights detected (max: ", round(max(dt_did[, cont_ipw_weight]), 2), "), estimates may be unstable")}
     
   } else {
     
@@ -270,7 +262,7 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     reg_coef_pre <- stats::coef(stats::lm.wfit(x = covvars[control_bool_pre,], y = dt_did[control_bool_pre,pre.y],
                                                w = dt_did[control_bool_pre,weights]))
 
-    if(anyNA(reg_coef_post)|anyNA(reg_coef_pre)){
+    if(anyNA(reg_coef_post) || anyNA(reg_coef_pre)){
       stop("some outcome regression resulted in NA coefficients, likely cause by perfect colinearity")
     }
 
@@ -392,9 +384,4 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   return(list(att = att, inf_func = inf_func, cache = list(ps = prop_score_fit, hess = hess))) #for next outcome
 }
 
-# utilities ------
-
-reverse_col <- function(x){
-  return(x[,ncol(x):1])
-}
 

@@ -22,7 +22,8 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
   att <- gt_result$att
   inf_func <- gt_result$inf_func
 
-  if (p$event_specific & !is.na(p$cohortvar2)) {
+  # influence from double did is calculated before the influence from aggregation 
+  if (p$event_specific && !allNA(p$cohortvar2)) {
     es_weight <- agg_sch$es_sto_weight + agg_sch$es_det_weight
     es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p)
     att <- (es_weight) %*% att
@@ -65,15 +66,18 @@ get_agg_sch <- function(gt_result, aux, p) {
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
   group_time <- gt_result$gt |> merge(pg_dt, by = "G", sort = FALSE)
   group_time[, mg := ming(G)]
-  group_time[, G1 := g1(G)]
-  group_time[, G2 := g2(G)]
-  setorder(group_time, time, mg, G1, G2) # change the order to match the order in gtatt
+  M <- if(allNA(p$cohortvar2)) 1L else 1L + length(p$cohortvar2)
+  gcol <- paste0("G", seq_len(M))
+  for(d in seq_len(M)){
+    group_time[, (paste0("G", d)) := gd(G, d)]
+  }
+  do.call(setorderv, c(list(group_time), list(c("time", "mg", gcol)))) # match order in gtatt
   if (!all(names(gt_result$att) == group_time[, paste0(G, ".", time)])) {
     stop("some bug makes gt misaligned, please report this to the maintainer. Thanks.")
   }
 
   # get the event-specific matrix, and available ggts
-  if (p$event_specific & !is.na(p$cohortvar2)) {
+  if (p$event_specific && !allNA(p$cohortvar2)) {
     es <- get_es_scheme(group_time, aux, p)
     pre_es_group_time <- group_time
     pre_es_group_time[, pg := NULL]
@@ -123,7 +127,7 @@ get_agg_targets <- function(group_time, p) {
     simple = group_time[, target := post],
     group_time = group_time[, target := paste0(g1(G), ".", time)],
     group_group_time = group_time[, target := paste0(G, ".", time)],
-    dynamic_stagger = group_time[, target := paste0(time - g1(G), ".", g1(G) - g2(G))]
+    dynamic_stagger = group_time[, target := paste0(time - g1(G), ".", g1(G) - gprime(G))]
   )
 
   # allow custom aggregation scheme, this overides other stuff
@@ -135,18 +139,28 @@ get_agg_targets <- function(group_time, p) {
 
   # for balanced cohort composition in dynamic setting
   # a cohort us only used if it is seen for all dynamic time
-  if (p$result_type == "dynamic" & !is.na(p$balanced_event_time)) {
+  if (p$result_type == "dynamic" && !is.na(p$balanced_event_time)) {
     cohorts <- group_time[, .(
       max_et = max(target), # event time is target if in dynamic
       min_et = min(target)
     ), by = "G"]
     cohorts[, used := max_et >= p$balanced_event_time] # the max
     if (!cohorts[, any(used)]) {
-      stop("balanced_comp_range outside avalible range")
+      stop("balanced_comp_range outside available range")
     }
     group_time[, used := G %in% cohorts[used == TRUE, G]]
 
-    targets <- targets[targets <= p$balanced_event_time & targets >= cohorts[used == TRUE, min(min_et)]]
+    min_event_time <- cohorts[used == TRUE, min(min_et)]
+    max_event_time <- p$balanced_event_time
+    
+    if (min_event_time > max_event_time) {
+      stop("Invalid balanced_event_time: The minimum available event time (", min_event_time, 
+           ") is greater than balanced_event_time (", max_event_time, "). ",
+           "Please specify a balanced_event_time >= ", min_event_time, 
+           " or use a smaller value that matches your data structure.")
+    }
+    
+    targets <- targets[targets <= p$balanced_event_time & targets >= min_event_time]
   } else {
     group_time[, used := TRUE]
   }
@@ -163,14 +177,17 @@ get_weight_influence <- function(att, group, agg_weights, aux, p) {
 
   group[, time := as.integer(time)]
 
-  if (is.na(p$cohortvar2)) {
+  if (allNA(p$cohortvar2)) {
     group[, G := as.integer(G)]
     setorder(group, time, G)
   } else {
+    M <- 1L + length(p$cohortvar2)
+    gcol_w <- paste0("G", seq_len(M))
     group[, mg := ming(G)]
-    group[, G1 := g1(G)]
-    group[, G2 := g2(G)]
-    setorder(group, time, mg, G1, G2) # sort
+    for(d in seq_len(M)){
+      group[, (paste0("G", d)) := gd(G, d)]
+    }
+    do.call(setorderv, c(list(group), list(c("time", "mg", gcol_w)))) # sort
   }
 
   if (!p$parallel) {
@@ -195,7 +212,7 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
   } # for direct double did
 
   # moving this outside will create a g*t*id matrix, not really worth the memory
-  keepers_matrix <- as.matrix(aux$weights * sapply(1:nrow(group), function(g) {
+  keepers_matrix <- as.matrix(aux$weights * sapply(seq_len(nrow(group)), function(g) {
     as.integer(aux$dt_inv[, G] == group[g, G]) - group[g, pg]
   }))
 
@@ -250,7 +267,7 @@ get_se <- function(inf_matrix, aux, p) {
     boot_tv <- boot_tv[is.finite(boot_tv)]
     crit_val <- quantile(boot_tv, 1 - p$alpha, type = 1, na.rm = TRUE) # alp set at 0.95 for now
   }
-  if (is.na(crit_val) | is.infinite(crit_val) | crit_val < point_crit_val) {
+  if (is.na(crit_val) || is.infinite(crit_val) || crit_val < point_crit_val) {
     crit_val <- point_crit_val
   }
 

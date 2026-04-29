@@ -9,7 +9,7 @@
 fastdid implements the Difference-in-Differences (DiD) estimators in [Callaway and Sant'Anna's (2021)](https://doi.org/10.1016/j.jeconom.2020.12.001). fastdid is
 
   - fast, reducing the computation time with millions of units from hours to [seconds](https://tsailintung.github.io/fastdid/articles/misc.html#performance),
-  - flexible, allowing extensions such as time-varying covariates [Caetano and Callaway, 2024](https://arxiv.org/abs/2406.15288) and multiple events ([Tsai 2024](https://arxiv.org/abs/2409.05184)). 
+  - flexible, allowing extensions such as time-varying covariates [Caetano and Callaway, 2024](https://arxiv.org/abs/2406.15288) and multiple events (M≥2) ([Tsai 2026](https://arxiv.org/abs/2409.05184)).
 
 # Getting Started
 
@@ -42,7 +42,7 @@ To create event study plots, use `plot_did_dynamics(did_estimate)`.
 
   - [did](https://bcallaway11.github.io/did/articles/did-basics.html): staggered Difference in Difference by Callaway and Sant'Anna
   - [fastdid](https://tsailintung.github.io/fastdid/reference/fastdid.html): full list of arguments and features.
-  - [double](https://tsailintung.github.io/fastdid/articles/double.html): introduction to DiD with multiple events.
+  - [double](https://tsailintung.github.io/fastdid/articles/double.html): introduction to DiD with multiple events. For M≥2 confounding events, pass a vector to `cohortvar2` (e.g., `cohortvar2 = c("G2", "G3")` for M=3).
   - [misc](https://tsailintung.github.io/fastdid/articles/misc.html): comparison with [did](https://github.com/bcallaway11/did), benchmark, tests, and experimental features.
 
 # Acknowledgments

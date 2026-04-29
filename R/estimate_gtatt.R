@@ -53,16 +53,21 @@ estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
   g <- gt[1]
   t <- as.numeric(gt[2])
   
+  # skip g-t outside requested event-time range
+  event_time <- t - ming(g)
+  if (!is.na(p$exper$only_est_min) && event_time < p$exper$only_est_min) return(NULL)
+  if (!is.na(p$exper$only_est_max) && event_time > p$exper$only_est_max) return(NULL)
+
   #find base time
   gt_name <- paste0(g,".",t)
   base_period <- get_base_period(g,t,p)
-  if(t == base_period | #no treatment effect for the base period
-     !base_period %in% aux$time_period){ #base period out of bounds
+  if(t == base_period || #no treatment effect for the base period
+     !base_period %in% aux$time_periods){ #base period out of bounds
     return(NULL)
   } 
   #find treatment and control group
   did_setup <- get_did_setup(g,t, base_period, aux, p)
-  valid_tc_groups <- any(did_setup == 1) & any(did_setup == 0) #if takes up too much time, consider use collapse anyv, but right now quite ok
+  valid_tc_groups <- any(did_setup == 1) && any(did_setup == 0) #if takes up too much time, consider use collapse anyv, but right now quite ok
   if(!isTRUE(valid_tc_groups)){return(NULL)} #no treatment group or control group #isTRUE for na as false
   
   #covariates matrix
@@ -133,25 +138,36 @@ get_did_setup <- function(g, t, base_period, aux, p){
 get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
   start <- cohort_sizes[ming(G) < start_cohort, sum(cohort_size)]+1 
   end <- cohort_sizes[ming(G) <= end_cohort, sum(cohort_size)]
-  if(start > end){return(c())}
+  
+  # Validate sequence parameters
+  if(start > end || start <= 0 || end <= 0){
+    return(c())  # Return empty vector when no valid control cohorts
+  }
   return(seq(start, end, by = 1))
 }
 
 get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for double did to match exact g-g-t
   index <- which(cohort_sizes[,G] == treat_cohort)
+  if(length(index) == 0){
+    stop("Cohort ", treat_cohort, " not found in cohort_sizes")
+  }
   start <- ifelse(index == 1, 1, cohort_sizes[1:(index-1), sum(cohort_size)]+1)
   end <- cohort_sizes[1:index, sum(cohort_size)]
-  if(start > end){return(c())}
+  
+  # Validate sequence parameters
+  if(start > end || start <= 0 || end <= 0){
+    return(c())  # Return empty vector when no valid treat positions
+  }
   return(seq(start, end, by = 1))
 }
 
 get_covvars <- function(base_period, t, aux, p){
   
-  if(all(is.na(p$covariatesvar)) & all(is.na(p$varycovariatesvar))){return(NA)}
+  if(allNA(p$covariatesvar) && allNA(p$varycovariatesvar)){return(NA)}
   covvars <- data.table()
   
   #add time-varying covariates
-  if(!all(is.na(p$varycovariatesvar))){
+  if(!allNA(p$varycovariatesvar)){
     
     precov <- aux$varycovariates[[base_period]]
     names(precov) <- paste0("pre_", names(precov))
@@ -161,7 +177,7 @@ get_covvars <- function(base_period, t, aux, p){
   }
   
   #add time-invariant covariates
-  if(!all(is.na(p$covariatesvar))){
+  if(!allNA(p$covariatesvar)){
     covvars <- cbind(aux$covariates, covvars)
   }
   

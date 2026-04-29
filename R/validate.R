@@ -25,31 +25,76 @@ validate_argument <- function(dt, p) {
   check_set_arg(control_option, double_control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) # kinda bad names since did's notyet include both notyet and never
   check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1)
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
-  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, "scalar logical", .up = 1)
+  check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, add_base_period, "scalar logical", .up = 1)
   check_arg(anticipation, anticipation2, alpha, "scalar numeric", .up = 1)
+  
+  if (anticipation < 0) {
+    stop("anticipation must be non-negative (>= 0), got: ", anticipation)
+  }
+  if (anticipation2 < 0) {
+    stop("anticipation2 must be non-negative (>= 0), got: ", anticipation2)
+  }
 
   if (!is.na(balanced_event_time)) {
     if (result_type != "dynamic") {
       stop("balanced_event_time is only meaningful with result_type == 'dynamic'")
     }
     check_arg(balanced_event_time, "numeric scalar", .up = 1)
+    if (balanced_event_time < 0) {
+      stop("balanced_event_time must be non-negative (>= 0), got: ", balanced_event_time)
+    }
   }
-  if (allow_unbalance_panel == TRUE & control_type == "dr") {
+
+  if (add_base_period == TRUE) {
+    if (result_type != "dynamic") {
+      stop("add_base_period is only possible with result_type == 'dynamic'")
+    }
+  }
+  
+  # Validate only_est_min / only_est_max
+  has_est_min <- !is.na(exper$only_est_min)
+  has_est_max <- !is.na(exper$only_est_max)
+  if (has_est_min || has_est_max) {
+    if (result_type != "dynamic") {
+      stop("only_est_min/only_est_max can only be used with result_type == 'dynamic'")
+    }
+    if (!allNA(cohortvar2)) {
+      stop("only_est_min/only_est_max cannot be used with double DiD (cohortvar2)")
+    }
+    if (has_est_min && (!is.numeric(exper$only_est_min) || length(exper$only_est_min) != 1))
+      stop("only_est_min must be a numeric scalar")
+    if (has_est_max && (!is.numeric(exper$only_est_max) || length(exper$only_est_max) != 1))
+      stop("only_est_max must be a numeric scalar")
+    if (has_est_min && has_est_max && exper$only_est_min > exper$only_est_max) {
+      stop("only_est_min (", exper$only_est_min, ") must be <= only_est_max (", exper$only_est_max, ")")
+    }
+  }
+
+  # Validate result_type for double DiD
+  if (result_type %in% c("group_group_time", "dynamic_stagger")) {
+    if (allNA(cohortvar2)) {
+      stop("result_type '", result_type, "' can only be used with double DiD (cohortvar2 must be specified)")
+    }
+  }
+  
+  if (allow_unbalance_panel == TRUE && control_type == "dr") {
     stop("fastdid does not support DR when allowing for unbalanced panels.")
   }
-  # if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
-  #   stop("fastdid currently only supprts time varying covariates when not allowing for unbalanced panels.")
-  # }
-  if (any(covariatesvar %in% varycovariatesvar) & !allNA(varycovariatesvar) & !allNA(covariatesvar)) {
+
+  if(allow_unbalance_panel == TRUE & !allNA(varycovariatesvar)){
+     stop("fastdid currently only supports time varying covariates when not allowing for unbalanced panels.")
+  }
+  
+  if (any(covariatesvar %in% varycovariatesvar) && !allNA(varycovariatesvar) && !allNA(covariatesvar)) {
     stop("time-varying var and invariant var have overlaps.")
   }
-  if (!boot & (!allNA(clustervar) | cband == TRUE)) {
+  if (!boot && (!allNA(clustervar) || cband == TRUE)) {
     stop("clustering and uniform confidence interval only available with bootstrap")
   }
 
   if (parallel) {
     if (.Platform$OS.type != "unix") {
-      stop("parallel option only available on unix sysytems")
+      stop("parallel option only available on unix systems")
     }
     if (!requireNamespace("parallel")) {
       stop("parallel requires the parallel package")
@@ -60,7 +105,7 @@ validate_argument <- function(dt, p) {
   varnames <- unlist(p[str_subset(names(p), "var")])
   varnames <- varnames[!is.na(varnames)]
   if (any(duplicated(varnames))) {
-    stop("-var arguments can not have duplicated names. (no need to specicify cluster on unit-level, it is automatically done.)")
+    stop("-var arguments can not have duplicated names. (no need to specify cluster on unit-level, it is automatically done.)")
   }
 }
 
@@ -80,19 +125,25 @@ validate_dt <- function(dt, p) {
   raw_unit_size <- dt[, uniqueN(unit)]
   raw_time_size <- dt[, uniqueN(time)]
 
+  # Validate balanced_event_time against actual data
   if (!is.na(p$balanced_event_time)) {
-    if (p$balanced_event_time > dt[, max(time - G)]) {
-      stop("balanced_event_time is larger than the max event time in the data")
+    # Early check: ensure balanced_event_time doesn't exceed max possible event time in data
+    max_event_time <- dt[, max(time - G)]
+    if (p$balanced_event_time > max_event_time) {
+      stop("balanced_event_time (", p$balanced_event_time, 
+           ") is larger than the maximum event time in the data (", max_event_time, "). ",
+           "Please specify a value between 0 and ", max_event_time, ".")
     }
   }
 
   # doesn't allow missing value
-  if (is.na(p$exper$only_balance_2by2) | !p$exper$only_balance_2by2) {
+  if (is.na(p$exper$only_balance_2by2) || !p$exper$only_balance_2by2) {
     for (col in varnames) {
       na_obs <- whichNA(dt[, get(col)])
       if (length(na_obs) != 0) {
         warning("missing values detected in ", col, ", removing ", length(na_obs), " observation.")
-        dt <- dt[!na_obs]
+        # whichNA returns integer row indices; remove those rows with negative indexing
+        dt <- dt[-na_obs]
       }
     }
   }
@@ -101,15 +152,22 @@ validate_dt <- function(dt, p) {
     warning("some covariates is time-varying, fastdid only use the first observation for covariates.")
   }
 
+  if (!is.na(p$weightvar) && dt[,.(uniqueN(get(p$weightvar))), by = "unit"] [V1>1,] |> nrow() > 0) {
+    stop("weightvar is time-varying, fastdid does not support time-varying weights.")
+  }
 
-  if (!allNA(p$covariatesvar) | !allNA(p$varycovariatesvar)) {
+  if (!is.na(p$weightvar) && nrow(dt[get(p$weightvar) == 0, ] > 0)) {
+    stop("some weights are zero.")
+  }
+
+  if (!allNA(p$covariatesvar) || !allNA(p$varycovariatesvar)) {
     for (cov in c(p$covariatesvar, p$varycovariatesvar)) {
       if (is.na(cov)) {
         next
       }
       # check covaraites is not constant
       if (fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1) stop(cov, " have no variation")
-      if (!(is.numeric(dt[, get(cov)]) | is.integer(dt[, get(cov)]))) {
+      if (!(is.numeric(dt[, get(cov)]) || is.integer(dt[, get(cov)]))) {
         stop(cov, " is not numeric or integer, do not support fixed effects.")
       }
     }
@@ -125,29 +183,44 @@ validate_dt <- function(dt, p) {
   # check if any is missing
   if (!p$allow_unbalance_panel) {
     unit_count <- dt[, .(count = .N), by = unit]
+    
     if (any(unit_count[, count < raw_time_size])) {
       mis_unit <- unit_count[count < raw_time_size]
       warning(nrow(mis_unit), " units is missing in some periods, enforcing balanced panel by dropping them")
       dt <- dt[!unit %in% mis_unit[, unit]]
+      
+      # Validate we still have data after dropping
+      if (nrow(dt) == 0) {
+        stop("No observations remain after enforcing balanced panel. Consider setting allow_unbalance_panel = TRUE")
+      }
     }
   }
 
   # drop always_treated units
-  always_treated <- dt[G <= min(time), unique(unit)]
-  if (length(always_treated) > 0) {
-    warning(length(always_treated), " units is treated in the first period, dropping them")
-    dt <- dt[!unit %in% always_treated]
-  }
-
-  # for double did part
-  if (!is.na(p$cohortvar2)) {
-    always_treated <- dt[G2 <= min(time), unique(unit)]
+  if (nrow(dt) > 0) {
+    min_time <- dt[, min(time)]
+    always_treated <- dt[G <= min_time, unique(unit)]
     if (length(always_treated) > 0) {
       warning(length(always_treated), " units is treated in the first period, dropping them")
       dt <- dt[!unit %in% always_treated]
     }
   }
 
+  # for double did part: check all confounding event columns
+  if (!allNA(p$cohortvar2) && nrow(dt) > 0) {
+    min_time <- dt[, min(time)]
+    M <- 1L + length(p$cohortvar2)
+    for(d in 2L:M){
+      Gd_col <- paste0("G", d)
+      always_treated <- dt[get(Gd_col) <= min_time, unique(unit)]
+      if (length(always_treated) > 0) {
+        warning(length(always_treated), " units is treated in the first period by event ", d, ", dropping them")
+        dt <- dt[!unit %in% always_treated]
+      }
+    }
+  }
+
+  # test is weights 
 
 
   return(dt)

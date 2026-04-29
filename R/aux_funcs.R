@@ -7,7 +7,7 @@ get_exper_default <- function(exper, exper_args){
     }
   }
   
-  if(!is.na(exper$only_balance_2by2) & exper$only_balance_2by2){ #will create this col in the get_aux part
+  if(!is.na(exper$only_balance_2by2) && exper$only_balance_2by2){ #will create this col in the get_aux part
     exper$filtervar <- "no_na"
     exper$filtervar_post <- "no_na"
   }
@@ -17,12 +17,16 @@ get_exper_default <- function(exper, exper_args){
 
 coerce_dt <- function(dt, p){
   
-  if(!is.na(p$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
-  
-  #chcek if there is availble never-treated group
+  if(!allNA(p$cohortvar2)){return(coerce_dt_doub(dt, p))} #in doubledid.R
+
+  if(nrow(dt) == 0){
+    stop("no data after coercing the dataset")
+  }
+
+  #check if there is available never-treated group
   if(!is.infinite(dt[, max(G)])){
-    if(p$control_option == "both"){warning("no never-treated availble, effectively using not-yet-but-eventually-treated as control")}
-    if(p$control_option == "never"){stop("no never-treated availble.")}
+    if(p$control_option == "both"){warning("no never-treated available, effectively using not-yet-but-eventually-treated as control")}
+    if(p$control_option == "never"){stop("no never-treated available.")}
   }
   
   if(p$allow_unbalance_panel){
@@ -37,11 +41,8 @@ coerce_dt <- function(dt, p){
   
   #deal with time, coerice time to 1,2,3,4,5.......
   time_periods <- dt[, unique(time)]
-  time_size <- length(time_periods)
-  
-  #TODO: this part is kinda ugly
+
   time_offset <- min(time_periods) - 1 #assume time starts at 1, first is min after sort :)
-  gcol <- str_subset(names(dt), ifelse(is.na(p$cohortvar2), "G", "G1|G2")) 
   if(time_offset != 0){
     dt[, G := G-time_offset]
     
@@ -50,12 +51,29 @@ coerce_dt <- function(dt, p){
   }
   
   time_step <- 1 #time may not jump at 1
-  if(any(time_periods[seq(2,length(time_periods),1)] - time_periods[seq_len(length(time_periods))-1] != 1)){
-    time_step <- time_periods[2]-time_periods[1]
-    time_periods <- (time_periods-1)/time_step+1
-    if(any(time_periods[seq(2,length(time_periods),1)] - time_periods[seq_len(length(time_periods))-1] != 1)){stop("time step is not uniform")}
-    dt[G != 1, G := (G-1)/time_step+1]
+  if(length(time_periods) > 1 && any(time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)] != 1)){
+    # Calculate all intervals between consecutive time periods
+    all_intervals <- time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)]
+
     
+    
+    # Check if all intervals are identical (uniform step)
+    if(length(unique(all_intervals)) > 1){
+      stop("Time step is not uniform. Time periods: ", paste(head(time_periods, 10), collapse = ", "),
+           if(length(time_periods) > 10) "..." else "",
+           ". Intervals between periods: ", paste(unique(all_intervals), collapse = ", "),
+           ". fastdid requires uniformly-spaced time periods.")
+    }
+    
+    time_step <- all_intervals[1]
+    time_periods <- (time_periods-1)/time_step+1
+    
+    # Verify that normalization worked (should always be consecutive integers now)
+    if(any(time_periods[2:length(time_periods)] - time_periods[seq_len(length(time_periods)-1)] != 1)){
+      stop("Internal error: time normalization failed. Please report this issue.")
+    }
+    
+    dt[G != 1, G := (G-1)/time_step+1]
     dt[time != 1, time := (time-1)/time_step+1]
   }
   
@@ -63,11 +81,7 @@ coerce_dt <- function(dt, p){
   t <- list()
   t$time_step <- time_step
   t$time_offset <- time_offset
-  
-  if(nrow(dt) == 0){
-    stop("no data after coercing the dataset")
-  }
-  
+
   return(list(dt = dt, p = p, t = t))
   
 }
@@ -76,6 +90,14 @@ get_auxdata <- function(dt, p){
   
   time_periods <- dt[, unique(time)]
   id_size <- dt[, uniqueN(unit)]
+  
+  # Validate basic data structure
+  if(id_size <= 0){
+    stop("Invalid data structure: id_size is ", id_size, ". Dataset must contain at least one unit.")
+  }
+  if(length(time_periods) == 0){
+    stop("Invalid data structure: no time periods found in the dataset.")
+  }
   
   #construct the outcomes list for fast access later
   #loop for multiple outcome
@@ -87,6 +109,10 @@ get_auxdata <- function(dt, p){
       for(i in time_periods){
         start <- (i-1)*id_size+1
         end <- i*id_size
+        if(start > end){
+          stop("Invalid sequence when extracting outcomes: start (", start, ") > end (", end, ") for time period ", i, 
+               ". This suggests an issue with the data structure (id_size=", id_size, ").")
+        }
         outcomes[[i]] <- dt[seq(start,end), get(outcol)]
       }
     } else {
@@ -122,6 +148,10 @@ get_auxdata <- function(dt, p){
     for(i in time_periods){
       start <- (i-1)*id_size+1
       end <- i*id_size
+      if(start > end){
+        stop("Invalid sequence when extracting varying covariates: start (", start, ") > end (", end, ") for time period ", i, 
+             ". This suggests an issue with the data structure (id_size=", id_size, ").")
+      }
       varycovariates[[i]] <- dt[seq(start,end, by = 1), .SD, .SDcols = p$varycovariatesvar]
     }
   } else {
@@ -129,7 +159,7 @@ get_auxdata <- function(dt, p){
   }
   
   #create na indicator for filtering
-  if(!is.na(p$exper$only_balance_2by2) & p$exper$only_balance_2by2){
+  if(!is.na(p$exper$only_balance_2by2) && p$exper$only_balance_2by2){
     if("no_na" %in% names(dt)){stop("no_na is already in dt, consider using another column name")}
     varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) #get all the argument that ends with "var"
     varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar) & !is.na(varnames) & !is.null(varnames)]
@@ -215,12 +245,13 @@ convert_targets <- function(results, p, t){
          group_group_time = {
            results[, cohort := str_split_i(target, "\\.", 1)]
            results[, time :=  as.numeric(str_split_i(target, "\\.", 2))]
-           
-           results[, cohort1 := g1(cohort)]
-           results[, cohort2 := g2(cohort)]
-           
-           results[, cohort1 := recover_time(cohort1, t)]
-           results[, cohort2 := recover_time(cohort2, t)]
+
+           M <- 1L + length(p$cohortvar2)
+           for(d in seq_len(M)){
+             col_name <- paste0("cohort", d)
+             results[, (col_name) := recover_time(gd(cohort, d), t)]
+           }
+
            results[, time := recover_time(time, t)]
            results[, `:=`(cohort = NULL)]
          },
@@ -231,6 +262,10 @@ convert_targets <- function(results, p, t){
   )
   
   results[, target := NULL]
+  
+  if(p$add_base_period){
+    results <- results |> rbind(data.table(event_time = -1 - p$anticipation, att = 0, se = 0, outcome = p$outcomevar, att_ciub = 0, att_cilb = 0))
+  }
   
   return(results)
 }
