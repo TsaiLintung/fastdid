@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">fastdid</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -73,7 +73,8 @@
 <span>  parallel <span class="op">=</span> <span class="cn">FALSE</span>,</span>
 <span>  cohortvar2 <span class="op">=</span> <span class="cn">NA</span>,</span>
 <span>  event_specific <span class="op">=</span> <span class="cn">TRUE</span>,</span>
-<span>  double_control_option <span class="op">=</span> <span class="st">"both"</span></span>
+<span>  double_control_option <span class="op">=</span> <span class="st">"both"</span>,</span>
+<span>  add_base_period <span class="op">=</span> <span class="cn">FALSE</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
 
@@ -174,7 +175,29 @@
 
 
 <dt id="arg-exper">exper<a class="anchor" aria-label="anchor" href="#arg-exper"></a></dt>
-<dd><p>list, arguments for experimental features.</p></dd>
+<dd><p>list, arguments for experimental features. Supported options:</p><dl><dt>`only_est_min`</dt>
+<dd><p>numeric scalar, minimum event time to estimate (`result_type == "dynamic"` only, not compatible with double DiD).</p></dd>
+
+  <dt>`only_est_max`</dt>
+<dd><p>numeric scalar, maximum event time to estimate (`result_type == "dynamic"` only, not compatible with double DiD).</p></dd>
+
+  <dt>`filtervar`</dt>
+<dd><p>character, name of a logical column; only units with TRUE at the base period are used.</p></dd>
+
+  <dt>`filtervar_post`</dt>
+<dd><p>character, name of a logical column; only units with TRUE at the post period are used.</p></dd>
+
+  <dt>`only_balance_2by2`</dt>
+<dd><p>logical, keep only units observed in both periods of each 2x2 DiD.</p></dd>
+
+  <dt>`aggregate_scheme`</dt>
+<dd><p>character, a custom aggregation expression evaluated as `group_time[, target := &lt;expr&gt;]`.</p></dd>
+
+  <dt>`max_control_cohort_diff`</dt>
+<dd><p>numeric, maximum cohort difference between treated and control groups.</p></dd>
+
+
+</dl></dd>
 
 
 <dt id="arg-full">full<a class="anchor" aria-label="anchor" href="#arg-full"></a></dt>
@@ -186,7 +209,7 @@
 
 
 <dt id="arg-cohortvar-">cohortvar2<a class="anchor" aria-label="anchor" href="#arg-cohortvar-"></a></dt>
-<dd><p>character, name of the second cohort (group) variable.</p></dd>
+<dd><p>character or character vector, name(s) of the confounding event cohort variable(s). For M&gt;2 events, provide a vector of length M-1 (e.g., `c("G2", "G3")` for M=3 events).</p></dd>
 
 
 <dt id="arg-event-specific">event_specific<a class="anchor" aria-label="anchor" href="#arg-event-specific"></a></dt>
@@ -196,6 +219,10 @@
 <dt id="arg-double-control-option">double_control_option<a class="anchor" aria-label="anchor" href="#arg-double-control-option"></a></dt>
 <dd><p>character, control units used for the double DiD, options are "both", "never", or "notyet".</p></dd>
 
+
+<dt id="arg-add-base-period">add_base_period<a class="anchor" aria-label="anchor" href="#arg-add-base-period"></a></dt>
+<dd><p>logical, whether to add a placeholder base period in dynamic results.</p></dd>
+
 </dl></div>
     <div class="section level2">
     <h2 id="value">Value<a class="anchor" aria-label="anchor" href="#value"></a></h2>
@@ -203,9 +230,10 @@
     </div>
     <div class="section level2">
     <h2 id="details">Details<a class="anchor" aria-label="anchor" href="#details"></a></h2>
-    <p>`balanced_event_time` is only meaningful when `result_type == "dynamic`.</p>
-<p>`result_type` as `group-group-time` and `dynamic staggered` is only meaningful when using double did.</p>
-<p>`biter` and `clustervar` is only used when `boot == TRUE`.</p>
+    <p>`balanced_event_time`, `add_base_period`, and the `exper` options `only_est_min`/`only_est_max` are only meaningful when `result_type == "dynamic"`.</p>
+<p>`result_type` as `"group_group_time"` and `"dynamic_stagger"` are only meaningful when using double DiD (`cohortvar2` is set).</p>
+<p>`cohortvar2` accepts a character vector of length M-1 to support M&gt;2 treatment events.</p>
+<p>`biters` and `clustervar` are only used when `boot == TRUE`.</p>
     </div>
 
     <div class="section level2">

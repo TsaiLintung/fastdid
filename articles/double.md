@@ -8,6 +8,11 @@ first simulate some data with confounding events.
 library(fastdid)
 library(ggplot2)
 library(data.table)
+#> 
+#> Attaching package: 'data.table'
+#> The following object is masked from 'package:base':
+#> 
+#>     %notin%
 simdt <- sim_did(1e+04, 5, cov = "cont", hetero = "all", balanced = TRUE, seed = 1, 
                  second_cohort = TRUE, second_het = "no") #comfounding event
 dt <- simdt$dt #dataset

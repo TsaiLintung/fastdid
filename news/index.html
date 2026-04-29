@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">fastdid</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -37,6 +37,15 @@
       <small>Source: <a href="https://github.com/TsaiLintung/fastdid/blob/main/NEWS.md" class="external-link"><code>NEWS.md</code></a></small>
     </div>
 
+    <div class="section level2">
+<h2 class="pkg-version" data-toc-text="1.0.7" id="fastdid-107">fastdid 1.0.7<a class="anchor" aria-label="anchor" href="#fastdid-107"></a></h2>
+<ul><li>Extended double DiD to support M&gt;2 treatment events: <code>cohortvar2</code> now accepts a character vector of length M-1 (e.g. <code>c("G2", "G3")</code> for three events)</li>
+<li>Added <code>add_base_period</code> parameter: inserts a zero-ATT placeholder at the base period in <code>result_type = "dynamic"</code> results</li>
+<li>Added experimental options <code>only_est_min</code> and <code>only_est_max</code> in <code>exper</code>: restrict estimation to a specific event-time range in dynamic mode, skipping g-t pairs outside the window</li>
+<li>Improved input validation: errors on negative <code>anticipation</code>/<code>anticipation2</code>, time-varying weights, and <code>balanced_event_time</code> exceeding data range</li>
+<li>Restored <code>parglm</code> dependency for multi-threaded propensity score estimation; thread count automatically matched to <code><a href="https://rdrr.io/pkg/data.table/man/openmp-utils.html" class="external-link">getDTthreads()</a></code> (or 1 when <code>parallel = TRUE</code>)</li>
+<li>Various bug fixes and robustness improvements for double DiD aggregation and weight handling</li>
+</ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.6" id="fastdid-106">fastdid 1.0.6<a class="anchor" aria-label="anchor" href="#fastdid-106"></a></h2><p class="text-muted">CRAN release: 2026-01-14</p>
 <ul><li>Remove archived parglm dependency</li>

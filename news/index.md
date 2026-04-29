@@ -1,5 +1,25 @@
 # Changelog
 
+## fastdid 1.0.7
+
+- Extended double DiD to support M\>2 treatment events: `cohortvar2` now
+  accepts a character vector of length M-1 (e.g. `c("G2", "G3")` for
+  three events)
+- Added `add_base_period` parameter: inserts a zero-ATT placeholder at
+  the base period in `result_type = "dynamic"` results
+- Added experimental options `only_est_min` and `only_est_max` in
+  `exper`: restrict estimation to a specific event-time range in dynamic
+  mode, skipping g-t pairs outside the window
+- Improved input validation: errors on negative
+  `anticipation`/`anticipation2`, time-varying weights, and
+  `balanced_event_time` exceeding data range
+- Restored `parglm` dependency for multi-threaded propensity score
+  estimation; thread count automatically matched to
+  [`getDTthreads()`](https://rdrr.io/pkg/data.table/man/openmp-utils.html)
+  (or 1 when `parallel = TRUE`)
+- Various bug fixes and robustness improvements for double DiD
+  aggregation and weight handling
+
 ## fastdid 1.0.6
 
 CRAN release: 2026-01-14

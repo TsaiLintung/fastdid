@@ -34,7 +34,8 @@ fastdid(
   parallel = FALSE,
   cohortvar2 = NA,
   event_specific = TRUE,
-  double_control_option = "both"
+  double_control_option = "both",
+  add_base_period = FALSE
 )
 ```
 
@@ -140,7 +141,41 @@ fastdid(
 
 - exper:
 
-  list, arguments for experimental features.
+  list, arguments for experimental features. Supported options:
+
+  \`only_est_min\`
+
+  :   numeric scalar, minimum event time to estimate (\`result_type ==
+      "dynamic"\` only, not compatible with double DiD).
+
+  \`only_est_max\`
+
+  :   numeric scalar, maximum event time to estimate (\`result_type ==
+      "dynamic"\` only, not compatible with double DiD).
+
+  \`filtervar\`
+
+  :   character, name of a logical column; only units with TRUE at the
+      base period are used.
+
+  \`filtervar_post\`
+
+  :   character, name of a logical column; only units with TRUE at the
+      post period are used.
+
+  \`only_balance_2by2\`
+
+  :   logical, keep only units observed in both periods of each 2x2 DiD.
+
+  \`aggregate_scheme\`
+
+  :   character, a custom aggregation expression evaluated as
+      \`group_time\[, target := \<expr\>\]\`.
+
+  \`max_control_cohort_diff\`
+
+  :   numeric, maximum cohort difference between treated and control
+      groups.
 
 - full:
 
@@ -153,7 +188,9 @@ fastdid(
 
 - cohortvar2:
 
-  character, name of the second cohort (group) variable.
+  character or character vector, name(s) of the confounding event cohort
+  variable(s). For M\>2 events, provide a vector of length M-1 (e.g.,
+  \`c("G2", "G3")\` for M=3 events).
 
 - event_specific:
 
@@ -165,6 +202,10 @@ fastdid(
   character, control units used for the double DiD, options are "both",
   "never", or "notyet".
 
+- add_base_period:
+
+  logical, whether to add a placeholder base period in dynamic results.
+
 ## Value
 
 A data.table containing the estimated treatment effects and standard
@@ -172,13 +213,17 @@ errors or a list of all results when \`full == TRUE\`.
 
 ## Details
 
-\`balanced_event_time\` is only meaningful when \`result_type ==
-"dynamic\`.
+\`balanced_event_time\`, \`add_base_period\`, and the \`exper\` options
+\`only_est_min\`/\`only_est_max\` are only meaningful when \`result_type
+== "dynamic"\`.
 
-\`result_type\` as \`group-group-time\` and \`dynamic staggered\` is
-only meaningful when using double did.
+\`result_type\` as \`"group_group_time"\` and \`"dynamic_stagger"\` are
+only meaningful when using double DiD (\`cohortvar2\` is set).
 
-\`biter\` and \`clustervar\` is only used when \`boot == TRUE\`.
+\`cohortvar2\` accepts a character vector of length M-1 to support M\>2
+treatment events.
+
+\`biters\` and \`clustervar\` are only used when \`boot == TRUE\`.
 
 ## Examples
 

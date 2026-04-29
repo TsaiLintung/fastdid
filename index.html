@@ -22,7 +22,7 @@
 
     <a class="navbar-brand me-2" href="index.html">fastdid</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.6</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">1.0.7</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -60,7 +60,7 @@
 <p>fastdid implements the Difference-in-Differences (DiD) estimators in <a href="https://doi.org/10.1016/j.jeconom.2020.12.001" class="external-link">Callaway and Sant’Anna’s (2021)</a>. fastdid is</p>
 <ul>
 <li>fast, reducing the computation time with millions of units from hours to <a href="https://tsailintung.github.io/fastdid/articles/misc.html#performance">seconds</a>,</li>
-<li>flexible, allowing extensions such as time-varying covariates <a href="https://arxiv.org/abs/2406.15288" class="external-link">Caetano and Callaway, 2024</a> and multiple events (<a href="https://arxiv.org/abs/2409.05184" class="external-link">Tsai 2024</a>).</li>
+<li>flexible, allowing extensions such as time-varying covariates <a href="https://arxiv.org/abs/2406.15288" class="external-link">Caetano and Callaway, 2024</a> and multiple events (M≥2) (<a href="https://arxiv.org/abs/2409.05184" class="external-link">Tsai 2026</a>).</li>
 </ul>
 </div>
 <div class="section level1">
@@ -88,7 +88,7 @@
 <li>
 <a href="https://tsailintung.github.io/fastdid/reference/fastdid.html">fastdid</a>: full list of arguments and features.</li>
 <li>
-<a href="https://tsailintung.github.io/fastdid/articles/double.html">double</a>: introduction to DiD with multiple events.</li>
+<a href="https://tsailintung.github.io/fastdid/articles/double.html">double</a>: introduction to DiD with multiple events. For M≥2 confounding events, pass a vector to <code>cohortvar2</code> (e.g., <code>cohortvar2 = c("G2", "G3")</code> for M=3).</li>
 <li>
 <a href="https://tsailintung.github.io/fastdid/articles/misc.html">misc</a>: comparison with <a href="https://github.com/bcallaway11/did" class="external-link">did</a>, benchmark, tests, and experimental features.</li>
 </ul>
