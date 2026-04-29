@@ -90,7 +90,8 @@ fastdid <- function(data,
 
   exper_args <- c(
     "filtervar", "filtervar_post", "only_balance_2by2",
-    "aggregate_scheme", "max_control_cohort_diff"
+    "aggregate_scheme", "max_control_cohort_diff",
+    "only_est_min", "only_est_max"
   )
   p$exper <- get_exper_default(p$exper, exper_args)
   class(p) <- "locked" # no more changes!

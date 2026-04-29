@@ -53,6 +53,11 @@ estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
   g <- gt[1]
   t <- as.numeric(gt[2])
   
+  # skip g-t outside requested event-time range
+  event_time <- t - ming(g)
+  if (!is.na(p$exper$only_est_min) && event_time < p$exper$only_est_min) return(NULL)
+  if (!is.na(p$exper$only_est_max) && event_time > p$exper$only_est_max) return(NULL)
+
   #find base time
   gt_name <- paste0(g,".",t)
   base_period <- get_base_period(g,t,p)

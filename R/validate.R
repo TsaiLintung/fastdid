@@ -51,6 +51,25 @@ validate_argument <- function(dt, p) {
     }
   }
   
+  # Validate only_est_min / only_est_max
+  has_est_min <- !is.na(exper$only_est_min)
+  has_est_max <- !is.na(exper$only_est_max)
+  if (has_est_min || has_est_max) {
+    if (result_type != "dynamic") {
+      stop("only_est_min/only_est_max can only be used with result_type == 'dynamic'")
+    }
+    if (!allNA(cohortvar2)) {
+      stop("only_est_min/only_est_max cannot be used with double DiD (cohortvar2)")
+    }
+    if (has_est_min && (!is.numeric(exper$only_est_min) || length(exper$only_est_min) != 1))
+      stop("only_est_min must be a numeric scalar")
+    if (has_est_max && (!is.numeric(exper$only_est_max) || length(exper$only_est_max) != 1))
+      stop("only_est_max must be a numeric scalar")
+    if (has_est_min && has_est_max && exper$only_est_min > exper$only_est_max) {
+      stop("only_est_min (", exper$only_est_min, ") must be <= only_est_max (", exper$only_est_max, ")")
+    }
+  }
+
   # Validate result_type for double DiD
   if (result_type %in% c("group_group_time", "dynamic_stagger")) {
     if (allNA(cohortvar2)) {
