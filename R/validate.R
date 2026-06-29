@@ -166,7 +166,14 @@ validate_dt <- function(dt, p) {
         next
       }
       # check covaraites is not constant
-      if (fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1) stop(cov, " have no variation")
+      # for time-invariant covariates only the first obs per unit is used, so check variation there;
+      # for time-varying covariates variation can come from any observation (within or across units)
+      if (cov %in% p$varycovariatesvar) {
+        novar <- fnunique(dt[, get(cov)]) == 1
+      } else {
+        novar <- fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1
+      }
+      if (novar) stop(cov, " have no variation")
       if (!(is.numeric(dt[, get(cov)]) || is.integer(dt[, get(cov)]))) {
         stop(cov, " is not numeric or integer, do not support fixed effects.")
       }
