@@ -26,21 +26,21 @@ Three exported functions:
 
 ### `fastdid()` key parameters
 
-| Parameter                                       | Description                                                                                             |
-|-------------------------------------------------|---------------------------------------------------------------------------------------------------------|
-| `data`                                          | data.table (or coercible)                                                                               |
-| `timevar`, `cohortvar`, `unitvar`, `outcomevar` | column name strings                                                                                     |
-| `control_option`                                | `"both"`, `"never"`, `"notyet"`                                                                         |
-| `result_type`                                   | `"group_time"`, `"time"`, `"group"`, `"simple"`, `"dynamic"`, `"group_group_time"`, `"dynamic_stagger"` |
-| `control_type`                                  | `"ipw"`, `"reg"`, `"dr"` (doubly robust)                                                                |
-| `cohortvar2`                                    | second treatment for double DiD                                                                         |
-| `boot`                                          | bootstrap SE (1000 iterations default)                                                                  |
-| `base_period`                                   | `"universal"` or `"varying"`                                                                            |
-| `covariatesvar`, `varycovariatesvar`            | time-invariant / time-varying covariates                                                                |
-| `anticipation`, `anticipation2`                 | anticipation periods                                                                                    |
-| `exper`                                         | experimental features (filtervar, aggregate_scheme, etc.)                                               |
-| `full`                                          | return full results including influence functions and weights                                           |
-| `parallel`                                      | Unix parallelization via `mclapply`                                                                     |
+| Parameter | Description |
+|----|----|
+| `data` | data.table (or coercible) |
+| `timevar`, `cohortvar`, `unitvar`, `outcomevar` | column name strings |
+| `control_option` | `"both"`, `"never"`, `"notyet"` |
+| `result_type` | `"group_time"`, `"time"`, `"group"`, `"simple"`, `"dynamic"`, `"group_group_time"`, `"dynamic_stagger"` |
+| `control_type` | `"ipw"`, `"reg"`, `"dr"` (doubly robust) |
+| `cohortvar2` | second treatment for double DiD |
+| `boot` | bootstrap SE (1000 iterations default) |
+| `base_period` | `"universal"` or `"varying"` |
+| `covariatesvar`, `varycovariatesvar` | time-invariant / time-varying covariates |
+| `anticipation`, `anticipation2` | anticipation periods |
+| `exper` | experimental features (filtervar, aggregate_scheme, etc.) |
+| `full` | return full results including influence functions and weights |
+| `parallel` | Unix parallelization via `mclapply` |
 
 ------------------------------------------------------------------------
 
@@ -108,6 +108,7 @@ Three exported functions:
 No Makefile. Standard R/devtools workflow:
 
 ``` r
+
 # Documentation (roxygen2)
 roxygen2::roxygenise()
 

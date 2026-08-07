@@ -5,6 +5,7 @@ Here we show how to deal with confounding events, see [Tsai
 first simulate some data with confounding events.
 
 ``` r
+
 library(fastdid)
 library(ggplot2)
 library(data.table)
@@ -27,6 +28,7 @@ Using the default estimator, the estimates (black line) is biased from
 the ground truth (red line).
 
 ``` r
+
 naive_result <-fastdid(data = dt, 
                  timevar = "time", cohortvar = "G", unitvar = "unit", 
                  outcomevar = "y", result_type = "dynamic")
@@ -41,6 +43,7 @@ event at 10 constantly, we can see that the bias of the default
 estimator is roughly 10 times the diagnostics.
 
 ``` r
+
 dt[, D2 := time >= G2]
 diag <- fastdid(data = dt, 
                  timevar = "time", cohortvar = "G", unitvar = "unit",
@@ -54,6 +57,7 @@ Using the double did estimator with `cohortvar2`, the estimator recovers
 the ground truth.
 
 ``` r
+
 double_result <-fastdid(data = dt, 
                  timevar = "time", cohortvar = "G", unitvar = "unit",
                  outcomevar = "y", result_type = "dynamic",
@@ -70,6 +74,7 @@ group-group-time (“group_group_time”) and dynamic-staggered
 (“dynamic_stagger”, event time by event stagger, G1-G2).
 
 ``` r
+
 double_result_ds <-fastdid(data = dt, 
                  timevar = "time", cohortvar = "G", unitvar = "unit",
                  outcomevar = "y", result_type = "dynamic_stagger",

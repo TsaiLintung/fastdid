@@ -25,6 +25,7 @@ A ggplot2 object
 ## Examples
 
 ``` r
+
 # simulated data
 simdt <- sim_did(1e+02, 10, seed = 1)
 dt <- simdt$dt
