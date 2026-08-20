@@ -107,3 +107,7 @@ devtools::install()
 ```
 
 **Test framework**: `tinytest` — test files auto-discovered in `tests/`. CI via GitHub Actions (`.github/workflows/`): R-CMD-check on macOS/Windows/Ubuntu, coverage, pkgdown.
+
+## Inbox
+
+`INBOX.md` at the repo root is a drop-box where humans and agents working elsewhere (e.g. the mono root) leave todo items or information for this repo. Never act on it unprompted — process entries only when explicitly asked to (e.g. "resolve the issues in INBOX.md"). When resolving an entry, move anything durable into the repo's documentation and delete the entry; when leaving one, append it with a date and source, self-contained enough to act on without the conversation that produced it.
