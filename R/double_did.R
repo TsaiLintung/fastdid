@@ -11,13 +11,15 @@ g2 <- function(GG){
   return(as.numeric(str_split_i(GG, "-", 2)))
 }
 
-# extract the d-th event timing from the G string
+#' Extract the d-th event timing from the G string.
+#' @noRd
 gd <- function(GG, d){
   if(is.numeric(GG)){return(GG)}
   return(as.numeric(str_split_i(GG, "-", d)))
 }
 
-# min over all confounding events d != 1 (g' in the paper)
+#' Minimum over all confounding events d != 1 (g' in the paper).
+#' @noRd
 gprime <- function(GG){
   if(is.numeric(GG)){return(Inf)}
   M <- n_events(GG)
@@ -31,13 +33,15 @@ gprime <- function(GG){
   result
 }
 
-# min over ALL events (ming = min(g1, gprime))
+#' Minimum over ALL events (ming = min(g1, gprime)).
+#' @noRd
 ming <- function(GG){
   if(is.numeric(GG)){return(GG)}
   pmin(g1(GG), gprime(GG))
 }
 
-# number of events M from a G string vector
+#' Number of events M from a G string vector.
+#' @noRd
 n_events <- function(GG){
   if(is.numeric(GG)){return(1L)}
   length(str_split(as.character(GG[1]), "-")[[1]])
@@ -127,7 +131,8 @@ coerce_dt_doub <- function(dt, p){
 
 # aggregation scheme -----------------------------------------------------------
 
-#the scheme for getting event-specific effect
+#' The scheme for the event-specific effect.
+#' @noRd
 get_es_scheme <- function(group_time, aux, p){
 
   es_group_time <- copy(group_time) #group_time with available es effect
@@ -151,8 +156,9 @@ get_es_scheme <- function(group_time, aux, p){
 
 }
 
-#get the scheme for retrieving group-group-time estimates
-#implements Theorem 3 of Tsai (2026) for M >= 2 events
+#' The scheme for the group-group-time estimates.
+#' Implements Theorem 3 of Tsai (2026) for M >= 2 events.
+#' @noRd
 get_es_ggt_weight <- function(ggt, group_time, aux, p){
 
   group_time <- copy(group_time) #avoid accidental modification

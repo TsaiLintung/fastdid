@@ -398,21 +398,8 @@ expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
              info = "unbalanced panel reg, but data balanced")
 rm(result, did_result)
 
-# estimate not the same, see coverage test
-# result <- fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-#                   control_type = "reg",
-#                   covariatesvar = c("x", "x2"),
-#                   allow_unbalance_panel = TRUE)
-# did_result <- did::att_gt(yname = "y",gname = "G",idname = "unit",tname = "time",data = dt2 ,base_period = "universal",cband = FALSE,
-#                           est_method = "reg",xformla = ~x+x2,
-#                           control_group = "notyettreated",
-#                           allow_unbalanced_panel = TRUE,
-#                           clustervars = NULL,
-#                           bstrap = FALSE)
-# 
-# expect_equal(est_diff_ratio(result, did_result), c(0,0), tolerance = tol,
-#              info = "unbalanced panel reg, but data unbalanced")
-# rm(result, did_result)
+# fastdid and did do not agree on reg with a truly unbalanced panel. The
+# coverage test covers that case instead.
 
 #clean up environment -------------------------
 rm(dt, simdt, tol, est_diff_ratio_agg)

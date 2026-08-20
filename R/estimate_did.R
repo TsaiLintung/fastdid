@@ -84,9 +84,6 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
 
   if(or){
 
-    #TODO: this should be optimized with better backend and some caching
-
-    #should change to speedlm or something
 
     control_bool <- dt_did[, D==0]
     reg_coef <- stats::coef(stats::lm.wfit(x = covvars[control_bool,], y = dt_did[control_bool,delta_y],
@@ -305,7 +302,6 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
     M2_post <- colSums(dt_did[, inpost*cont_ipw_weight*(post.y-weighted_cont_post-or_delta_post)/n] * covvars, na.rm = TRUE) / mean_wcpo
     M2_pre <- colSums(dt_did[, inpre*cont_ipw_weight*(pre.y-weighted_cont_pre-or_delta_pre)/n] * covvars, na.rm = TRUE) / mean_wcpr
     
-    #not sure about /2
     score_ps <- dt_did[, weights*(inpre+inpost)*n/(n_pre+n_post)*(D-ps)] * covvars#weight is doubled for observed in both post and pre
     asym_linear_ps <- score_ps %*% hess 
     

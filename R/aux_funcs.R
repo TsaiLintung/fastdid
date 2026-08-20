@@ -174,8 +174,6 @@ get_auxdata <- function(dt, p){
   filters <- list()
   if(!is.na(p$exper$filtervar)){
     for(t in time_periods){
-      #filters[[t]] <- rep(NA, id_size)
-      #data_pos <- dt[time == t, unit] #units observed in i
       filters[[t]] <- unlist(dt[time == t,  .SD, .SDcols = p$exper$filtervar])
       if(p$allow_unbalance_panel){stop("unbalance panel not supported with filtervar")}
     }
@@ -281,5 +279,3 @@ recover_time <- function(time, t){
 .S3method("[[<-", "locked", function(value) {stop("Can't assign into locked object")})
 .S3method("[<-", "locked", function(value) {stop("Can't assign into locked object")})
 .S3method("$<-", "locked", function(value) {stop("Can't assign into locked object")})
-# a <- list(b = 1, c = 2)
-# class(a) <- c("locked")

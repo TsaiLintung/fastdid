@@ -7,10 +7,6 @@ dt <- simdt$dt
 
 # basics ---------------------------------------------
 
-# fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
-#         control_type = "ipw",
-#         covariatesvar = c("x", "x2"))
-
 expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time"),
               info = "simple call")
 

@@ -11,7 +11,8 @@ estimate_gtatt <- function(aux, p){
   return(outcome_results)
 }
 
-#gtatt for each outcome
+#' gtatt for each outcome.
+#' @noRd
 estimate_gtatt_outcome <- function(y, aux, p, caches) {
     
     treated_cohort <- aux$cohorts[!is.infinite(ming(aux$cohorts))] #otherwise would try to calculate the pre-period of nevertreated in varying base period lol
@@ -47,7 +48,8 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
   return(list(est = list(gt = gt, att = gt_att, inf_func = gt_inf_func), caches = caches))    
 }
 
-#gtatt for each outcome, each gt
+#' gtatt for each outcome, each gt.
+#' @noRd
 estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
   
   g <- gt[1]

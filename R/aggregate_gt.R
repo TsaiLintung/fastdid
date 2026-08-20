@@ -59,7 +59,8 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
 
 # scheme ------------------------------------------------------------------------
 
-# scheme for aggregation
+#' Scheme for aggregation.
+#' @noRd
 get_agg_sch <- function(gt_result, aux, p) {
   # create group_time
   id_dt <- data.table(weight = aux$weights / sum(aux$weights), G = aux$dt_inv[, G])
@@ -117,7 +118,8 @@ get_agg_sch <- function(gt_result, aux, p) {
   ))
 }
 
-# get the target parameters
+#' Get the target parameters.
+#' @noRd
 get_agg_targets <- function(group_time, p) {
   group_time[, post := as.numeric(ifelse(time >= g1(G), 1, -1))]
   switch(p$result_type,
@@ -203,7 +205,8 @@ get_weight_influence <- function(att, group, agg_weights, aux, p) {
   return(inf_weights)
 }
 
-# influence from weight calculation
+#' Influence from the weight calculation.
+#' @noRd
 get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
   keepers <- which(agg_weights != 0)
   group <- group[keepers, ]
@@ -228,7 +231,8 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
 
 # se -------------------------------------------------------------------
 
-# aggregated standard error
+#' Aggregated standard error.
+#' @noRd
 get_se <- function(inf_matrix, aux, p) {
   if (p$boot) {
     cluster <- aux$cluster
@@ -254,7 +258,7 @@ get_se <- function(inf_matrix, aux, p) {
     se[se < sqrt(.Machine$double.eps) * 10] <- NA
   } else {
     inf_matrix <- inf_matrix |> as.data.table()
-    se <- inf_matrix[, lapply(.SD, function(x) sqrt(sum(x^2, na.rm = TRUE) / length(x)^2))] |> as.vector() # should maybe use n-1 but did use n
+    se <- inf_matrix[, lapply(.SD, function(x) sqrt(sum(x^2, na.rm = TRUE) / length(x)^2))] |> as.vector() # divides by n, matching the did package (see TODO.md)
   }
 
   # get critical value
@@ -265,7 +269,7 @@ get_se <- function(inf_matrix, aux, p) {
       max(abs(b / se), na.rm = TRUE)
     })
     boot_tv <- boot_tv[is.finite(boot_tv)]
-    crit_val <- quantile(boot_tv, 1 - p$alpha, type = 1, na.rm = TRUE) # alp set at 0.95 for now
+    crit_val <- quantile(boot_tv, 1 - p$alpha, type = 1, na.rm = TRUE)
   }
   if (is.na(crit_val) || is.infinite(crit_val) || crit_val < point_crit_val) {
     crit_val <- point_crit_val
