@@ -57,46 +57,51 @@
 <div class="page-header"><h1 id="fastdid">fastdid<a class="anchor" aria-label="anchor" href="#fastdid"></a>
 </h1></div>
 <p><!-- badges: start --> <a href="https://github.com/TsaiLintung/fastdid/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/TsaiLintung/fastdid/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a> <a href="https://cran.r-project.org/package=fastdid" class="external-link"><img src="https://www.r-pkg.org/badges/version/fastdid?color=blue"></a> <a href="https://CRAN.R-project.org/package=fastdid" class="external-link"><img src="https://cranlogs.r-pkg.org/badges/grand-total/fastdid?color=blue" alt="CRANd"></a> <!-- badges: end --></p>
-<p>fastdid implements the Difference-in-Differences (DiD) estimators in <a href="https://doi.org/10.1016/j.jeconom.2020.12.001" class="external-link">Callaway and Sant’Anna’s (2021)</a>. fastdid is</p>
+<p>fastdid implements the difference-in-differences estimators of <a href="https://doi.org/10.1016/j.jeconom.2020.12.001" class="external-link">Callaway and Sant’Anna (2021)</a>. fastdid is:</p>
 <ul>
-<li>fast, reducing the computation time with millions of units from hours to <a href="https://tsailintung.github.io/fastdid/articles/misc.html#performance">seconds</a>,</li>
-<li>flexible, allowing extensions such as time-varying covariates <a href="https://arxiv.org/abs/2406.15288" class="external-link">Caetano and Callaway, 2024</a> and multiple events (M≥2) (<a href="https://arxiv.org/abs/2409.05184" class="external-link">Tsai 2026</a>).</li>
+<li>
+<strong>fast</strong>. On millions of units it cuts the computation time from hours to <a href="https://tsailintung.github.io/fastdid/articles/misc.html#performance">seconds</a>.</li>
+<li>
+<strong>flexible</strong>. It supports time-varying covariates (<a href="https://arxiv.org/abs/2406.15288" class="external-link">Caetano and Callaway, 2024</a>) and multiple events, M &gt;= 2 (<a href="https://arxiv.org/abs/2409.05184" class="external-link">Tsai, 2026</a>).</li>
 </ul>
 </div>
 <div class="section level1">
-<h1 id="getting-started">Getting Started<a class="anchor" aria-label="anchor" href="#getting-started"></a>
+<h1 id="getting-started">Getting started<a class="anchor" aria-label="anchor" href="#getting-started"></a>
 </h1>
-<p>fastdid can be installed from CRAN,</p>
-<pre><code><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"fastdid"</span><span class="op">)</span></span></code></pre>
-<p>or the latest developmental version can be installed via GitHub,</p>
-<pre><code><span><span class="co"># install.packages("devtools")</span></span>
-<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"TsaiLintung/fastdid"</span><span class="op">)</span></span></code></pre>
-<p>To use <code>fastdid</code>, you need to provide the dataset <code>data</code>, the column name of time <code>timevar</code>, cohort <code>cohortvar</code>, unit <code>unitvar</code>, and outcome(s) <code>outcomevar</code>. Here is a simple call:</p>
-<pre><code><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/TsaiLintung/fastdid" class="external-link">fastdid</a></span><span class="op">)</span> <span class="co">#loading the package</span></span>
-<span><span class="va">did_sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/sim_did.html">sim_did</a></span><span class="op">(</span><span class="fl">1e+03</span>, <span class="fl">10</span><span class="op">)</span> <span class="co">#simulate some data</span></span>
+<p>Install fastdid from CRAN:</p>
+<div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/utils/install.packages.html" class="external-link">install.packages</a></span><span class="op">(</span><span class="st">"fastdid"</span><span class="op">)</span></span></code></pre></div>
+<p>Or install the development version from GitHub:</p>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># install.packages("devtools")</span></span>
+<span><span class="fu">devtools</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"TsaiLintung/fastdid"</span><span class="op">)</span></span></code></pre></div>
+<p>A call needs five things: the dataset <code>data</code>, and the column names for time (<code>timevar</code>), cohort (<code>cohortvar</code>), unit (<code>unitvar</code>), and the outcome or outcomes (<code>outcomevar</code>).</p>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/TsaiLintung/fastdid" class="external-link">fastdid</a></span><span class="op">)</span></span>
+<span><span class="va">did_sim</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/sim_did.html">sim_did</a></span><span class="op">(</span><span class="fl">1e+03</span>, <span class="fl">10</span><span class="op">)</span>                   <span class="co"># simulate some data</span></span>
 <span><span class="va">did_estimate</span> <span class="op">&lt;-</span> <span class="fu"><a href="reference/fastdid.html">fastdid</a></span><span class="op">(</span>data <span class="op">=</span> <span class="va">did_sim</span><span class="op">$</span><span class="va">dt</span>, timevar <span class="op">=</span> <span class="st">"time"</span>,</span>
-<span>                  cohortvar <span class="op">=</span> <span class="st">"G"</span>, unitvar <span class="op">=</span> <span class="st">"unit"</span>, outcomevar <span class="op">=</span> <span class="st">"y"</span><span class="op">)</span></span></code></pre>
-<p>The function returns a <code>data.table</code> that includes the estimates. Column <code>att</code> is the point estimate, <code>se</code> the standard error of the estimate, <code>att_ciub</code> and <code>att_cilb</code> the confidence interval. The other columns indexes the estimated parameter.</p>
-<p>To create event study plots, use <code>plot_did_dynamics(did_estimate)</code>.</p>
+<span>                        cohortvar <span class="op">=</span> <span class="st">"G"</span>, unitvar <span class="op">=</span> <span class="st">"unit"</span>, outcomevar <span class="op">=</span> <span class="st">"y"</span><span class="op">)</span></span></code></pre></div>
+<p>The function returns a <code>data.table</code> of estimates. Column <code>att</code> is the point estimate. Column <code>se</code> is its standard error. Columns <code>att_cilb</code> and <code>att_ciub</code> give the confidence interval. The remaining columns index the estimated parameter.</p>
+<p>To draw an event-study plot, call <code>plot_did_dynamics(did_estimate)</code>.</p>
 </div>
 <div class="section level1">
 <h1 id="more">More<a class="anchor" aria-label="anchor" href="#more"></a>
 </h1>
 <ul>
 <li>
-<a href="https://bcallaway11.github.io/did/articles/did-basics.html" class="external-link">did</a>: staggered Difference in Difference by Callaway and Sant’Anna</li>
+<a href="https://bcallaway11.github.io/did/articles/did-basics.html" class="external-link">did</a> — staggered difference-in-differences, by Callaway and Sant’Anna</li>
 <li>
-<a href="https://tsailintung.github.io/fastdid/reference/fastdid.html">fastdid</a>: full list of arguments and features.</li>
+<a href="https://tsailintung.github.io/fastdid/reference/fastdid.html">fastdid</a> — the full list of arguments and features</li>
 <li>
-<a href="https://tsailintung.github.io/fastdid/articles/double.html">double</a>: introduction to DiD with multiple events. For M≥2 confounding events, pass a vector to <code>cohortvar2</code> (e.g., <code>cohortvar2 = c("G2", "G3")</code> for M=3).</li>
+<a href="https://tsailintung.github.io/fastdid/articles/double.html">double</a> — an introduction to DiD with multiple events. For M &gt;= 2 confounding events, pass a vector to <code>cohortvar2</code>, for example <code>cohortvar2 = c("G2", "G3")</code> for M = 3.</li>
 <li>
-<a href="https://tsailintung.github.io/fastdid/articles/misc.html">misc</a>: comparison with <a href="https://github.com/bcallaway11/did" class="external-link">did</a>, benchmark, tests, and experimental features.</li>
+<a href="https://tsailintung.github.io/fastdid/articles/misc.html">misc</a> — the comparison with <a href="https://github.com/bcallaway11/did" class="external-link">did</a>, the benchmark, the tests, and the experimental features</li>
 </ul>
 </div>
 <div class="section level1">
 <h1 id="acknowledgments">Acknowledgments<a class="anchor" aria-label="anchor" href="#acknowledgments"></a>
 </h1>
-<p><strong>fastdid</strong> is created and maintained by Lin-Tung Tsai. Many thanks to Maxwell Kellogg and Kuan-Ju Tseng for their contribution.</p>
+<p>Lin-Tung Tsai created and maintains <strong>fastdid</strong>. Many thanks to Maxwell Kellogg and Kuan-Ju Tseng for their contribution.</p>
 </div>
 
   </main><aside class="col-md-3"><div class="links">

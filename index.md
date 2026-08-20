@@ -4,59 +4,68 @@
 [![](https://www.r-pkg.org/badges/version/fastdid?color=blue)](https://cran.r-project.org/package=fastdid)
 [![CRANd](https://cranlogs.r-pkg.org/badges/grand-total/fastdid?color=blue)](https://CRAN.R-project.org/package=fastdid)
 
-fastdid implements the Difference-in-Differences (DiD) estimators in
-[Callaway and Sant’Anna’s
-(2021)](https://doi.org/10.1016/j.jeconom.2020.12.001). fastdid is
+fastdid implements the difference-in-differences estimators of [Callaway
+and Sant’Anna (2021)](https://doi.org/10.1016/j.jeconom.2020.12.001).
+fastdid is:
 
-- fast, reducing the computation time with millions of units from hours
+- **fast**. On millions of units it cuts the computation time from hours
   to
-  [seconds](https://tsailintung.github.io/fastdid/articles/misc.html#performance),
-- flexible, allowing extensions such as time-varying covariates [Caetano
-  and Callaway, 2024](https://arxiv.org/abs/2406.15288) and multiple
-  events (M≥2) ([Tsai 2026](https://arxiv.org/abs/2409.05184)).
+  [seconds](https://tsailintung.github.io/fastdid/articles/misc.html#performance).
+- **flexible**. It supports time-varying covariates ([Caetano and
+  Callaway, 2024](https://arxiv.org/abs/2406.15288)) and multiple
+  events, M \>= 2 ([Tsai, 2026](https://arxiv.org/abs/2409.05184)).
 
-# Getting Started
+# Getting started
 
-fastdid can be installed from CRAN,
+Install fastdid from CRAN:
 
-    install.packages("fastdid")
+``` r
 
-or the latest developmental version can be installed via GitHub,
+install.packages("fastdid")
+```
 
-    # install.packages("devtools")
-    devtools::install_github("TsaiLintung/fastdid")
+Or install the development version from GitHub:
 
-To use `fastdid`, you need to provide the dataset `data`, the column
-name of time `timevar`, cohort `cohortvar`, unit `unitvar`, and
-outcome(s) `outcomevar`. Here is a simple call:
+``` r
 
-    library(fastdid) #loading the package
-    did_sim <- sim_did(1e+03, 10) #simulate some data
-    did_estimate <- fastdid(data = did_sim$dt, timevar = "time",
-                      cohortvar = "G", unitvar = "unit", outcomevar = "y")
+# install.packages("devtools")
+devtools::install_github("TsaiLintung/fastdid")
+```
 
-The function returns a `data.table` that includes the estimates. Column
-`att` is the point estimate, `se` the standard error of the estimate,
-`att_ciub` and `att_cilb` the confidence interval. The other columns
-indexes the estimated parameter.
+A call needs five things: the dataset `data`, and the column names for
+time (`timevar`), cohort (`cohortvar`), unit (`unitvar`), and the
+outcome or outcomes (`outcomevar`).
 
-To create event study plots, use `plot_did_dynamics(did_estimate)`.
+``` r
+
+library(fastdid)
+did_sim <- sim_did(1e+03, 10)                   # simulate some data
+did_estimate <- fastdid(data = did_sim$dt, timevar = "time",
+                        cohortvar = "G", unitvar = "unit", outcomevar = "y")
+```
+
+The function returns a `data.table` of estimates. Column `att` is the
+point estimate. Column `se` is its standard error. Columns `att_cilb`
+and `att_ciub` give the confidence interval. The remaining columns index
+the estimated parameter.
+
+To draw an event-study plot, call `plot_did_dynamics(did_estimate)`.
 
 # More
 
-- [did](https://bcallaway11.github.io/did/articles/did-basics.html):
-  staggered Difference in Difference by Callaway and Sant’Anna
-- [fastdid](https://tsailintung.github.io/fastdid/reference/fastdid.html):
-  full list of arguments and features.
-- [double](https://tsailintung.github.io/fastdid/articles/double.html):
-  introduction to DiD with multiple events. For M≥2 confounding events,
-  pass a vector to `cohortvar2` (e.g., `cohortvar2 = c("G2", "G3")` for
-  M=3).
-- [misc](https://tsailintung.github.io/fastdid/articles/misc.html):
-  comparison with [did](https://github.com/bcallaway11/did), benchmark,
-  tests, and experimental features.
+- [did](https://bcallaway11.github.io/did/articles/did-basics.html) —
+  staggered difference-in-differences, by Callaway and Sant’Anna
+- [fastdid](https://tsailintung.github.io/fastdid/reference/fastdid.html)
+  — the full list of arguments and features
+- [double](https://tsailintung.github.io/fastdid/articles/double.html) —
+  an introduction to DiD with multiple events. For M \>= 2 confounding
+  events, pass a vector to `cohortvar2`, for example
+  `cohortvar2 = c("G2", "G3")` for M = 3.
+- [misc](https://tsailintung.github.io/fastdid/articles/misc.html) — the
+  comparison with [did](https://github.com/bcallaway11/did), the
+  benchmark, the tests, and the experimental features
 
 # Acknowledgments
 
-**fastdid** is created and maintained by Lin-Tung Tsai. Many thanks to
-Maxwell Kellogg and Kuan-Ju Tseng for their contribution.
+Lin-Tung Tsai created and maintains **fastdid**. Many thanks to Maxwell
+Kellogg and Kuan-Ju Tseng for their contribution.
