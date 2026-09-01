@@ -217,7 +217,7 @@
 
 
 <dt id="arg-double-control-option">double_control_option<a class="anchor" aria-label="anchor" href="#arg-double-control-option"></a></dt>
-<dd><p>character, control units used for the double DiD, options are "both", "never", or "notyet".</p></dd>
+<dd><p>character, control units used for the double DiD, options are "both", "never", or "notyet". "notyet" keeps a control cohort only if every confounding event is finite and later than the period, so the control must be confounded eventually by all of them. With M &gt;= 3 events this can leave very few control cohorts, and "both" is the recommended option.</p></dd>
 
 
 <dt id="arg-add-base-period">add_base_period<a class="anchor" aria-label="anchor" href="#arg-add-base-period"></a></dt>

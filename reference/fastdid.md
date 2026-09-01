@@ -200,7 +200,11 @@ fastdid(
 - double_control_option:
 
   character, control units used for the double DiD, options are "both",
-  "never", or "notyet".
+  "never", or "notyet". "notyet" keeps a control cohort only if every
+  confounding event is finite and later than the period, so the control
+  must be confounded eventually by all of them. With M \>= 3 events this
+  can leave very few control cohorts, and "both" is the recommended
+  option.
 
 - add_base_period:
 

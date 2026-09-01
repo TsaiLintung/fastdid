@@ -39,12 +39,21 @@
 
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.7" id="fastdid-107">fastdid 1.0.7<a class="anchor" aria-label="anchor" href="#fastdid-107"></a></h2>
-<ul><li>Extended double DiD to support M&gt;2 treatment events: <code>cohortvar2</code> now accepts a character vector of length M-1 (e.g. <code>c("G2", "G3")</code> for three events)</li>
-<li>Added <code>add_base_period</code> parameter: inserts a zero-ATT placeholder at the base period in <code>result_type = "dynamic"</code> results</li>
-<li>Added experimental options <code>only_est_min</code> and <code>only_est_max</code> in <code>exper</code>: restrict estimation to a specific event-time range in dynamic mode, skipping g-t pairs outside the window</li>
-<li>Improved input validation: errors on negative <code>anticipation</code>/<code>anticipation2</code>, time-varying weights, and <code>balanced_event_time</code> exceeding data range</li>
-<li>Restored <code>parglm</code> dependency for multi-threaded propensity score estimation; thread count automatically matched to <code><a href="https://rdrr.io/pkg/data.table/man/openmp-utils.html" class="external-link">getDTthreads()</a></code> (or 1 when <code>parallel = TRUE</code>)</li>
-<li>Various bug fixes and robustness improvements for double DiD aggregation and weight handling</li>
+<ul><li><p>Fixed the double DiD control set of the DiD case: with M &gt;= 3 events a control cohort with an event that the target cohort does not have was used, which biased <code>ATT^1</code>. A control must now be not yet confounded by every such event</p></li>
+<li><p>The DiD case of double DiD is now reported for the post-periods of the first event only, as the theorem states</p></li>
+<li><p>Fixed the influence function of the double DiD weights: the weights are a signed pair and each period is normalized on its own</p></li>
+<li><p>Fixed the control cohorts of double DiD when a first-stage cell is missing: both periods now normalize over the cohorts available at both</p></li>
+<li><p><code>anticipation2</code> now moves the boundary of the direct case, and enters the not-yet-treated control cutoff of the first stage</p></li>
+<li><p>Added validation of the confounding cohort columns: a missing value drops the unit with a warning, and a fractional value raises an error</p></li>
+<li><p>Added a warning when no event-specific post-period effect is identified for any cohort</p></li>
+<li><p>Fixed small-group variance understatement: the residual influence of each 2x2 group is inflated by the Kish effective size, <code>sqrt(ess/(ess-1))</code>. Without the inflation the plug-in variance of a group of m units is deflated by (m-1)/m, which under-covers when cells are small (for example the cross-cohorts of double DiD)</p></li>
+<li><p>A 2x2 cell with fewer than 2 effective units in a group is now skipped with a warning: its residual is zero, so its variance is not estimable and the standard error understates the truth</p></li>
+<li><p>Extended double DiD to support M&gt;2 treatment events: <code>cohortvar2</code> now accepts a character vector of length M-1 (e.g. <code>c("G2", "G3")</code> for three events)</p></li>
+<li><p>Added <code>add_base_period</code> parameter: inserts a zero-ATT placeholder at the base period in <code>result_type = "dynamic"</code> results</p></li>
+<li><p>Added experimental options <code>only_est_min</code> and <code>only_est_max</code> in <code>exper</code>: restrict estimation to a specific event-time range in dynamic mode, skipping g-t pairs outside the window</p></li>
+<li><p>Improved input validation: errors on negative <code>anticipation</code>/<code>anticipation2</code>, time-varying weights, and <code>balanced_event_time</code> exceeding data range</p></li>
+<li><p>Restored <code>parglm</code> dependency for multi-threaded propensity score estimation; thread count automatically matched to <code><a href="https://rdrr.io/pkg/data.table/man/openmp-utils.html" class="external-link">getDTthreads()</a></code> (or 1 when <code>parallel = TRUE</code>)</p></li>
+<li><p>Various bug fixes and robustness improvements for double DiD aggregation and weight handling</p></li>
 </ul></div>
     <div class="section level2">
 <h2 class="pkg-version" data-toc-text="1.0.6" id="fastdid-106">fastdid 1.0.6<a class="anchor" aria-label="anchor" href="#fastdid-106"></a></h2><p class="text-muted">CRAN release: 2026-01-14</p>
