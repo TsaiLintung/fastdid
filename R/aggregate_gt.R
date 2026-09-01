@@ -25,7 +25,8 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
   # influence from double did is calculated before the influence from aggregation 
   if (p$event_specific && !allNA(p$cohortvar2)) {
     es_weight <- agg_sch$es_sto_weight + agg_sch$es_det_weight
-    es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p)
+    # the double DiD weights are signed, and each period is normalized on its own
+    es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p, by_period = TRUE)
     att <- (es_weight) %*% att
     inf_func <- (inf_func %*% t(es_weight)) + es_inf_weights
   }
@@ -172,7 +173,7 @@ get_agg_targets <- function(group_time, p) {
 
 # influence function ------------------------------------------------------------
 
-get_weight_influence <- function(att, group, agg_weights, aux, p) {
+get_weight_influence <- function(att, group, agg_weights, aux, p, by_period = FALSE) {
   id_dt <- data.table(weight = aux$weights / sum(aux$weights), G = aux$dt_inv[, G])
   pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
   group <- group |> merge(pg_dt, by = "G", sort = FALSE)
@@ -194,11 +195,11 @@ get_weight_influence <- function(att, group, agg_weights, aux, p) {
 
   if (!p$parallel) {
     inf_weights <- sapply(asplit(agg_weights, 1), function(x) {
-      get_weight_influence_param(x, group, att, aux, p)
+      get_weight_influence_param(x, group, att, aux, p, by_period)
     })
   } else {
     inf_weights <- matrix(unlist(mclapply(asplit(agg_weights, 1), function(x) {
-      get_weight_influence_param(x, group, att, aux, p)
+      get_weight_influence_param(x, group, att, aux, p, by_period)
     })), ncol = dim(agg_weights)[1])
   }
 
@@ -206,25 +207,46 @@ get_weight_influence <- function(att, group, agg_weights, aux, p) {
 }
 
 #' Influence from the weight calculation.
+#'
+#' The weight of a cell is the cohort share pgi / sum(pgi), so the estimated
+#' weight adds a term to the influence function. The plain aggregation weights
+#' are positive and share one denominator. The double DiD weights are a signed
+#' pair, and each period has its own denominator, so `by_period` splits the sum
+#' into one block for each period and keeps the sign.
+#'
+#' @param agg_weights numeric vector, the weight of each row of `group`.
+#' @param group the group-time table, with the cohort share `pg`.
+#' @param gt_att the g-t estimates.
+#' @param by_period logical, normalize each period on its own.
+#' @return a column of the influence function for the weights.
 #' @noRd
-get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p) {
+get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p, by_period = FALSE) {
   keepers <- which(agg_weights != 0)
-  group <- group[keepers, ]
-  if (nrow(group) == 0) {
+  if (length(keepers) == 0) {
     return(rep(0, length(aux$weights)))
   } # for direct double did
+  group <- group[keepers, ]
+  signs <- sign(agg_weights[keepers])
+  att_keep <- as.vector(gt_att)[keepers]
 
   # moving this outside will create a g*t*id matrix, not really worth the memory
   keepers_matrix <- as.matrix(aux$weights * sapply(seq_len(nrow(group)), function(g) {
     as.integer(aux$dt_inv[, G] == group[g, G]) - group[g, pg]
   }))
 
-  # gt weight = pgi / sum(pgi)
-  if1 <- keepers_matrix / sum(group[, pg]) # numerator
-  if2 <- rowSums(keepers_matrix) %*% t(group[, pg]) / (sum(group[, pg])^2) # denominator
+  blocks <- if (by_period) group[, time] else rep(1L, nrow(group))
 
-  # return the influence function for the weights
-  inf_weight <- (if1 - if2) %*% as.vector(gt_att[keepers])
+  # one normalized share for each block: d(pgi / sum(pgi))
+  inf_weight <- rep(0, length(aux$weights))
+  for (b in unique(blocks)) {
+    idx <- which(blocks == b)
+    pg_b <- group[idx, pg]
+    block_matrix <- keepers_matrix[, idx, drop = FALSE]
+    if1 <- block_matrix / sum(pg_b) # numerator
+    if2 <- rowSums(block_matrix) %*% t(pg_b) / (sum(pg_b)^2) # denominator
+    inf_weight <- inf_weight + (if1 - if2) %*% (signs[idx] * att_keep[idx])
+  }
+
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps) * 10] <- 0 # fill zero
   return(inf_weight)
 }

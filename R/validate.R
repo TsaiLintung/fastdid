@@ -113,8 +113,34 @@ validate_dt <- function(dt, p) {
   varnames <- unlist(p[str_ends(names(p), "var")], recursive = TRUE) # get all the argument that ends with "var"
   varnames <- varnames[!varnames %in% c(p$timevar, p$unitvar, p$cohortvar) & !is.na(varnames) & !is.null(varnames)]
 
+  # the confounding events of double did, already renamed to G2 ... GM
+  gcol2 <- character(0)
+  if (!allNA(p$cohortvar2)) {
+    gcol2 <- paste0("G", seq(2L, 1L + length(p$cohortvar2)))
+  }
+
+  # screen the confounding cohorts: a missing value silently drops a unit from the
+  # control sets, and a fractional value corrupts the cohort labels
+  for (col in gcol2) {
+    if (!dt[, is.numeric(get(col))]) {
+      stop(col, " needs to be numeric.")
+    }
+    na_units <- dt[is.na(get(col)), unique(unit)]
+    if (length(na_units) > 0) {
+      warning(length(na_units), " units have a missing value in ", col, ". fastdid drops them.")
+      dt <- dt[!unit %in% na_units]
+    }
+    frac <- dt[!is.infinite(get(col)) & get(col) %% 1 != 0, .N]
+    if (frac > 0) {
+      stop(col, " must be a whole number or Inf. ", frac, " observations are not.")
+    }
+  }
+  if (length(gcol2) > 0 && nrow(dt) == 0) {
+    stop("no observations remain after the confounding cohorts are screened.")
+  }
+
   # change to int
-  uniquecols <- c("G", "time", "unit")
+  uniquecols <- c("G", "time", "unit", gcol2)
   for (col in uniquecols) {
     if (!dt[, is.numeric(get(col))]) {
       stop(col, " needs to be numeric.")

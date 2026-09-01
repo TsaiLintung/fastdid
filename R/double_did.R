@@ -149,11 +149,40 @@ get_es_scheme <- function(group_time, aux, p){
   valid_ggt <- which(!sapply(es_weight_list, is.null))
   es_group_time <- es_group_time[valid_ggt] #remove the ones without
   es_weight_list <- es_weight_list[valid_ggt]
+
+  # a cohort with g1 == g' carries no separable effect, so the post-periods can all be gone
+  if(nrow(es_group_time) == 0 || !es_group_time[, any(time >= G1 - p$anticipation)]){
+    warning("no event-specific post-period effect is identified for any cohort. ",
+            "check that some cohort has the first event at a different time than the confounding events.")
+  }
+
   es_det_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$det}))
   es_sto_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$sto}))
 
   return(list(group_time = es_group_time, es_det_weight = es_det_weight, es_sto_weight = es_sto_weight))
 
+}
+
+#' Keep the control cohorts that are available at both periods.
+#'
+#' A first-stage cell can be missing, for example after an estimation failure or
+#' with an unbalanced panel. The two periods then normalize over different
+#' populations. This function restricts both to the common cohorts.
+#'
+#' @param group_time the group-time table.
+#' @param cp,cb logical vectors, the control rows at t and at the base period.
+#' @param gg,t,base_period the target cohort and the two periods, for the message.
+#' @return a list with the two restricted logical vectors, or NULL if no cohort is common.
+#' @noRd
+intersect_control <- function(group_time, cp, cb, gg, t, base_period){
+  common <- intersect(group_time[cp, G], group_time[cb, G])
+  if(length(common) == 0){
+    warning("the control cohorts at ", t, " and at ", base_period,
+            " do not overlap for cohort ", gg, ". fastdid skips the cell.")
+    return(NULL)
+  }
+  in_common <- group_time[, G %in% common]
+  return(list(cp = cp & in_common, cb = cb & in_common))
 }
 
 #' The scheme for the group-group-time estimates.
@@ -174,7 +203,9 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
   M_val <- 1L + length(p$cohortvar2)   # total number of events
   gp    <- gprime(gg)                  # g' = min_{d!=1}(g^d), earliest confounding event
 
-  if(t < gp){ # Case 1: direct pure effect (before any confounding event)
+  # the anticipation of the confounding event contaminates the periods before g', so
+  # the direct case stops one anticipation horizon earlier
+  if(t < gp - p$anticipation2){ # Case 1: direct pure effect (before any confounding event)
 
     group_time[ggt, det_weight := 1]
 
@@ -206,29 +237,41 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
     #if any group have no available cohort, skip
     if(sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
 
+    common <- intersect_control(group_time, cp, cb, gg, t, base_period)
+    if(is.null(common)){return(NULL)}
+    cp <- common$cp
+    cb <- common$cb
+
     #assign the weights
     group_time[tb, det_weight := 1]
     group_time[cp, sto_weight := pg/sum(pg)]
     group_time[cb, sto_weight := -pg/sum(pg)]
 
   } else if (g1_val > gp) { # Case 3: double DiD (confounded before treated)
-    # C^did = {h : h^1 > t, for all d!=1 with g^d <= t: h^d = g^d}
+    # C^did = {h : h^1 > t, h^d = g^d if g^d <= t, h^d > max(t, base) if g^d > t}
+
+    # the theorem covers the post-period of the first event only
+    if(t < g1_val - p$anticipation){return(NULL)}
 
     base_period <- g1_val - 1 - p$anticipation
     if(base_period == t){return(NULL)}
     min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+p$anticipation+1)
+    min_conf_cohort <- max(t, base_period) + p$anticipation2 + 1
 
     tp <- group_time[,.I == ggt]
     tb <- group_time[,G == gg & time == base_period]
 
-    # control: h^1 not yet treated, and for each confounding event that has occurred
-    # for the target (g^d <= t), the control must share the same timing (h^d = g^d)
+    # control: h^1 not yet treated, and for every confounding event either the same
+    # timing as the target (g^d <= t), or no event at all yet (g^d > t). without the
+    # second rule a control can carry an event the target does not have.
     c <- group_time[, G1 >= min_control_cohort & G1 != g1_val]
     for(d in 2:M_val){
       g_d <- gd(gg, d)
+      Gd_vals <- group_time[[paste0("G", d)]]
       if(g_d <= t){  # this confounding event has already occurred for the target cohort
-        Gd_vals <- group_time[[paste0("G", d)]]
         c <- c & (Gd_vals == g_d)
+      } else {       # the target is not confounded by it, so the control must not be either
+        c <- c & (Gd_vals >= min_conf_cohort)
       }
     }
     if(p$control_option == "notyet"){
@@ -239,6 +282,11 @@ get_es_ggt_weight <- function(ggt, group_time, aux, p){
 
     #if any group have no available cohort, skip
     if(sum(tp) == 0 || sum(tb) == 0 || sum(cp) == 0 || sum(cb) == 0){return(NULL)}
+
+    common <- intersect_control(group_time, cp, cb, gg, t, base_period)
+    if(is.null(common)){return(NULL)}
+    cp <- common$cp
+    cb <- common$cb
 
     #assign the weights
     group_time[tp, det_weight := 1]

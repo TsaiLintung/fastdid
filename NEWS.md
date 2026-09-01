@@ -1,5 +1,15 @@
 # fastdid 1.0.7
 
+- Fixed the double DiD control set of the DiD case: with M >= 3 events a control cohort with an event that the target cohort does not have was used, which biased `ATT^1`. A control must now be not yet confounded by every such event
+- The DiD case of double DiD is now reported for the post-periods of the first event only, as the theorem states
+- Fixed the influence function of the double DiD weights: the weights are a signed pair and each period is normalized on its own
+- Fixed the control cohorts of double DiD when a first-stage cell is missing: both periods now normalize over the cohorts available at both
+- `anticipation2` now moves the boundary of the direct case, and enters the not-yet-treated control cutoff of the first stage
+- Added validation of the confounding cohort columns: a missing value drops the unit with a warning, and a fractional value raises an error
+- Added a warning when no event-specific post-period effect is identified for any cohort
+- Fixed small-group variance understatement: the residual influence of each 2x2 group is inflated by the Kish effective size, `sqrt(ess/(ess-1))`. Without the inflation the plug-in variance of a group of m units is deflated by (m-1)/m, which under-covers when cells are small (for example the cross-cohorts of double DiD)
+- A 2x2 cell with fewer than 2 effective units in a group is now skipped with a warning: its residual is zero, so its variance is not estimable and the standard error understates the truth
+
 - Extended double DiD to support M>2 treatment events: `cohortvar2` now accepts a character vector of length M-1 (e.g. `c("G2", "G3")` for three events)
 - Added `add_base_period` parameter: inserts a zero-ATT placeholder at the base period in `result_type = "dynamic"` results
 - Added experimental options `only_est_min` and `only_est_max` in `exper`: restrict estimation to a specific event-time range in dynamic mode, skipping g-t pairs outside the window

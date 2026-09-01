@@ -153,6 +153,19 @@ estimate_did_bp <- function(dt_did, covvars, p, cache){
   inf_cont_did <- dt_did[, att_cont - cont_ipw_weight*weighted_cont_delta]
   inf_treat_did <-  dt_did[, (att_treat - treat_ipw_weight*weighted_treat_delta)]
 
+  # the residuals are centered on the estimated group means, which deflates the
+  # plug-in variance by (m-1)/m for a group of m effective units. inflate by the
+  # Kish effective size of each group, else small cells under-cover.
+  ess_treat <- dt_did[, sum(treat_ipw_weight)^2/sum(treat_ipw_weight^2)]
+  ess_cont <- dt_did[, sum(cont_ipw_weight)^2/sum(cont_ipw_weight^2)]
+
+  # a group of one effective unit has a zero residual, so its variance is not
+  # estimable and the cell must be skipped
+  if(!is.finite(ess_treat) || !is.finite(ess_cont) || ess_treat < 2 || ess_cont < 2){
+    stop("a group has fewer than 2 effective units, the variance is not estimable")
+  }
+  inf_treat_did <- inf_treat_did * sqrt(ess_treat/(ess_treat-1))
+  inf_cont_did <- inf_cont_did * sqrt(ess_cont/(ess_cont-1))
 
   #get overall influence function
   inf_cont <- (inf_cont_did+inf_cont_ipw+inf_cont_or)/dt_did[, mean(cont_ipw_weight)]
@@ -354,6 +367,20 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
   inf_treat_did_post <-  dt_did[, att_treat_post - treat_ipw_weight*inpost*weighted_treat_post/mean_wtpo]
   inf_cont_did_pre <- dt_did[, att_cont_pre - cont_ipw_weight*inpre*weighted_cont_pre/mean_wcpr]
   inf_treat_did_pre <-  dt_did[, att_treat_pre -  treat_ipw_weight*inpre*weighted_treat_pre/mean_wtpr]
+
+  # small-group inflation, see estimate_did_bp: each group-period mean deflates
+  # the plug-in variance by (m-1)/m for m effective units. a group-period of one
+  # effective unit has a zero residual, so the cell must be skipped
+  ess_all <- sapply(list(dt_did[, treat_ipw_weight*inpost], dt_did[, cont_ipw_weight*inpost],
+                         dt_did[, treat_ipw_weight*inpre], dt_did[, cont_ipw_weight*inpre]),
+                    function(w) sum(w)^2/sum(w^2))
+  if(any(!is.finite(ess_all)) || any(ess_all < 2)){
+    stop("a group-period has fewer than 2 effective units, the variance is not estimable")
+  }
+  inf_treat_did_post <- inf_treat_did_post * sqrt(ess_all[1]/(ess_all[1]-1))
+  inf_cont_did_post <- inf_cont_did_post * sqrt(ess_all[2]/(ess_all[2]-1))
+  inf_treat_did_pre <- inf_treat_did_pre * sqrt(ess_all[3]/(ess_all[3]-1))
+  inf_cont_did_pre <- inf_cont_did_pre * sqrt(ess_all[4]/(ess_all[4]-1))
   
   #fill zero to avoid NA from addition
   inf_cont_did_post[is.na(inf_cont_did_post)] <- 0

@@ -103,7 +103,7 @@ fastdid(
 
 \item{event_specific}{logical, whether to recover target treatment effect or use combined effect.}
 
-\item{double_control_option}{character, control units used for the double DiD, options are "both", "never", or "notyet".}
+\item{double_control_option}{character, control units used for the double DiD, options are "both", "never", or "notyet". "notyet" keeps a control cohort only if every confounding event is finite and later than the period, so the control must be confounded eventually by all of them. With M >= 3 events this can leave very few control cohorts, and "both" is the recommended option.}
 
 \item{add_base_period}{logical, whether to add a placeholder base period in dynamic results.}
 }

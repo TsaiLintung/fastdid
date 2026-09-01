@@ -239,9 +239,16 @@ expect_silent(fastdid(dt_single, timevar = "time", cohortvar = "G", unitvar = "u
 
 # edge case: very few observations per group ----------------------
 
-dt_small <- dt[unit <= 5]
-expect_silent(fastdid(dt_small, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", result_type = "group_time"),
-              info = "small sample works")
+dt_small <- dt[unit <= 10]
+expect_warning(fastdid(dt_small, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", result_type = "group_time"),
+               pattern = "fewer than 2 effective units",
+               info = "small sample works, warns on singleton cohorts")
+
+# every cohort has one unit, so no cell has an estimable variance
+dt_tiny <- dt[unit <= 5]
+expect_error(fastdid(dt_tiny, timevar = "time", cohortvar = "G", unitvar = "unit", outcomevar = "y", result_type = "group_time"),
+             pattern = "no valid group-times att to compute",
+             info = "singleton cohorts are skipped")
 
 # test detailed diagnostics in balanced panel warning -------------
 

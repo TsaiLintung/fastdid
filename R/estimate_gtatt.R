@@ -27,6 +27,13 @@ estimate_gtatt_outcome <- function(y, aux, p, caches) {
     
     #post process
     gt_results <- gt_results[which(!sapply(gt_results, is.null))] #remove the ones with no valid didsetup
+
+    # cells skipped for a too-small group are reported once, not one warning per cell
+    ess_skip <- vapply(gt_results, function(x) isTRUE(x$skip_ess), logical(1))
+    if(any(ess_skip)){
+      warning(sum(ess_skip), " group-time(s) skipped: a group has fewer than 2 effective units, so the variance is not estimable")
+      gt_results <- gt_results[!ess_skip]
+    }
     if(length(gt_results) == 0){stop("no valid group-times att to compute")}
     
     gt <- lapply(gt_results, function(x) {x$gt}) |> as.data.table() |> transpose()
@@ -88,11 +95,16 @@ estimate_gtatt_outcome_gt <- function(gt, y, aux, p, caches){
   # estimate --------------------
   result <- tryCatch(estimate_did(dt_did = cohort_did, covvars, p, caches[[gt_name]]),
                      error = function(e){
+                       # small-group skips are counted and reported once by the caller
+                       if(grepl("fewer than 2 effective units", e$message, fixed = TRUE)){
+                         return("skip_ess")
+                       }
                        warning("Skipping group-time ", g, "-", t,
                                ": ", e$message)
                        return(NULL)
                      })
   if(is.null(result)){return(NULL)}
+  if(identical(result, "skip_ess")){return(list(gt = gt, skip_ess = TRUE))}
   return(list(gt = gt, result = result))
   
 }
@@ -121,7 +133,14 @@ get_did_setup <- function(g, t, base_period, aux, p){
   
   #select the control and treated cohorts
   did_setup <- rep(NA, aux$id_size)
-  did_setup[get_control_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)] <- 0
+  if(allNA(p$cohortvar2) || p$anticipation == p$anticipation2){
+    # one horizon for every event, so the cohorts in range are contiguous after the sort
+    control_pos <- get_control_pos(aux$cohort_sizes, min_control_cohort, max_control_cohort)
+  } else {
+    # each event has its own horizon, so screen the cohorts one by one
+    control_pos <- get_control_pos_event(aux$cohort_sizes, t, base_period, max_control_cohort, p)
+  }
+  did_setup[control_pos] <- 0
   did_setup[get_treat_pos(aux$cohort_sizes, g)] <- 1 #treated cannot be controls, assign treated after control to overwrite
   
   if(!is.na(p$exper$filtervar)){
@@ -146,6 +165,40 @@ get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohor
     return(c())  # Return empty vector when no valid control cohorts
   }
   return(seq(start, end, by = 1))
+}
+
+#' Control positions when the events have different anticipation horizons.
+#'
+#' A cohort is a valid not-yet-treated control only if every event is further
+#' away than the horizon of that event. The first event uses `anticipation`, the
+#' confounding events use `anticipation2`. The cohorts in range are not
+#' contiguous after the sort, so screen them one by one.
+#'
+#' @param cohort_sizes the cohort table, in the order of the unit array.
+#' @param t,base_period the two periods of the 2x2.
+#' @param max_control_cohort the not-yet-treated upper bound.
+#' @return the positions of the control units in the unit array.
+#' @noRd
+get_control_pos_event <- function(cohort_sizes, t, base_period, max_control_cohort, p){
+  GG <- cohort_sizes[, G]
+  last <- max(t, base_period)
+
+  if(p$control_option == "never"){
+    keep <- is.infinite(ming(GG))
+  } else {
+    keep <- g1(GG) > last + p$anticipation
+    M <- 1L + length(p$cohortvar2)
+    for(d in 2:M){
+      keep <- keep & (gd(GG, d) > last + p$anticipation2)
+    }
+  }
+  keep <- keep & (ming(GG) <= max_control_cohort)
+  if(!any(keep)){return(c())}
+
+  # each cohort is one contiguous block of the unit array
+  end <- cumsum(cohort_sizes[, cohort_size])
+  start <- end - cohort_sizes[, cohort_size] + 1
+  return(unlist(lapply(which(keep), function(i) seq(start[i], end[i]))))
 }
 
 get_treat_pos <- function(cohort_sizes, treat_cohort){ #need to separate for double did to match exact g-g-t

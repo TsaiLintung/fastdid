@@ -39,7 +39,7 @@
 #' @param parallel logical, whether to use parallization on unix system.
 #' @param cohortvar2 character or character vector, name(s) of the confounding event cohort variable(s). For M>2 events, provide a vector of length M-1 (e.g., `c("G2", "G3")` for M=3 events).
 #' @param event_specific logical, whether to recover target treatment effect or use combined effect.
-#' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet".
+#' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet". "notyet" keeps a control cohort only if every confounding event is finite and later than the period, so the control must be confounded eventually by all of them. With M >= 3 events this can leave very few control cohorts, and "both" is the recommended option.
 #' @param add_base_period logical, whether to add a placeholder base period in dynamic results.
 #'
 #' @import data.table stringr dreamerr ggplot2

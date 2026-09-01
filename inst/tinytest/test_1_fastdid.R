@@ -47,7 +47,7 @@ expect_equal(names(full_res), c("call", "estimate", "gt_estimate", "agg_inf_func
              info = "full result")
 
 units <- dt[, unique(unit)]
-weights <- data.table::data.table(unit = units, w = rnorm(length(units), 1, 1))
+weights <- data.table::data.table(unit = units, w = runif(length(units), 0.5, 1.5))
 dt2 <- dt |> merge(weights, by = "unit")
 expect_silent(fastdid(dt2, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = "y",  result_type = "group_time",
                       weightvar = "w"),
