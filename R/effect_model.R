@@ -32,8 +32,14 @@ get_effect_scheme <- function(cells, att, inf_func, aux, p) {
   fits <- list()
 
   if (p$effect_kind != "unrestricted") {
-    long <- if (p$effect_fit == "separate") build_component_rows(tab, p) else build_event_rows(tab, p)
+    long <- switch(p$effect_fit,
+                   separate = build_component_rows(tab, p),
+                   state = build_state_rows(tab, p),
+                   build_event_rows(tab, p))
     long[, lid := .I] # a cell has one row per modeled event, so the cell index is not unique
+    if (p$effect_fit == "state") { # the state before event k is the row of event k - 1
+      long[, lid_prev := lid[match(paste(cell, event - 1L), paste(cell, event))]]
+    }
     X <- build_design(p$effect_model, long)
 
     # fit each component, and collect the weight of each modeled row
@@ -65,6 +71,12 @@ get_effect_scheme <- function(cells, att, inf_func, aux, p) {
       tr <- merge(tr, own_max, by = c("G", "event"), all.x = TRUE, sort = FALSE)
       tr[, e_gap := pmax(e - emax, 0)]
       Xt <- Xc[match(tr[, lid], lr[, lid]), , drop = FALSE]
+      if (comp == "state") { # the marginal effect of event k is the state after it minus the state before it
+        prev <- match(tr[, lid_prev], lr[, lid])
+        Xp <- Xc[ifelse(is.na(prev), 1L, prev), , drop = FALSE]
+        Xp[is.na(prev), ] <- 0
+        Xt <- Xt - Xp
+      }
 
       det_comp <- matrix(0, nrow(tr), K)
       est <- logical(nrow(tr))
@@ -101,7 +113,7 @@ finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
   rep_rows[, ri := .I]
   # a cohort treated and confounded in the same period is tried under both
   # components; the target component wins when both are estimable
-  rep_rows[, prio := match(component, c("direct", "target", "confound", "joint"))]
+  rep_rows[, prio := match(component, c("direct", "target", "confound", "joint", "state"))]
   setorder(rep_rows, cell, event, prio)
   rep_rows[, keep := estimable & !duplicated(paste(cell, event, estimable))]
   do.call(setorderv, c(list(rep_rows), list(c("time", "mg", gcol, "event", "prio"))))
@@ -224,6 +236,35 @@ build_event_rows <- function(tab, p) {
   return(rows)
 }
 
+#' One row per cell and number of active events, for the state fit.
+#'
+#' The cell is a function of its state: the number of active events `nact`,
+#' the parity `status` (1 when an odd number of events is active, the "on"
+#' state of an on-and-off treatment), and the time since the last active
+#' event `e`. The row of event `k` describes the state after the first `k`
+#' events. The actual state of the cell is its fit row, and the marginal
+#' effect of event `k` is the difference between the states after `k` and
+#' after `k - 1` events.
+#' @noRd
+build_state_rows <- function(tab, p) {
+  M <- 1L + length(p$cohortvar2)
+  a <- p$anticipation
+  nact <- Reduce(`+`, lapply(seq_len(M), function(d) as.integer(tab[, t >= get(paste0("G", d)) - a])))
+  tab[, nact_cell := nact]
+  rows <- rbindlist(lapply(seq_len(M), function(k) {
+    r <- tab[nact_cell >= k]
+    if (nrow(r) == 0) return(NULL)
+    r[, `:=`(component = "state", event = as.integer(k), nact = as.integer(k), status = as.integer(k %% 2L),
+             gown = as.character(get(paste0("G", k))), e = get(paste0("e", k)))]
+    r[, gactive := gown]
+    r[, ghist := do.call(paste, c(lapply(seq_len(k), function(j) as.character(get(paste0("G", j)))), list(sep = "-")))]
+    r
+  }))
+  rows[, fit := event == nact_cell]
+  rows[, target := !(event == 1L & clean1)]
+  return(rows)
+}
+
 #' The design matrix of the long rows.
 #'
 #' One `model.matrix()` call over every row, so the factor levels and the
@@ -235,7 +276,7 @@ build_design <- function(formula, long) {
   bad <- setdiff(vars, allowed)
   if (length(bad) > 0) {
     stop("the effect model uses ", paste(bad, collapse = ", "), ". the available variables are: ",
-         "gvec, t, event, e, gown, gactive, ghist, g1..gM, e1..eM.")
+         "gvec, t, event, e, gown, gactive, ghist, g1..gM, e1..eM, and status, nact in the state fit.")
   }
   X <- tryCatch({
     mf <- stats::model.frame(formula, data = long, na.action = stats::na.pass)

@@ -18,5 +18,5 @@ utils::globalVariables(c(
     "det_weight", "sto_weight", "add_base_period", "cohortvar2", "exper",
     "effect_model", "effect_fit", "effect_kind", "cell", "ord", "gvec", "t", "gp", "gconf",
     "active1", "clean1", "activec", "cleanc", "component", "estimable", "leverage", "e_gap",
-    "gown", "gactive", "ghist", "e", "e1", "fit", "emax", "resid", "ri", "prio", "keep", "lid", "event_specific"
+    "gown", "gactive", "ghist", "e", "e1", "fit", "emax", "resid", "ri", "prio", "keep", "lid", "lid_prev", "nact", "nact_cell", "status", "event_specific"
 ))

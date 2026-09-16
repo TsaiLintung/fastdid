@@ -157,3 +157,35 @@ res_joint <- run(dt_imp, result_type = "group_group_time", cohortvar2 = "G2",
                  effect_fit = "joint")
 est <- res_joint[cohort1 == 2 & cohort2 == 3 & time >= 3]
 expect_equal(est[, att], rep(1, nrow(est)), tolerance = tol, info = "joint fit recovers the first-event effect")
+
+# state fit: an on-and-off treatment ------------------------------------------
+
+# on at G, off at G2: the cell is 1 + 0.5 e while on and 0.8 * 0.5^e after the switch off
+make_onoff <- function(cohorts, TT = 8, n = 400, seed = 5) {
+  set.seed(seed)
+  dt <- data.table::rbindlist(lapply(seq_along(cohorts), function(i) {
+    g <- cohorts[[i]]
+    data.table::CJ(unit = (i - 1) * n + seq_len(n), time = seq_len(TT))[, `:=`(G = g[1], G2 = g[2])]
+  }))
+  dt[, y := unit / 100 + time * 0.3 + stats::rnorm(.N, 0, 0.01) +
+       data.table::fifelse(time >= G & time < G2, 1 + 0.5 * (time - G), 0) +
+       data.table::fifelse(time >= G2, 0.8 * 0.5^(time - G2), 0)]
+  dt[]
+}
+dt_onoff <- make_onoff(list(c(2, 4, Inf), c(2, 6, Inf), c(2, Inf, Inf), c(3, Inf, Inf), c(Inf, Inf, Inf)))
+res_state <- run(dt_onoff, result_type = "dynamic_event", cohortvar2 = "G2",
+                 effect_model = ~ 0 + factor(status):factor(e), effect_fit = "state",
+                 exper = list(aggregate_scheme = "paste0(event, '.', e)"))
+res_state[, `:=`(event = as.integer(sub("\\..*", "", target)), e = as.integer(sub(".*\\.", "", target)))]
+on <- res_state[event == 1 & e >= 0]
+expect_equal(on[, att], 1 + 0.5 * on[, e], tolerance = tol, info = "state fit recovers the on profile")
+# the switch-off effect is the carryover minus the on profile that the spell would have had
+off <- res_state[event == 2]
+dt_truth <- unique(dt_onoff[is.finite(G2), .(G, G2)])
+truth_off <- sapply(off[, e], function(e2) {
+  cells <- dt_truth[G2 + e2 <= 8]
+  mean(0.8 * 0.5^e2 - (1 + 0.5 * (cells$G2 + e2 - cells$G)))
+})
+expect_equal(off[, att], truth_off, tolerance = tol, info = "state fit recovers the switch-off effect")
+expect_error(run(dt_ord, result_type = "dynamic_event", cohortvar2 = "G2", effect_model = ~ 0 + factor(foo),
+                 effect_fit = "state"), pattern = "available variables", info = "state fit rejects an unknown variable")

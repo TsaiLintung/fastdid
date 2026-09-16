@@ -53,7 +53,7 @@ validate_argument <- function(dt, p) {
 
   # the effect model of the second stage
   check_set_arg(effect_model, "os formula | match", .choices = c("parallel", "unrestricted"), .up = 1)
-  check_set_arg(effect_fit, "match", .choices = c("separate", "joint", "ordered"), .up = 1)
+  check_set_arg(effect_fit, "match", .choices = c("separate", "joint", "ordered", "state"), .up = 1)
   if (effect_kind != "parallel") {
     if (allNA(cohortvar2)) {
       stop("effect_model needs multiple events: set cohortvar2.")
@@ -73,11 +73,11 @@ validate_argument <- function(dt, p) {
       stop("effect_fit = '", effect_fit, "' needs a formula in effect_model.")
     }
   }
-  if (effect_fit == "ordered" && anticipation != anticipation2) {
-    stop("effect_fit = 'ordered' models one event kind, so anticipation and anticipation2 must be equal.")
+  if (effect_fit %in% c("ordered", "state") && anticipation != anticipation2) {
+    stop("effect_fit = '", effect_fit, "' models ordered events, so anticipation and anticipation2 must be equal.")
   }
-  if (result_type == "dynamic_event" && effect_fit != "ordered") {
-    stop("result_type 'dynamic_event' needs effect_fit = 'ordered'.")
+  if (result_type == "dynamic_event" && !effect_fit %in% c("ordered", "state")) {
+    stop("result_type 'dynamic_event' needs effect_fit = 'ordered' or 'state'.")
   }
   
   # Validate only_est_min / only_est_max
@@ -170,14 +170,14 @@ validate_dt <- function(dt, p) {
   }
 
   # the k-th occurrence of one event: the dates must increase, and Inf is a suffix
-  if (p$effect_fit == "ordered") {
+  if (p$effect_fit %in% c("ordered", "state")) {
     gcols <- c("G", gcol2)
     for (k in seq_len(length(gcols) - 1)) {
       a <- dt[[gcols[k]]]
       b <- dt[[gcols[k + 1]]]
       ok <- is.infinite(b) | (is.finite(a) & b > a)
       if (any(!ok)) {
-        stop("effect_fit = 'ordered' needs g1 < g2 < ... for every unit, with Inf only after every finite date. ",
+        stop("effect_fit = '", p$effect_fit, "' needs g1 < g2 < ... for every unit, with Inf only after every finite date. ",
              dt[!ok, uniqueN(unit)], " units break the order between event ", k, " and event ", k + 1, ".")
       }
     }

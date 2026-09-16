@@ -32,7 +32,7 @@ Key `fastdid()` parameters:
 | `control_type` | `"ipw"`, `"reg"`, or `"dr"` (doubly robust) |
 | `cohortvar2` | the confounding events, one column name per event, for the two-stage estimator |
 | `effect_model` | the second-stage model: `"parallel"`, `"unrestricted"`, or a one-sided formula on the cell features |
-| `effect_fit` | how a formula is fit: `"separate"`, `"joint"`, or `"ordered"` |
+| `effect_fit` | how a formula is fit: `"separate"`, `"joint"`, `"ordered"`, or `"state"` |
 | `boot` | bootstrap standard errors. The default is 1000 iterations |
 | `base_period` | `"universal"` or `"varying"` |
 | `covariatesvar`, `varycovariatesvar` | time-invariant and time-varying covariates |
