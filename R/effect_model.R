@@ -10,10 +10,12 @@
 #' value is then a linear combination of first-stage cells, so the weights slot
 #' into the same contract as `get_es_scheme()`.
 #'
-#' Three fit modes: `"separate"` fits one component on its clean cells,
-#' `"joint"` stacks the events additively and fits on every cell, `"ordered"`
-#' does the same for the k-th occurrence of one event kind, where the stacked
-#' sum holds by telescoping.
+#' Fit modes: `"separate"` fits one component on its clean cells. `"joint"`
+#' models the sequential marginal effect of every event in the order of the
+#' cohort columns and fits on every cell; the cell is the telescoping sum of
+#' the marginal effects of its active events, so no additivity is assumed.
+#' `"ordered"` is the same for the k-th occurrence of one event kind, and
+#' `"state"` models the cell by its state.
 #'
 #' @param cells the cell table from `get_cell_table()`.
 #' @param att,inf_func the first-stage estimates and influence functions.
