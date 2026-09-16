@@ -50,8 +50,9 @@ R/
 ├── aux_funcs.R        data coercion, aux data structures, locked lists
 ├── estimate_gtatt.R   core loop over cohorts and times
 ├── estimate_did.R     the 2x2 engine: IPW, OR, doubly robust, influence functions
-├── aggregate_gt.R     aggregates g-t ATTs to the target parameters, and their SEs
-├── double_did.R       multiple events / double DiD
+├── aggregate_gt.R     aggregates the cells to the target parameters, and their SEs
+├── second_stage.R     the cell table, and the second stage as weights over first-stage cells
+├── double_did.R       multiple events: the G-string label helpers and the coercion
 ├── sim_did.R          data simulation
 ├── generics.R         S3 methods for the fastdid_result class
 └── global.R           global-variable suppressions for R CMD check
@@ -65,7 +66,7 @@ fastdid()
   -> coerce_dt()        normalize time and cohort to 1,2,3...; store time_offset, time_step
   -> get_auxdata()      fast-access structures, clustered by time period
   -> estimate_gtatt()   per outcome: cohorts x times, then estimate_did()
-  -> aggregate_gt()     weight the g-t estimates to the targets, then the SEs
+  -> aggregate_gt()     per outcome: get_cell_table(), second_stage(), then the targets and the SEs
   -> convert_targets()  map back to the original time and cohort scales
 ```
 
@@ -82,9 +83,14 @@ fastdid()
    `[<-` and `[[<-` all raise an error, so nothing mutates it.
 5. **Time normalization.** User time (for example 2000, 2005, 2010) becomes
    1, 2, 3 internally. `time_offset` and `time_step` recover the original scale.
-6. **Double DiD.** When `cohortvar2` is set, the estimator decomposes the effects
-   across two staggered events. It uses three cases, chosen by the relative
-   timing of g1 and g2. `double_did.R` implements Theorem 3 of Tsai (2026).
+6. **Two stages.** The first stage is Callaway-Sant'Anna on the cohort label.
+   With `cohortvar2` the label is the G-string `"g1-g2-...-gM"`, and the first
+   stage identifies the combined effect of all events in each cell. The second
+   stage (`second_stage.R`) reads the cell table only. It returns one weight
+   row per identified cell over the first-stage cells, so the estimate and its
+   influence function are linear combinations of the first stage. The
+   parallel-treatment-effects scheme uses three cases, chosen by the relative
+   timing of g1 and g', and implements Theorem 3 of Tsai (2026).
 7. **IPW caching.** When several outcomes share the same covariates, the
    propensity scores are computed once and reused.
 

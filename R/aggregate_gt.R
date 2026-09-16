@@ -11,25 +11,30 @@ aggregate_gt <- function(all_gt_result, aux, p) {
     }),
     agg_weight_matrix = lapply(results, function(x) {
       x$weight_matrix
+    }),
+    es_weight_matrix = lapply(results, function(x) {
+      x$es_weight
     })
   ))
 }
 
 aggregate_gt_outcome <- function(gt_result, aux, p) {
-  # get aggregation scheme from g-t to target parameters
-  agg_sch <- get_agg_sch(gt_result, aux, p)
-
+  cells <- get_cell_table(gt_result, aux, p)
   att <- gt_result$att
   inf_func <- gt_result$inf_func
 
-  # influence from double did is calculated before the influence from aggregation 
+  # the second stage runs before the aggregation, on the first-stage cells
+  es_weight <- NULL
   if (p$event_specific && !allNA(p$cohortvar2)) {
-    es_weight <- agg_sch$es_sto_weight + agg_sch$es_det_weight
-    # the double DiD weights are signed, and each period is normalized on its own
-    es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p, by_period = TRUE)
-    att <- (es_weight) %*% att
-    inf_func <- (inf_func %*% t(es_weight)) + es_inf_weights
+    ss <- second_stage(cells, att, inf_func, aux, p)
+    cells <- ss$cells # some gt may not have an identified effect (ex: g1 == g2)
+    att <- ss$att
+    inf_func <- ss$inf_func
+    es_weight <- ss$weight
   }
+
+  # get aggregation scheme from cells to target parameters
+  agg_sch <- get_agg_sch(cells, p)
 
   # get att
   agg_att <- agg_sch$agg_weights %*% att
@@ -54,44 +59,19 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
   return(list(
     result = result,
     inf_func = inf_matrix,
-    weight_matrix = agg_sch$agg_weights
+    weight_matrix = agg_sch$agg_weights,
+    es_weight = es_weight
   ))
 }
 
 # scheme ------------------------------------------------------------------------
 
 #' Scheme for aggregation.
+#'
+#' @param group_time the cell table, after the second stage when there is one.
+#' @return the targets, the weight of each cell in each target, and the table.
 #' @noRd
-get_agg_sch <- function(gt_result, aux, p) {
-  # create group_time
-  id_dt <- data.table(weight = aux$weights / sum(aux$weights), G = aux$dt_inv[, G])
-  pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
-  group_time <- gt_result$gt |> merge(pg_dt, by = "G", sort = FALSE)
-  group_time[, mg := ming(G)]
-  M <- if(allNA(p$cohortvar2)) 1L else 1L + length(p$cohortvar2)
-  gcol <- paste0("G", seq_len(M))
-  for(d in seq_len(M)){
-    group_time[, (paste0("G", d)) := gd(G, d)]
-  }
-  do.call(setorderv, c(list(group_time), list(c("time", "mg", gcol)))) # match order in gtatt
-  if (!all(names(gt_result$att) == group_time[, paste0(G, ".", time)])) {
-    stop("some bug makes gt misaligned, please report this to the maintainer. Thanks.")
-  }
-
-  # get the event-specific matrix, and available ggts
-  if (p$event_specific && !allNA(p$cohortvar2)) {
-    es <- get_es_scheme(group_time, aux, p)
-    pre_es_group_time <- group_time
-    pre_es_group_time[, pg := NULL]
-    group_time <- es$group_time # some gt may not have availble effect (ex: g1 == g2)
-    es_det_weight <- as.matrix(es$es_det_weight)
-    es_sto_weight <- as.matrix(es$es_sto_weight)
-  } else {
-    es_det_weight <- NULL
-    es_sto_weight <- NULL
-    pre_es_group_time <- NULL
-  }
-
+get_agg_sch <- function(group_time, p) {
   # choose the target based on aggregation type
   tg <- get_agg_targets(group_time, p)
   group_time <- tg$group_time
@@ -112,10 +92,7 @@ get_agg_sch <- function(gt_result, aux, p) {
   return(list(
     agg_weights = agg_weights, # a matrix of each target and gt's weight in it
     targets = targets,
-    group_time = group_time,
-    pre_es_group_time = pre_es_group_time,
-    es_det_weight = es_det_weight,
-    es_sto_weight = es_sto_weight
+    group_time = group_time
   ))
 }
 

@@ -143,7 +143,8 @@ fastdid <- function(data,
       estimate = est_results,
       gt_estimate = gt_result_list,
       agg_inf_func = agg_result$inf_func,
-      agg_weight_matrix = agg_result$agg_weight_matrix
+      agg_weight_matrix = agg_result$agg_weight_matrix,
+      es_weight_matrix = agg_result$es_weight_matrix
     )
     class(full_result) <- c("fastdid_result", class(full_result))
     return(full_result)
