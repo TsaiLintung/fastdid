@@ -22,6 +22,27 @@ Move an entry out of this file when it is resolved.
   missingness pattern, so reuse is likely unsafe. If it is unsafe, drop the
   argument.
 
+## Second stage
+
+- **`R/effect_model.R`, `get_effect_scheme()`.** The weights of the WLS fit
+  are the cohort shares `pg`, and the influence function treats them as fixed.
+  The correction is second order under a correct model. If a Monte Carlo shows
+  under-coverage, add the delta-method term through the pseudo-inverse, as
+  `get_weight_influence_param()` does for the share weights of the parallel
+  scheme.
+
+- **`R/effect_model.R`, the filters of the fit set.** `double_control_option`
+  and `control_option = "notyet"` restrict the control cohorts of the parallel
+  scheme cell by cell. A global fit cannot apply them without per-target fits,
+  so a formula ignores them with a warning. Decide whether a per-target local
+  fit is worth its cost.
+
+- **`R/estimate_gtatt.R`, `get_base_period()`.** The base period of a cohort
+  uses `anticipation`, the horizon of event 1, even when a confounding event
+  comes first. With one horizon per event the base period must be one before
+  the earliest shifted date, `min_d (g^d - a_d) - 1`. The parallel scheme keeps
+  the current rule. Decide before the first stage moves to that rule.
+
 ## Inference
 
 - **`R/aggregate_gt.R`, `get_se()`, the analytic branch.** The standard error

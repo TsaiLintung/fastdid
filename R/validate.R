@@ -46,9 +46,38 @@ validate_argument <- function(dt, p) {
   }
 
   if (add_base_period == TRUE) {
-    if (result_type != "dynamic") {
-      stop("add_base_period is only possible with result_type == 'dynamic'")
+    if (!result_type %in% c("dynamic", "dynamic_event")) {
+      stop("add_base_period is only possible with result_type == 'dynamic' or 'dynamic_event'")
     }
+  }
+
+  # the effect model of the second stage
+  check_set_arg(effect_model, "os formula | match", .choices = c("parallel", "unrestricted"), .up = 1)
+  check_set_arg(effect_fit, "match", .choices = c("separate", "joint", "ordered"), .up = 1)
+  if (effect_kind != "parallel") {
+    if (allNA(cohortvar2)) {
+      stop("effect_model needs multiple events: set cohortvar2.")
+    }
+    if (!event_specific) {
+      stop("effect_model needs event_specific = TRUE.")
+    }
+    if (base_period != "universal") {
+      stop("effect_model needs base_period = 'universal'. a varying base period makes the pre-period cells short differences.")
+    }
+    if (double_control_option != "both" || control_option == "notyet") {
+      warning("effect_model does not restrict the fit set: double_control_option and control_option = 'notyet' do not apply to the second stage.")
+    }
+  }
+  if (effect_fit != "separate") {
+    if (effect_kind != "formula") {
+      stop("effect_fit = '", effect_fit, "' needs a formula in effect_model.")
+    }
+  }
+  if (effect_fit == "ordered" && anticipation != anticipation2) {
+    stop("effect_fit = 'ordered' models one event kind, so anticipation and anticipation2 must be equal.")
+  }
+  if (result_type == "dynamic_event" && effect_fit != "ordered") {
+    stop("result_type 'dynamic_event' needs effect_fit = 'ordered'.")
   }
   
   # Validate only_est_min / only_est_max
@@ -71,7 +100,8 @@ validate_argument <- function(dt, p) {
   }
 
   # Validate result_type for double DiD
-  if (result_type %in% c("group_group_time", "dynamic_stagger")) {
+  check_set_arg(result_type, "match", .choices = c("group_time", "time", "group", "simple", "dynamic", "group_group_time", "dynamic_stagger", "dynamic_event"), .up = 1)
+  if (result_type %in% c("group_group_time", "dynamic_stagger", "dynamic_event")) {
     if (allNA(cohortvar2)) {
       stop("result_type '", result_type, "' can only be used with double DiD (cohortvar2 must be specified)")
     }
@@ -137,6 +167,20 @@ validate_dt <- function(dt, p) {
   }
   if (length(gcol2) > 0 && nrow(dt) == 0) {
     stop("no observations remain after the confounding cohorts are screened.")
+  }
+
+  # the k-th occurrence of one event: the dates must increase, and Inf is a suffix
+  if (p$effect_fit == "ordered") {
+    gcols <- c("G", gcol2)
+    for (k in seq_len(length(gcols) - 1)) {
+      a <- dt[[gcols[k]]]
+      b <- dt[[gcols[k + 1]]]
+      ok <- is.infinite(b) | (is.finite(a) & b > a)
+      if (any(!ok)) {
+        stop("effect_fit = 'ordered' needs g1 < g2 < ... for every unit, with Inf only after every finite date. ",
+             dt[!ok, uniqueN(unit)], " units break the order between event ", k, " and event ", k + 1, ".")
+      }
+    }
   }
 
   # change to int

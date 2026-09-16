@@ -11,6 +11,9 @@ get_exper_default <- function(exper, exper_args){
     exper$filtervar <- "no_na"
     exper$filtervar_post <- "no_na"
   }
+  if(is.na(exper$effect_tol)){
+    exper$effect_tol <- 1e-7
+  }
   
   return(exper)
 }
@@ -256,6 +259,10 @@ convert_targets <- function(results, p, t){
          dynamic_stagger = {
            results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
            results[, event_stagger :=  as.numeric(str_split_i(target, "\\.", 2))]
+         },
+         dynamic_event = {
+           results[, event_time := target]
+           setcolorder(results, "event_time", before = 1)
          }
   )
   

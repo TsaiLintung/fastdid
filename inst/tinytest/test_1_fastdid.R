@@ -43,7 +43,7 @@ expect_silent(fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",ou
 
 #get full result
 full_res <- fastdid(dt, timevar = "time", cohortvar = "G", unitvar = "unit",outcomevar = c("y", "y2"),  result_type = "group_time", full = TRUE)
-expect_equal(names(full_res), c("call", "estimate", "gt_estimate", "agg_inf_func", "agg_weight_matrix", "es_weight_matrix"),
+expect_equal(names(full_res), c("call", "estimate", "gt_estimate", "agg_inf_func", "agg_weight_matrix", "es_weight_matrix", "effect_diag"),
              info = "full result")
 
 units <- dt[, unique(unit)]

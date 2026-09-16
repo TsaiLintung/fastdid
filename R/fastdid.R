@@ -8,7 +8,7 @@
 #' @param unitvar character, name of the unit (id) variable.
 #' @param outcomevar character vector, name(s) of the outcome variable(s).
 #' @param control_option character, control units used for the DiD estimates, options are "both", "never", or "notyet".
-#' @param result_type character, type of result to return, options are "group_time", "time", "group", "simple", "dynamic" (time since event), "group_group_time", or "dynamic_stagger".
+#' @param result_type character, type of result to return, options are "group_time", "time", "group", "simple", "dynamic" (time since event), "group_group_time", "dynamic_stagger", or "dynamic_event" (the average effect of every event at each event time, for `effect_fit = "ordered"`).
 #' @param balanced_event_time number, max event time to balance the cohort composition.
 #' @param control_type character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), or "dr" (doubly-robust).
 #' @param allow_unbalance_panel logical, allow unbalance panel as input or coerce dataset into one.
@@ -33,6 +33,7 @@
 #'     \item{`only_balance_2by2`}{logical, keep only units observed in both periods of each 2x2 DiD.}
 #'     \item{`aggregate_scheme`}{character, a custom aggregation expression evaluated as `group_time[, target := <expr>]`.}
 #'     \item{`max_control_cohort_diff`}{numeric, maximum cohort difference between treated and control groups.}
+#'     \item{`effect_tol`}{numeric, the relative tolerance of the rank and estimability checks of an effect model. Default is 1e-7.}
 #'   }
 #' @param base_period character, type of base period in pre-preiods, options are "universal", or "varying".
 #' @param full logical, whether to return the full result (influence function, call, weighting scheme, etc,.).
@@ -41,9 +42,11 @@
 #' @param event_specific logical, whether to recover target treatment effect or use combined effect.
 #' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet". "notyet" keeps a control cohort only if every confounding event is finite and later than the period, so the control must be confounded eventually by all of them. With M >= 3 events this can leave very few control cohorts, and "both" is the recommended option.
 #' @param add_base_period logical, whether to add a placeholder base period in dynamic results.
+#' @param effect_model the second-stage model of the treatment effects, for multiple events. `"parallel"` (the default) is the parallel treatment effects estimator. `"unrestricted"` reports the clean cells only. A one-sided formula models one component of the cell as a linear function of the cell features, see Details.
+#' @param effect_fit character, how a formula is fit. `"separate"` fits the modeled component on its clean cells. `"joint"` stacks the events additively and fits on every cell. `"ordered"` does the same for the k-th occurrence of one event kind, where the cohort dates must increase.
 #'
 #' @import data.table stringr dreamerr ggplot2
-#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean
+#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean model.frame model.matrix na.pass pchisq setNames
 #' @importFrom parglm parglm.fit parglm.control
 #' @importFrom collapse allNA fnrow whichNA fnunique fsum na_insert
 #' @importFrom parallel mclapply
@@ -60,6 +63,19 @@
 #' `cohortvar2` accepts a character vector of length M-1 to support M>2 treatment events.
 #'
 #' `biters` and `clustervar` are only used when `boot == TRUE`.
+#'
+#' **Effect models.** With multiple events, a first-stage cell (cohort vector, period) identifies the combined effect of every active event. The second stage recovers the effect of event 1. An `effect_model` formula states a linear model for one component of the cell, fit by weighted least squares on the cells where that component is observed alone, and imputed into the other cells. A cell is reported only when it is estimable: its regressor row lies in the row space of the fit design. The formula can use these cell features:
+#'   \describe{
+#'     \item{`gvec`}{the cohort vector, as the string `"g1-g2-...-gM"`}
+#'     \item{`t`}{the period}
+#'     \item{`g1`, ..., `gM`, `e1`, ..., `eM`}{the date and the event time of each event}
+#'     \item{`event`}{the modeled event: 1 for the target, 2 for the confounding bundle, k in the stacked fits}
+#'     \item{`gown`}{the date of the modeled event (the confounding profile for the bundle)}
+#'     \item{`gactive`}{the dates of the modeled events that are active at `t`}
+#'     \item{`ghist`}{the cohort vector truncated at the modeled event}
+#'     \item{`e`}{the event time of the modeled event}
+#'   }
+#' The model `~ factor(gvec) + factor(gactive):factor(t)` is the parallel treatment effects assumption of `"parallel"`, fit on every clean cell at once. `~ factor(gvec) + poly(e, 2)` is a quadratic profile in event time with a cohort level. With `effect_fit = "separate"`, the target component is modeled for cohorts treated before they are confounded, and the confounding component for cohorts confounded before they are treated; the reported effect is the pure effect in the first case and the interacted effect in the second. With `effect_fit = "joint"` or `"ordered"`, the design row of a cell is the sum over its active events, so a formula can share parameters across events, for example `~ 0 + factor(gvec):factor(event) + factor(e)`. Use `~ 0 + ...` in a stacked fit, because an intercept counts once per active event. `result_type = "dynamic_event"` averages the effect of every event at each event time, with cohort-size weights. The weights of the fit are treated as fixed in the influence function. `double_control_option` and `control_option = "notyet"` do not restrict the fit set of a formula. With `full = TRUE`, `effect_diag` returns the weight of every first-stage cell in every reported cell, the estimability of every candidate cell, the fit residuals, and an over-identification test.
 #'
 #' @examples
 #' # simulated data
@@ -82,7 +98,8 @@ fastdid <- function(data,
                     copy = TRUE, validate = TRUE,
                     anticipation = 0, anticipation2 = 0, base_period = "universal",
                     exper = NULL, full = FALSE, parallel = FALSE,
-                    cohortvar2 = NA, event_specific = TRUE, double_control_option = "both", add_base_period = FALSE) {
+                    cohortvar2 = NA, event_specific = TRUE, double_control_option = "both", add_base_period = FALSE,
+                    effect_model = "parallel", effect_fit = "separate") {
   # preprocess --------------------------------------------------------
 
   if (!is.data.table(data)) {
@@ -95,6 +112,12 @@ fastdid <- function(data,
     dt <- data
   }
 
+  # the presets are matched here, so that the rest of the code reads one value
+  if (is.character(effect_model)) {
+    effect_model <- match.arg(effect_model, c("parallel", "unrestricted"))
+  }
+  effect_kind <- if (is.character(effect_model)) effect_model else "formula"
+
   # validate arguments
   p <- as.list(environment()) # collect everything besides data
   p$data <- NULL
@@ -103,7 +126,7 @@ fastdid <- function(data,
   exper_args <- c(
     "filtervar", "filtervar_post", "only_balance_2by2",
     "aggregate_scheme", "max_control_cohort_diff",
-    "only_est_min", "only_est_max"
+    "only_est_min", "only_est_max", "effect_tol"
   )
   p$exper <- get_exper_default(p$exper, exper_args)
   class(p) <- "locked" # no more changes!
@@ -144,7 +167,8 @@ fastdid <- function(data,
       gt_estimate = gt_result_list,
       agg_inf_func = agg_result$inf_func,
       agg_weight_matrix = agg_result$agg_weight_matrix,
-      es_weight_matrix = agg_result$es_weight_matrix
+      es_weight_matrix = agg_result$es_weight_matrix,
+      effect_diag = agg_result$effect_diag
     )
     class(full_result) <- c("fastdid_result", class(full_result))
     return(full_result)

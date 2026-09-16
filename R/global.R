@@ -15,5 +15,8 @@ utils::globalVariables(c(
     "mg", "cohort1", "cohort2", "cohort3", "cohort4", "cohort5", "event_time_1", "event_time_2",
     "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2", "parallel",
     "tp", "cp", "tb", "cb", "no_na", "event_stagger", "double_control_option",
-    "det_weight", "sto_weight", "add_base_period", "cohortvar2", "exper"
+    "det_weight", "sto_weight", "add_base_period", "cohortvar2", "exper",
+    "effect_model", "effect_fit", "effect_kind", "cell", "ord", "gvec", "t", "gp", "gconf",
+    "active1", "clean1", "activec", "cleanc", "component", "estimable", "leverage", "e_gap",
+    "gown", "gactive", "ghist", "e", "e1", "fit", "emax", "resid", "ri", "prio", "keep", "lid"
 ))

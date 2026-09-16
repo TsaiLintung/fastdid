@@ -76,3 +76,47 @@ double_result_ggt <-fastdid(data = dt,
                  cohortvar2 = "G2", event_specific = TRUE)
 
 ```
+
+## Effect models
+
+The second stage of double DiD imputes the effect of the first event into the periods after the confounding event. The default imputation is the parallel treatment effects assumption. `effect_model` replaces it with a formula for the effect. The formula is fit on the clean cells, the group-times before the confounding event, and imputed into the confounded cells. A cell is reported only when its regressor row is in the row space of the fit, so the output never extrapolates through a rank-deficient fit.
+
+The parallel treatment effects assumption is the two-way model below, fit on every clean cell at once. A quadratic profile in event time with a cohort level is a stronger model that extrapolates within a cohort. `"unrestricted"` reports the clean cells only.
+
+```{r, effect}
+parallel_fit <- fastdid(data = dt,
+                 timevar = "time", cohortvar = "G", unitvar = "unit",
+                 outcomevar = "y", result_type = "dynamic", cohortvar2 = "G2",
+                 effect_model = ~ factor(gvec) + factor(gactive):factor(t))
+
+quadratic_fit <- fastdid(data = dt,
+                 timevar = "time", cohortvar = "G", unitvar = "unit",
+                 outcomevar = "y", result_type = "dynamic", cohortvar2 = "G2",
+                 effect_model = ~ factor(gvec) + poly(e, 2))
+
+clean_only <- fastdid(data = dt,
+                 timevar = "time", cohortvar = "G", unitvar = "unit",
+                 outcomevar = "y", result_type = "dynamic", cohortvar2 = "G2",
+                 effect_model = "unrestricted")
+```
+
+With `full = TRUE`, `effect_diag` holds the weight of every first-stage cell in every reported cell, the estimability and the extrapolation gap of every candidate cell, the residuals of the fit, and an over-identification test of the model on the clean cells.
+
+```{r, diag2}
+full_fit <- fastdid(data = dt,
+                 timevar = "time", cohortvar = "G", unitvar = "unit",
+                 outcomevar = "y", result_type = "group_group_time", cohortvar2 = "G2",
+                 effect_model = ~ factor(gvec) + poly(e, 2), full = TRUE)
+head(full_fit$effect_diag$y$cells)
+full_fit$effect_diag$y$overid$target
+```
+
+When the events are the first and the second occurrence of one event kind, set `effect_fit = "ordered"`. The cohort dates must increase. The design row of a cell is then the sum over its active events, so a formula can share the event-time profile across occurrences. `result_type = "dynamic_event"` averages the effect of every occurrence at each event time.
+
+```{r, ordered, eval = FALSE}
+ordered_fit <- fastdid(data = dt_ordered,
+                 timevar = "time", cohortvar = "G", unitvar = "unit",
+                 outcomevar = "y", result_type = "dynamic_event", cohortvar2 = "G2",
+                 effect_model = ~ 0 + factor(gvec):factor(event) + factor(e),
+                 effect_fit = "ordered")
+```

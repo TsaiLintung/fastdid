@@ -1,5 +1,5 @@
-#2026-08-31
-message('loading fastdid source ver. ver: 1.1.0 date: 2026-08-31')
+#2026-09-15
+message('loading fastdid source ver. ver: 1.1.0 date: 2026-09-15')
 require(data.table);
  require(stringr);
  require(BMisc);
@@ -18,25 +18,35 @@ aggregate_gt <- function(all_gt_result, aux, p) {
     }),
     agg_weight_matrix = lapply(results, function(x) {
       x$weight_matrix
+    }),
+    es_weight_matrix = lapply(results, function(x) {
+      x$es_weight
+    }),
+    effect_diag = lapply(results, function(x) {
+      x$effect_diag
     })
   ))
 }
 
 aggregate_gt_outcome <- function(gt_result, aux, p) {
-  # get aggregation scheme from g-t to target parameters
-  agg_sch <- get_agg_sch(gt_result, aux, p)
-
+  cells <- get_cell_table(gt_result, aux, p)
   att <- gt_result$att
   inf_func <- gt_result$inf_func
 
-  # influence from double did is calculated before the influence from aggregation 
+  # the second stage runs before the aggregation, on the first-stage cells
+  es_weight <- NULL
+  effect_diag <- NULL
   if (p$event_specific && !allNA(p$cohortvar2)) {
-    es_weight <- agg_sch$es_sto_weight + agg_sch$es_det_weight
-    # the double DiD weights are signed, and each period is normalized on its own
-    es_inf_weights <- get_weight_influence(att, agg_sch$pre_es_group_time, agg_sch$es_sto_weight, aux, p, by_period = TRUE)
-    att <- (es_weight) %*% att
-    inf_func <- (inf_func %*% t(es_weight)) + es_inf_weights
+    ss <- second_stage(cells, att, inf_func, aux, p)
+    cells <- ss$cells # some gt may not have an identified effect (ex: g1 == g2)
+    att <- ss$att
+    inf_func <- ss$inf_func
+    es_weight <- ss$weight
+    effect_diag <- ss$diag
   }
+
+  # get aggregation scheme from cells to target parameters
+  agg_sch <- get_agg_sch(cells, p)
 
   # get att
   agg_att <- agg_sch$agg_weights %*% att
@@ -61,44 +71,20 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
   return(list(
     result = result,
     inf_func = inf_matrix,
-    weight_matrix = agg_sch$agg_weights
+    weight_matrix = agg_sch$agg_weights,
+    es_weight = es_weight,
+    effect_diag = effect_diag
   ))
 }
 
 # scheme ------------------------------------------------------------------------
 
 #' Scheme for aggregation.
+#'
+#' @param group_time the cell table, after the second stage when there is one.
+#' @return the targets, the weight of each cell in each target, and the table.
 #' @noRd
-get_agg_sch <- function(gt_result, aux, p) {
-  # create group_time
-  id_dt <- data.table(weight = aux$weights / sum(aux$weights), G = aux$dt_inv[, G])
-  pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
-  group_time <- gt_result$gt |> merge(pg_dt, by = "G", sort = FALSE)
-  group_time[, mg := ming(G)]
-  M <- if(allNA(p$cohortvar2)) 1L else 1L + length(p$cohortvar2)
-  gcol <- paste0("G", seq_len(M))
-  for(d in seq_len(M)){
-    group_time[, (paste0("G", d)) := gd(G, d)]
-  }
-  do.call(setorderv, c(list(group_time), list(c("time", "mg", gcol)))) # match order in gtatt
-  if (!all(names(gt_result$att) == group_time[, paste0(G, ".", time)])) {
-    stop("some bug makes gt misaligned, please report this to the maintainer. Thanks.")
-  }
-
-  # get the event-specific matrix, and available ggts
-  if (p$event_specific && !allNA(p$cohortvar2)) {
-    es <- get_es_scheme(group_time, aux, p)
-    pre_es_group_time <- group_time
-    pre_es_group_time[, pg := NULL]
-    group_time <- es$group_time # some gt may not have availble effect (ex: g1 == g2)
-    es_det_weight <- as.matrix(es$es_det_weight)
-    es_sto_weight <- as.matrix(es$es_sto_weight)
-  } else {
-    es_det_weight <- NULL
-    es_sto_weight <- NULL
-    pre_es_group_time <- NULL
-  }
-
+get_agg_sch <- function(group_time, p) {
   # choose the target based on aggregation type
   tg <- get_agg_targets(group_time, p)
   group_time <- tg$group_time
@@ -119,10 +105,7 @@ get_agg_sch <- function(gt_result, aux, p) {
   return(list(
     agg_weights = agg_weights, # a matrix of each target and gt's weight in it
     targets = targets,
-    group_time = group_time,
-    pre_es_group_time = pre_es_group_time,
-    es_det_weight = es_det_weight,
-    es_sto_weight = es_sto_weight
+    group_time = group_time
   ))
 }
 
@@ -137,7 +120,8 @@ get_agg_targets <- function(group_time, p) {
     simple = group_time[, target := post],
     group_time = group_time[, target := paste0(g1(G), ".", time)],
     group_group_time = group_time[, target := paste0(G, ".", time)],
-    dynamic_stagger = group_time[, target := paste0(time - g1(G), ".", g1(G) - gprime(G))]
+    dynamic_stagger = group_time[, target := paste0(time - g1(G), ".", g1(G) - gprime(G))],
+    dynamic_event = group_time[, target := e] # the event time of the modeled event
   )
 
   # allow custom aggregation scheme, this overides other stuff
@@ -197,7 +181,9 @@ get_weight_influence <- function(att, group, agg_weights, aux, p, by_period = FA
     for(d in seq_len(M)){
       group[, (paste0("G", d)) := gd(G, d)]
     }
-    do.call(setorderv, c(list(group), list(c("time", "mg", gcol_w)))) # sort
+    sortcols <- c("time", "mg", gcol_w)
+    if ("event" %in% names(group)) sortcols <- c(sortcols, "event") # one row per event in a stacked fit
+    do.call(setorderv, c(list(group), list(sortcols))) # sort
   }
 
   if (!p$parallel) {
@@ -319,6 +305,9 @@ get_exper_default <- function(exper, exper_args){
   if(!is.na(exper$only_balance_2by2) && exper$only_balance_2by2){ #will create this col in the get_aux part
     exper$filtervar <- "no_na"
     exper$filtervar_post <- "no_na"
+  }
+  if(is.na(exper$effect_tol)){
+    exper$effect_tol <- 1e-7
   }
   
   return(exper)
@@ -565,6 +554,10 @@ convert_targets <- function(results, p, t){
          dynamic_stagger = {
            results[, event_time_1 :=  as.numeric(str_split_i(target, "\\.", 1))]
            results[, event_stagger :=  as.numeric(str_split_i(target, "\\.", 2))]
+         },
+         dynamic_event = {
+           results[, event_time := target]
+           setcolorder(results, "event_time", before = 1)
          }
   )
   
@@ -720,176 +713,338 @@ coerce_dt_doub <- function(dt, p){
 
 }
 
-# aggregation scheme -----------------------------------------------------------
+# effect model scheme ----------------------------------------------------------
 
-#' The scheme for the event-specific effect.
+#' The scheme for a formula-based second stage.
+#'
+#' A cell equals the pure target effect plus the confounding effect. The user
+#' models one component as a linear function of cell features. The model is fit
+#' by weighted least squares on the cells where the component is observed alone
+#' (the clean cells), and imputed into the confounded cells. A cell is estimable
+#' when its regressor row lies in the row space of the fit design. The imputed
+#' value is then a linear combination of first-stage cells, so the weights slot
+#' into the same contract as `get_es_scheme()`.
+#'
+#' Three fit modes: `"separate"` fits one component on its clean cells,
+#' `"joint"` stacks the events additively and fits on every cell, `"ordered"`
+#' does the same for the k-th occurrence of one event kind, where the stacked
+#' sum holds by telescoping.
+#'
+#' @param cells the cell table from `get_cell_table()`.
+#' @param att,inf_func the first-stage estimates and influence functions.
+#' @return a list: `group_time` (the reported rows), `es_det_weight`,
+#'   `es_sto_weight` (zero), and `diag` (weights, cells, fit, overid).
 #' @noRd
-get_es_scheme <- function(group_time, aux, p){
+get_effect_scheme <- function(cells, att, inf_func, aux, p) {
+  tab <- build_effect_table(cells, p)
+  K <- nrow(tab)
 
-  es_group_time <- copy(group_time) #group_time with available es effect
-  #create lookup (columns already populated by get_agg_sch)
-  es_weight_list <- list()
+  # the direct rows: a clean cell is the pure target effect, pre-periods included
+  direct <- tab[clean1 == TRUE & is.finite(G1)]
+  direct[, `:=`(event = 1L, e = e1, component = "direct", estimable = TRUE, leverage = 0, e_gap = 0)]
+  rep_rows <- direct
+  det <- unit_rows(direct[, cell], K)
+  fits <- list()
 
-  ggt <- as.list(seq_len(nrow(group_time)))
-  if(!p$parallel){
-    es_weight_list <- lapply(ggt, get_es_ggt_weight, group_time, aux, p)
-  } else {
-    es_weight_list <- mclapply(ggt, get_es_ggt_weight, group_time, aux, p, mc.cores = getDTthreads())
+  if (p$effect_kind != "unrestricted") {
+    long <- if (p$effect_fit == "separate") build_component_rows(tab, p) else build_event_rows(tab, p)
+    long[, lid := .I] # a cell has one row per modeled event, so the cell index is not unique
+    X <- build_design(p$effect_model, long)
+
+    # fit each component, and collect the weight of each modeled row
+    for (comp in unique(long[, component])) {
+      in_comp <- long[, component == comp]
+      lr <- long[in_comp]
+      Xc <- X[in_comp, , drop = FALSE]
+      fit_long <- lr[, fit]
+      tr <- lr[target == TRUE]
+      if (nrow(tr) == 0) next
+      # a component with no clean cell identifies nothing
+      if (!any(fit_long)) {
+        tr[, `:=`(estimable = FALSE, leverage = NA_real_, e_gap = NA_real_)]
+        if (comp == "confound") tr[, `:=`(event = 1L, e = e1)]
+        rep_rows <- rbind(rep_rows, tr, fill = TRUE)
+        det <- rbind(det, matrix(0, nrow(tr), K))
+        next
+      }
+      # a stacked design sums the event rows of a cell
+      Xf <- rowsum(Xc[fit_long, , drop = FALSE], lr[fit_long, cell])
+      fit_cells <- as.integer(rownames(Xf))
+      fit <- wls_fit(Xf, as.vector(att)[fit_cells], tab[fit_cells, pg], p$exper$effect_tol)
+      fit$cells <- fit_cells
+      fit$component <- comp
+      fits[[comp]] <- fit
+
+      # the event-time gap to the last fit cell of the same cohort and event
+      own_max <- lr[fit == TRUE, .(emax = max(e)), by = .(G, event)]
+      tr <- merge(tr, own_max, by = c("G", "event"), all.x = TRUE, sort = FALSE)
+      tr[, e_gap := pmax(e - emax, 0)]
+      Xt <- Xc[match(tr[, lid], lr[, lid]), , drop = FALSE]
+
+      det_comp <- matrix(0, nrow(tr), K)
+      est <- logical(nrow(tr))
+      lev <- rep(NA_real_, nrow(tr))
+      for (i in seq_len(nrow(tr))) {
+        x <- Xt[i, ]
+        est[i] <- is_estimable(x, fit, p$exper$effect_tol)
+        if (!est[i]) next
+        lev[i] <- as.numeric(t(x) %*% fit$pinv %*% x)
+        w <- impute_weights(x, fit)
+        det_comp[i, fit$cells] <- w
+        if (comp == "confound") { # the interacted target effect is the cell minus the confounding effect
+          det_comp[i, ] <- -det_comp[i, ]
+          det_comp[i, tr[i, cell]] <- det_comp[i, tr[i, cell]] + 1
+        }
+      }
+      tr[, `:=`(estimable = est, leverage = lev)]
+      # the reported row is the effect of event 1, whichever component was modeled
+      if (comp == "confound") tr[, `:=`(event = 1L, e = e1)]
+      rep_rows <- rbind(rep_rows, tr, fill = TRUE)
+      det <- rbind(det, det_comp)
+    }
   }
 
-  valid_ggt <- which(!sapply(es_weight_list, is.null))
-  es_group_time <- es_group_time[valid_ggt] #remove the ones without
-  es_weight_list <- es_weight_list[valid_ggt]
+  return(finish_effect_scheme(rep_rows, det, tab, fits, p, att, inf_func))
+}
 
-  # a cohort with g1 == g' carries no separable effect, so the post-periods can all be gone
-  if(nrow(es_group_time) == 0 || !es_group_time[, any(time >= G1 - p$anticipation)]){
+#' Order the reported rows, drop the cells that are not estimable, and build
+#' the diagnostics.
+#' @noRd
+finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
+  M <- 1L + length(p$cohortvar2)
+  gcol <- paste0("G", seq_len(M))
+  rep_rows[, ri := .I]
+  # a cohort treated and confounded in the same period is tried under both
+  # components; the target component wins when both are estimable
+  rep_rows[, prio := match(component, c("direct", "target", "confound", "joint"))]
+  setorder(rep_rows, cell, event, prio)
+  rep_rows[, keep := estimable & !duplicated(paste(cell, event, estimable))]
+  do.call(setorderv, c(list(rep_rows), list(c("time", "mg", gcol, "event", "prio"))))
+  det <- det[rep_rows[, ri], , drop = FALSE]
+
+  # a cohort treated and confounded in the same period has no clean cell, so
+  # only the other cells are worth a warning
+  surprise <- rep_rows[estimable == FALSE & G1 != gprime(G)]
+  if (nrow(surprise) > 0) {
+    warning(nrow(surprise), " cell(s) are not estimable under the effect model and are dropped. ",
+            "see `effect_diag$cells` with `full = TRUE`.")
+  }
+  keep <- rep_rows[, keep]
+  if (!any(keep)) {
+    stop("no cell is estimable under the effect model.")
+  }
+  if (!rep_rows[keep, any(time >= G1 - p$anticipation)]) {
     warning("no event-specific post-period effect is identified for any cohort. ",
             "check that some cohort has the first event at a different time than the confounding events.")
   }
 
-  es_det_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$det}))
-  es_sto_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$sto}))
+  det_keep <- det[keep, , drop = FALSE]
+  colnames(det_keep) <- tab[, paste0(G, ".", time)]
+  rownames(det_keep) <- rep_rows[keep, paste0(G, ".", time, ".", event)]
 
-  return(list(group_time = es_group_time, es_det_weight = es_det_weight, es_sto_weight = es_sto_weight))
+  diag <- list(
+    weights = det_keep,
+    cells = rep_rows[, .(G, time, event, component, estimable, leverage, e_gap)],
+    fit = lapply(fits, function(f) fit_summary(f, att, tab)),
+    overid = lapply(fits, get_effect_overid, att, inf_func)
+  )
 
+  out <- rep_rows[keep, c("G", "time", "pg", "mg", gcol, "event", "e", "component"), with = FALSE]
+  return(list(group_time = out, es_det_weight = det_keep, es_sto_weight = det_keep * 0, diag = diag))
 }
 
-#' Keep the control cohorts that are available at both periods.
+# cell features ----------------------------------------------------------------
+
+#' The cell table with the features that a formula can use.
 #'
-#' A first-stage cell can be missing, for example after an estimation failure or
-#' with an unbalanced panel. The two periods then normalize over different
-#' populations. This function restricts both to the common cohorts.
-#'
-#' @param group_time the group-time table.
-#' @param cp,cb logical vectors, the control rows at t and at the base period.
-#' @param gg,t,base_period the target cohort and the two periods, for the message.
-#' @return a list with the two restricted logical vectors, or NULL if no cohort is common.
+#' Adds the cell index, the event times `e1..eM`, the earliest confounding
+#' date `gp`, the confounding profile `gconf`, and the windows: `active1` and
+#' `clean1` for the target effect, `activec` and `cleanc` for the confounding
+#' effect. The windows use the anticipation of each event.
 #' @noRd
-intersect_control <- function(group_time, cp, cb, gg, t, base_period){
-  common <- intersect(group_time[cp, G], group_time[cb, G])
-  if(length(common) == 0){
-    warning("the control cohorts at ", t, " and at ", base_period,
-            " do not overlap for cohort ", gg, ". fastdid skips the cell.")
-    return(NULL)
+build_effect_table <- function(cells, p) {
+  tab <- copy(cells)
+  M <- 1L + length(p$cohortvar2)
+  tab[, cell := .I]
+  tab[, ord := .I]
+  tab[, gvec := G]
+  tab[, t := as.numeric(time)]
+  for (d in seq_len(M)) {
+    tab[, (paste0("e", d)) := t - get(paste0("G", d))]
   }
-  in_common <- group_time[, G %in% common]
-  return(list(cp = cp & in_common, cb = cb & in_common))
+  tab[, gp := gprime(G)]
+  tab[, gconf := str_split_fixed(G, "-", 2)[, 2]]
+  a1 <- p$anticipation
+  a2 <- p$anticipation2
+  tab[, active1 := t >= G1 - a1]
+  tab[, clean1 := t < gp - a2]
+  tab[, activec := t >= gp - a2]
+  tab[, cleanc := t < G1 - a1]
+  return(tab)
 }
 
-#' The scheme for the group-group-time estimates.
-#' Implements Theorem 3 of Tsai (2026) for M >= 2 events.
+#' One row per cell and modeled component, for the separate fit.
+#'
+#' The target component has one row per cell where event 1 is active. Its fit
+#' set is the clean cells. The confounding component has one row per cell where
+#' a confounding event is active. Its fit set is the cells before event 1.
+#' `gactive` is the confounding profile active at `t`, so a control cohort with
+#' an extra active event gets its own column.
 #' @noRd
-get_es_ggt_weight <- function(ggt, group_time, aux, p){
+build_component_rows <- function(tab, p) {
+  M <- 1L + length(p$cohortvar2)
+  a2 <- p$anticipation2
 
-  group_time <- copy(group_time) #avoid accidental modification
+  target <- tab[active1 == TRUE & is.finite(G1)]
+  target[, `:=`(component = "target", event = 1L, gown = as.character(G1), gactive = as.character(G1),
+                ghist = as.character(G1), e = e1)]
+  target[, fit := clean1]
+  # a cohort treated and confounded in the same period is tried under both components
+  target[, target := !clean1 & G1 <= gp]
 
-  group_time[, det_weight := 0] #reset
-  group_time[, sto_weight := 0] #reset
-  t     <- group_time[ggt, time]
-  g1_val <- group_time[ggt, G1]
-  gg    <- group_time[ggt, G]
+  confound <- tab[activec == TRUE]
+  confound[, `:=`(component = "confound", event = 2L, gown = gconf, ghist = gconf, e = t - gp)]
+  active_dates <- lapply(2:M, function(d) {
+    confound[, ifelse(t >= get(paste0("G", d)) - a2, as.character(get(paste0("G", d))), "Inf")]
+  })
+  confound[, gactive := do.call(paste, c(active_dates, list(sep = "-")))]
+  confound[, fit := cleanc]
+  confound[, target := active1 & G1 >= gp]
 
-  if(is.infinite(g1_val)){return(NULL)}
+  rows <- rbind(target, confound)
+  return(rows)
+}
 
-  M_val <- 1L + length(p$cohortvar2)   # total number of events
-  gp    <- gprime(gg)                  # g' = min_{d!=1}(g^d), earliest confounding event
+#' One row per cell and active event, for the stacked fits.
+#'
+#' The design row of a cell is the sum of its event rows. `ghist` is the
+#' cohort vector truncated at the event, so a formula can stratify on the
+#' history of earlier events.
+#' @noRd
+build_event_rows <- function(tab, p) {
+  M <- 1L + length(p$cohortvar2)
+  a <- c(p$anticipation, rep(p$anticipation2, M - 1))
+  rows <- rbindlist(lapply(seq_len(M), function(d) {
+    r <- tab[t >= get(paste0("G", d)) - a[d]]
+    if (nrow(r) == 0) return(NULL)
+    r[, `:=`(component = "joint", event = as.integer(d), gown = as.character(get(paste0("G", d))),
+             e = get(paste0("e", d)))]
+    r[, gactive := gown]
+    r[, ghist := do.call(paste, c(lapply(seq_len(d), function(k) as.character(get(paste0("G", k)))), list(sep = "-")))]
+    r
+  }))
+  rows[, fit := TRUE]
+  # a clean cell of event 1 is reported as it is
+  rows[, target := !(event == 1L & clean1)]
+  return(rows)
+}
 
-  # the anticipation of the confounding event contaminates the periods before g', so
-  # the direct case stops one anticipation horizon earlier
-  if(t < gp - p$anticipation2){ # Case 1: direct pure effect (before any confounding event)
-
-    group_time[ggt, det_weight := 1]
-
-  } else if(g1_val < gp) { # Case 2: imputation (treated before confounded)
-    # C^imp = {h : h^1 = g^1, for all d!=1, h^d > t}
-
-    base_period <- gp - 1 - p$anticipation2
-    if(base_period == t){return(NULL)}
-    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+p$anticipation2+1)
-
-    tb <- group_time[, G == gg & time == base_period]
-
-    # control: same G1, and ALL confounding events not yet occurred (each h^d >= min_control_cohort)
-    c <- group_time[, G1 == g1_val]
-    for(d in 2:M_val){
-      Gd_vals <- group_time[[paste0("G", d)]]
-      c <- c & (Gd_vals >= min_control_cohort)
-    }
-    if(p$control_option == "notyet"){
-      # exclude never-confounded units: require each h^d < Inf
-      for(d in 2:M_val){
-        Gd_vals <- group_time[[paste0("G", d)]]
-        c <- c & !is.infinite(Gd_vals)
-      }
-    }
-    cp <- group_time[, c & time == t]
-    cb <- group_time[, c & time == base_period]
-
-    #if any group have no available cohort, skip
-    if(sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
-
-    common <- intersect_control(group_time, cp, cb, gg, t, base_period)
-    if(is.null(common)){return(NULL)}
-    cp <- common$cp
-    cb <- common$cb
-
-    #assign the weights
-    group_time[tb, det_weight := 1]
-    group_time[cp, sto_weight := pg/sum(pg)]
-    group_time[cb, sto_weight := -pg/sum(pg)]
-
-  } else if (g1_val > gp) { # Case 3: double DiD (confounded before treated)
-    # C^did = {h : h^1 > t, h^d = g^d if g^d <= t, h^d > max(t, base) if g^d > t}
-
-    # the theorem covers the post-period of the first event only
-    if(t < g1_val - p$anticipation){return(NULL)}
-
-    base_period <- g1_val - 1 - p$anticipation
-    if(base_period == t){return(NULL)}
-    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+p$anticipation+1)
-    min_conf_cohort <- max(t, base_period) + p$anticipation2 + 1
-
-    tp <- group_time[,.I == ggt]
-    tb <- group_time[,G == gg & time == base_period]
-
-    # control: h^1 not yet treated, and for every confounding event either the same
-    # timing as the target (g^d <= t), or no event at all yet (g^d > t). without the
-    # second rule a control can carry an event the target does not have.
-    c <- group_time[, G1 >= min_control_cohort & G1 != g1_val]
-    for(d in 2:M_val){
-      g_d <- gd(gg, d)
-      Gd_vals <- group_time[[paste0("G", d)]]
-      if(g_d <= t){  # this confounding event has already occurred for the target cohort
-        c <- c & (Gd_vals == g_d)
-      } else {       # the target is not confounded by it, so the control must not be either
-        c <- c & (Gd_vals >= min_conf_cohort)
-      }
-    }
-    if(p$control_option == "notyet"){
-      c[group_time[, is.infinite(G1)]] <- FALSE
-    }
-    cp <- group_time[, c & time == t]
-    cb <- group_time[, c & time == base_period]
-
-    #if any group have no available cohort, skip
-    if(sum(tp) == 0 || sum(tb) == 0 || sum(cp) == 0 || sum(cb) == 0){return(NULL)}
-
-    common <- intersect_control(group_time, cp, cb, gg, t, base_period)
-    if(is.null(common)){return(NULL)}
-    cp <- common$cp
-    cb <- common$cb
-
-    #assign the weights
-    group_time[tp, det_weight := 1]
-    group_time[tb, det_weight := -1]
-    group_time[cp, sto_weight := -pg/sum(pg)]
-    group_time[cb, sto_weight := pg/sum(pg)]
-
+#' The design matrix of the long rows.
+#'
+#' One `model.matrix()` call over every row, so the factor levels and the
+#' polynomial bases are shared between the fit rows and the target rows.
+#' @noRd
+build_design <- function(formula, long) {
+  vars <- all.vars(formula)
+  allowed <- names(long)
+  bad <- setdiff(vars, allowed)
+  if (length(bad) > 0) {
+    stop("the effect model uses ", paste(bad, collapse = ", "), ". the available variables are: ",
+         "gvec, t, event, e, gown, gactive, ghist, g1..gM, e1..eM.")
   }
+  X <- tryCatch({
+    mf <- stats::model.frame(formula, data = long, na.action = stats::na.pass)
+    stats::model.matrix(formula, mf)
+  }, error = function(err) {
+    stop("the effect model cannot be built: ", conditionMessage(err),
+         ". an event time `e2..eM` is infinite for a cohort without that event; use `e` and `gown`.")
+  })
+  if (any(!is.finite(X))) {
+    stop("the effect model has a non-finite regressor. an event time `e2..eM` is infinite for a cohort ",
+         "without that event; use `e` and `gown`, which refer to the modeled event.")
+  }
+  return(X)
+}
 
-  if(all(group_time[, det_weight+sto_weight] == 0)){return(NULL)} #not redundant!
-  return(list(det = group_time[, det_weight], sto = group_time[, sto_weight]))
+# linear algebra ---------------------------------------------------------------
 
+#' Weighted least squares through the SVD of the normal matrix.
+#'
+#' The singular values below `tol` times the largest are treated as zero. The
+#' right singular vectors that remain span the row space of the design, which
+#' the estimability check reads.
+#' @return a list: `pinv`, `rank`, `V`, `X`, `w`, `y`, `coef`, `fitted`, `resid`.
+#' @noRd
+wls_fit <- function(X, y, w, tol) {
+  A <- crossprod(X, X * w)
+  s <- svd(A)
+  keep <- s$d > tol * max(s$d, .Machine$double.eps)
+  V <- s$v[, keep, drop = FALSE]
+  pinv <- V %*% (t(V) / s$d[keep])
+  coef <- as.vector(pinv %*% crossprod(X, w * y))
+  fitted <- as.vector(X %*% coef)
+  list(pinv = pinv, rank = sum(keep), V = V, X = X, w = w, y = y,
+       coef = stats::setNames(coef, colnames(X)), fitted = fitted, resid = y - fitted)
+}
+
+#' Is the regressor row in the row space of the fit design?
+#' @noRd
+is_estimable <- function(x, fit, tol) {
+  r <- x - fit$V %*% crossprod(fit$V, x)
+  sqrt(sum(r^2)) <= sqrt(tol) * max(1, sqrt(sum(x^2)))
+}
+
+#' The weight of each fit cell in the imputed value `x' beta`.
+#' @noRd
+impute_weights <- function(x, fit) {
+  as.vector(crossprod(fit$pinv %*% x, t(fit$X) * rep(fit$w, each = ncol(fit$X))))
+}
+
+#' Rows of the identity, one per direct cell.
+#' @noRd
+unit_rows <- function(cells, K) {
+  m <- matrix(0, length(cells), K)
+  m[cbind(seq_along(cells), cells)] <- 1
+  m
+}
+
+# diagnostics ------------------------------------------------------------------
+
+#' A summary of one fit: the formula, the size, the rank, the coefficients,
+#' and the residual of every fit cell.
+#' @noRd
+fit_summary <- function(fit, att, tab) {
+  list(
+    component = fit$component,
+    n_fit = length(fit$cells),
+    rank = fit$rank,
+    coef = fit$coef,
+    residuals = data.table(G = tab[fit$cells, G], time = tab[fit$cells, time],
+                           att = fit$y, fitted = fit$fitted, resid = fit$resid)
+  )
+}
+
+#' The over-identification test of one fit.
+#'
+#' The residual of the fit cells is a linear combination of first-stage cells,
+#' so its variance comes from the influence functions. The statistic is the
+#' residual quadratic form in the pseudo-inverse of that variance, with the
+#' degrees of freedom of the null space. The bootstrap does not cover it.
+#' @noRd
+get_effect_overid <- function(fit, att, inf_func) {
+  n <- length(fit$cells)
+  H <- fit$X %*% fit$pinv %*% (t(fit$X) * rep(fit$w, each = ncol(fit$X)))
+  R <- diag(n) - H
+  IF <- inf_func[, fit$cells, drop = FALSE] %*% t(R)
+  V <- crossprod(IF) / nrow(IF)^2
+  r <- fit$resid
+  df <- n - fit$rank
+  if (df <= 0) return(list(stat = 0, df = 0, pvalue = NA_real_))
+  s <- svd(V)
+  keep <- s$d > 1e-10 * max(s$d)
+  Vinv <- s$v[, keep, drop = FALSE] %*% (t(s$u[, keep, drop = FALSE]) / s$d[keep])
+  stat <- as.numeric(t(r) %*% Vinv %*% r)
+  list(stat = stat, df = df, pvalue = stats::pchisq(stat, df, lower.tail = FALSE))
 }
 
 estimate_did <- function(dt_did, covvars, p, cache){
@@ -1556,7 +1711,7 @@ get_covvars <- function(base_period, t, aux, p){
 #' @param unitvar character, name of the unit (id) variable.
 #' @param outcomevar character vector, name(s) of the outcome variable(s).
 #' @param control_option character, control units used for the DiD estimates, options are "both", "never", or "notyet".
-#' @param result_type character, type of result to return, options are "group_time", "time", "group", "simple", "dynamic" (time since event), "group_group_time", or "dynamic_stagger".
+#' @param result_type character, type of result to return, options are "group_time", "time", "group", "simple", "dynamic" (time since event), "group_group_time", "dynamic_stagger", or "dynamic_event" (the average effect of every event at each event time, for `effect_fit = "ordered"`).
 #' @param balanced_event_time number, max event time to balance the cohort composition.
 #' @param control_type character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), or "dr" (doubly-robust).
 #' @param allow_unbalance_panel logical, allow unbalance panel as input or coerce dataset into one.
@@ -1581,6 +1736,7 @@ get_covvars <- function(base_period, t, aux, p){
 #'     \item{`only_balance_2by2`}{logical, keep only units observed in both periods of each 2x2 DiD.}
 #'     \item{`aggregate_scheme`}{character, a custom aggregation expression evaluated as `group_time[, target := <expr>]`.}
 #'     \item{`max_control_cohort_diff`}{numeric, maximum cohort difference between treated and control groups.}
+#'     \item{`effect_tol`}{numeric, the relative tolerance of the rank and estimability checks of an effect model. Default is 1e-7.}
 #'   }
 #' @param base_period character, type of base period in pre-preiods, options are "universal", or "varying".
 #' @param full logical, whether to return the full result (influence function, call, weighting scheme, etc,.).
@@ -1589,9 +1745,11 @@ get_covvars <- function(base_period, t, aux, p){
 #' @param event_specific logical, whether to recover target treatment effect or use combined effect.
 #' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet". "notyet" keeps a control cohort only if every confounding event is finite and later than the period, so the control must be confounded eventually by all of them. With M >= 3 events this can leave very few control cohorts, and "both" is the recommended option.
 #' @param add_base_period logical, whether to add a placeholder base period in dynamic results.
+#' @param effect_model the second-stage model of the treatment effects, for multiple events. `"parallel"` (the default) is the parallel treatment effects estimator. `"unrestricted"` reports the clean cells only. A one-sided formula models one component of the cell as a linear function of the cell features, see Details.
+#' @param effect_fit character, how a formula is fit. `"separate"` fits the modeled component on its clean cells. `"joint"` stacks the events additively and fits on every cell. `"ordered"` does the same for the k-th occurrence of one event kind, where the cohort dates must increase.
 #'
 #' @import data.table stringr dreamerr ggplot2
-#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean
+#' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean model.frame model.matrix na.pass pchisq setNames
 #' @importFrom parglm parglm.fit parglm.control
 #' @importFrom collapse allNA fnrow whichNA fnunique fsum na_insert
 #' @importFrom parallel mclapply
@@ -1608,6 +1766,19 @@ get_covvars <- function(base_period, t, aux, p){
 #' `cohortvar2` accepts a character vector of length M-1 to support M>2 treatment events.
 #'
 #' `biters` and `clustervar` are only used when `boot == TRUE`.
+#'
+#' **Effect models.** With multiple events, a first-stage cell (cohort vector, period) identifies the combined effect of every active event. The second stage recovers the effect of event 1. An `effect_model` formula states a linear model for one component of the cell, fit by weighted least squares on the cells where that component is observed alone, and imputed into the other cells. A cell is reported only when it is estimable: its regressor row lies in the row space of the fit design. The formula can use these cell features:
+#'   \describe{
+#'     \item{`gvec`}{the cohort vector, as the string `"g1-g2-...-gM"`}
+#'     \item{`t`}{the period}
+#'     \item{`g1`, ..., `gM`, `e1`, ..., `eM`}{the date and the event time of each event}
+#'     \item{`event`}{the modeled event: 1 for the target, 2 for the confounding bundle, k in the stacked fits}
+#'     \item{`gown`}{the date of the modeled event (the confounding profile for the bundle)}
+#'     \item{`gactive`}{the dates of the modeled events that are active at `t`}
+#'     \item{`ghist`}{the cohort vector truncated at the modeled event}
+#'     \item{`e`}{the event time of the modeled event}
+#'   }
+#' The model `~ factor(gvec) + factor(gactive):factor(t)` is the parallel treatment effects assumption of `"parallel"`, fit on every clean cell at once. `~ factor(gvec) + poly(e, 2)` is a quadratic profile in event time with a cohort level. With `effect_fit = "separate"`, the target component is modeled for cohorts treated before they are confounded, and the confounding component for cohorts confounded before they are treated; the reported effect is the pure effect in the first case and the interacted effect in the second. With `effect_fit = "joint"` or `"ordered"`, the design row of a cell is the sum over its active events, so a formula can share parameters across events, for example `~ 0 + factor(gvec):factor(event) + factor(e)`. Use `~ 0 + ...` in a stacked fit, because an intercept counts once per active event. `result_type = "dynamic_event"` averages the effect of every event at each event time, with cohort-size weights. The weights of the fit are treated as fixed in the influence function. `double_control_option` and `control_option = "notyet"` do not restrict the fit set of a formula. With `full = TRUE`, `effect_diag` returns the weight of every first-stage cell in every reported cell, the estimability of every candidate cell, the fit residuals, and an over-identification test.
 #'
 #' @examples
 #' # simulated data
@@ -1630,7 +1801,8 @@ fastdid <- function(data,
                     copy = TRUE, validate = TRUE,
                     anticipation = 0, anticipation2 = 0, base_period = "universal",
                     exper = NULL, full = FALSE, parallel = FALSE,
-                    cohortvar2 = NA, event_specific = TRUE, double_control_option = "both", add_base_period = FALSE) {
+                    cohortvar2 = NA, event_specific = TRUE, double_control_option = "both", add_base_period = FALSE,
+                    effect_model = "parallel", effect_fit = "separate") {
   # preprocess --------------------------------------------------------
 
   if (!is.data.table(data)) {
@@ -1643,6 +1815,12 @@ fastdid <- function(data,
     dt <- data
   }
 
+  # the presets are matched here, so that the rest of the code reads one value
+  if (is.character(effect_model)) {
+    effect_model <- match.arg(effect_model, c("parallel", "unrestricted"))
+  }
+  effect_kind <- if (is.character(effect_model)) effect_model else "formula"
+
   # validate arguments
   p <- as.list(environment()) # collect everything besides data
   p$data <- NULL
@@ -1651,7 +1829,7 @@ fastdid <- function(data,
   exper_args <- c(
     "filtervar", "filtervar_post", "only_balance_2by2",
     "aggregate_scheme", "max_control_cohort_diff",
-    "only_est_min", "only_est_max"
+    "only_est_min", "only_est_max", "effect_tol"
   )
   p$exper <- get_exper_default(p$exper, exper_args)
   class(p) <- "locked" # no more changes!
@@ -1691,7 +1869,9 @@ fastdid <- function(data,
       estimate = est_results,
       gt_estimate = gt_result_list,
       agg_inf_func = agg_result$inf_func,
-      agg_weight_matrix = agg_result$agg_weight_matrix
+      agg_weight_matrix = agg_result$agg_weight_matrix,
+      es_weight_matrix = agg_result$es_weight_matrix,
+      effect_diag = agg_result$effect_diag
     )
     class(full_result) <- c("fastdid_result", class(full_result))
     return(full_result)
@@ -1728,17 +1908,19 @@ plot_did_dynamics <- function(x, margin = "event_time") {
   if (margin == "event_time") {
     et_range <- min(x[, event_time]):max(x[, event_time])
     base_time <- et_range[!et_range %in% x[, unique(event_time)]]
-    if (length(base_time) != 1) {
+    if (length(base_time) > 1) {
       stop("missing more than one period")
     }
 
-    # add the base period
-    if ("outcome" %in% names(x)) {
-      base_row <- data.table(att = 0, se = 0, event_time = base_time, outcome = x[, unique(outcome)], att_ciub = 0, att_cilb = 0)
-    } else {
-      base_row <- data.table(att = 0, se = 0, event_time = base_time, att_ciub = 0, att_cilb = 0)
+    # add the base period; a result with post periods only has none to add
+    if (length(base_time) == 1) {
+      if ("outcome" %in% names(x)) {
+        base_row <- data.table(att = 0, se = 0, event_time = base_time, outcome = x[, unique(outcome)], att_ciub = 0, att_cilb = 0)
+      } else {
+        base_row <- data.table(att = 0, se = 0, event_time = base_time, att_ciub = 0, att_cilb = 0)
+      }
+      x <- x |> rbind(base_row, fill = TRUE)
     }
-    x <- x |> rbind(base_row, fill = TRUE)
   } else {
     x <- x[type == "post"]
   }
@@ -1776,8 +1958,268 @@ utils::globalVariables(c(
     "mg", "cohort1", "cohort2", "cohort3", "cohort4", "cohort5", "event_time_1", "event_time_2",
     "D2", "attgt2", "event", "atu2", "y01", "y10", "y11", "tau2", "parallel",
     "tp", "cp", "tb", "cb", "no_na", "event_stagger", "double_control_option",
-    "det_weight", "sto_weight", "add_base_period", "cohortvar2", "exper"
+    "det_weight", "sto_weight", "add_base_period", "cohortvar2", "exper",
+    "effect_model", "effect_fit", "effect_kind", "cell", "ord", "gvec", "t", "gp", "gconf",
+    "active1", "clean1", "activec", "cleanc", "component", "estimable", "leverage", "e_gap",
+    "gown", "gactive", "ghist", "e", "e1", "fit", "emax", "resid", "ri", "prio", "keep", "lid"
 ))
+
+# cell table -------------------------------------------------------------------
+
+#' Build the cell table from the first-stage result.
+#'
+#' One row per first-stage cell, in the order of the first-stage estimates. The
+#' table carries the cohort share `pg`, the first event `mg`, and one column per
+#' event date `G1..GM`. The second stage and the aggregation read the cells from
+#' this table only.
+#'
+#' @param gt_result the first-stage result of one outcome: `gt`, `att`, `inf_func`.
+#' @return the cell table.
+#' @noRd
+get_cell_table <- function(gt_result, aux, p) {
+  id_dt <- data.table(weight = aux$weights / sum(aux$weights), G = aux$dt_inv[, G])
+  pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
+  cells <- gt_result$gt |> merge(pg_dt, by = "G", sort = FALSE)
+  cells[, mg := ming(G)]
+  M <- if (allNA(p$cohortvar2)) 1L else 1L + length(p$cohortvar2)
+  gcol <- paste0("G", seq_len(M))
+  for (d in seq_len(M)) {
+    cells[, (paste0("G", d)) := gd(G, d)]
+  }
+  do.call(setorderv, c(list(cells), list(c("time", "mg", gcol)))) # match order in gtatt
+  if (!all(names(gt_result$att) == cells[, paste0(G, ".", time)])) {
+    stop("some bug makes gt misaligned, please report this to the maintainer. Thanks.")
+  }
+  return(cells)
+}
+
+# second stage -----------------------------------------------------------------
+
+#' Apply the second stage to the first-stage cells.
+#'
+#' The second stage is a linear combination of first-stage cells. The scheme
+#' gives one weight row per identified cell, split into a deterministic part and
+#' a part that depends on the estimated cohort shares. The estimate is the
+#' weighted sum, and its influence function is the same combination of the
+#' first-stage influence functions plus the influence of the shares.
+#'
+#' @param cells the cell table from `get_cell_table()`.
+#' @param att,inf_func the first-stage estimates and influence functions.
+#' @return a list: the identified cells, their `att` and `inf_func`, and the
+#'   weight matrix over the first-stage cells.
+#' @noRd
+second_stage <- function(cells, att, inf_func, aux, p) {
+  if (p$effect_kind == "parallel") {
+    sch <- get_es_scheme(cells, aux, p)
+  } else {
+    sch <- get_effect_scheme(cells, att, inf_func, aux, p)
+  }
+  det_weight <- as.matrix(sch$es_det_weight)
+  sto_weight <- as.matrix(sch$es_sto_weight)
+  es_weight <- det_weight + sto_weight
+
+  # the share weights are signed, and each period is normalized on its own
+  if (any(sto_weight != 0)) {
+    pre_cells <- copy(cells)
+    pre_cells[, pg := NULL] # get_weight_influence merges the shares itself
+    es_inf_weights <- get_weight_influence(att, pre_cells, sto_weight, aux, p, by_period = TRUE)
+  } else {
+    es_inf_weights <- 0
+  }
+
+  out_cells <- sch$group_time
+  att <- es_weight %*% att
+  inf_func <- (inf_func %*% t(es_weight)) + es_inf_weights
+
+  # a stacked fit reports every event; the event-1 rows serve the other result types
+  if ("event" %in% names(out_cells) && p$result_type != "dynamic_event" && is.na(p$exper$aggregate_scheme)) {
+    keep <- out_cells[, event == 1L]
+    out_cells <- out_cells[keep]
+    att <- att[keep, , drop = FALSE]
+    inf_func <- inf_func[, keep, drop = FALSE]
+    es_weight <- es_weight[keep, , drop = FALSE]
+  }
+
+  return(list(
+    cells = out_cells,
+    att = att,
+    inf_func = inf_func,
+    weight = es_weight,
+    diag = sch$diag
+  ))
+}
+
+# parallel treatment effects scheme -------------------------------------------
+
+#' The scheme for the event-specific effect.
+#' @noRd
+get_es_scheme <- function(group_time, aux, p){
+
+  es_group_time <- copy(group_time) #group_time with available es effect
+  #create lookup (columns already populated by get_cell_table)
+  es_weight_list <- list()
+
+  ggt <- as.list(seq_len(nrow(group_time)))
+  if(!p$parallel){
+    es_weight_list <- lapply(ggt, get_es_ggt_weight, group_time, aux, p)
+  } else {
+    es_weight_list <- mclapply(ggt, get_es_ggt_weight, group_time, aux, p, mc.cores = getDTthreads())
+  }
+
+  valid_ggt <- which(!sapply(es_weight_list, is.null))
+  es_group_time <- es_group_time[valid_ggt] #remove the ones without
+  es_weight_list <- es_weight_list[valid_ggt]
+
+  # a cohort with g1 == g' carries no separable effect, so the post-periods can all be gone
+  if(nrow(es_group_time) == 0 || !es_group_time[, any(time >= G1 - p$anticipation)]){
+    warning("no event-specific post-period effect is identified for any cohort. ",
+            "check that some cohort has the first event at a different time than the confounding events.")
+  }
+
+  es_det_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$det}))
+  es_sto_weight <- do.call(rbind, lapply(es_weight_list, \(x){x$sto}))
+
+  return(list(group_time = es_group_time, es_det_weight = es_det_weight, es_sto_weight = es_sto_weight))
+
+}
+
+#' Keep the control cohorts that are available at both periods.
+#'
+#' A first-stage cell can be missing, for example after an estimation failure or
+#' with an unbalanced panel. The two periods then normalize over different
+#' populations. This function restricts both to the common cohorts.
+#'
+#' @param group_time the group-time table.
+#' @param cp,cb logical vectors, the control rows at t and at the base period.
+#' @param gg,t,base_period the target cohort and the two periods, for the message.
+#' @return a list with the two restricted logical vectors, or NULL if no cohort is common.
+#' @noRd
+intersect_control <- function(group_time, cp, cb, gg, t, base_period){
+  common <- intersect(group_time[cp, G], group_time[cb, G])
+  if(length(common) == 0){
+    warning("the control cohorts at ", t, " and at ", base_period,
+            " do not overlap for cohort ", gg, ". fastdid skips the cell.")
+    return(NULL)
+  }
+  in_common <- group_time[, G %in% common]
+  return(list(cp = cp & in_common, cb = cb & in_common))
+}
+
+#' The scheme for the group-group-time estimates.
+#' Implements Theorem 3 of Tsai (2026) for M >= 2 events.
+#' @noRd
+get_es_ggt_weight <- function(ggt, group_time, aux, p){
+
+  group_time <- copy(group_time) #avoid accidental modification
+
+  group_time[, det_weight := 0] #reset
+  group_time[, sto_weight := 0] #reset
+  t     <- group_time[ggt, time]
+  g1_val <- group_time[ggt, G1]
+  gg    <- group_time[ggt, G]
+
+  if(is.infinite(g1_val)){return(NULL)}
+
+  M_val <- 1L + length(p$cohortvar2)   # total number of events
+  gp    <- gprime(gg)                  # g' = min_{d!=1}(g^d), earliest confounding event
+
+  # the anticipation of the confounding event contaminates the periods before g', so
+  # the direct case stops one anticipation horizon earlier
+  if(t < gp - p$anticipation2){ # Case 1: direct pure effect (before any confounding event)
+
+    group_time[ggt, det_weight := 1]
+
+  } else if(g1_val < gp) { # Case 2: imputation (treated before confounded)
+    # C^imp = {h : h^1 = g^1, for all d!=1, h^d > t}
+
+    base_period <- gp - 1 - p$anticipation2
+    if(base_period == t){return(NULL)}
+    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+p$anticipation2+1)
+
+    tb <- group_time[, G == gg & time == base_period]
+
+    # control: same G1, and ALL confounding events not yet occurred (each h^d >= min_control_cohort)
+    c <- group_time[, G1 == g1_val]
+    for(d in 2:M_val){
+      Gd_vals <- group_time[[paste0("G", d)]]
+      c <- c & (Gd_vals >= min_control_cohort)
+    }
+    if(p$control_option == "notyet"){
+      # exclude never-confounded units: require each h^d < Inf
+      for(d in 2:M_val){
+        Gd_vals <- group_time[[paste0("G", d)]]
+        c <- c & !is.infinite(Gd_vals)
+      }
+    }
+    cp <- group_time[, c & time == t]
+    cb <- group_time[, c & time == base_period]
+
+    #if any group have no available cohort, skip
+    if(sum(tb) == 0 | sum(cp) == 0 | sum(cb) == 0){return(NULL)}
+
+    common <- intersect_control(group_time, cp, cb, gg, t, base_period)
+    if(is.null(common)){return(NULL)}
+    cp <- common$cp
+    cb <- common$cb
+
+    #assign the weights
+    group_time[tb, det_weight := 1]
+    group_time[cp, sto_weight := pg/sum(pg)]
+    group_time[cb, sto_weight := -pg/sum(pg)]
+
+  } else if (g1_val > gp) { # Case 3: double DiD (confounded before treated)
+    # C^did = {h : h^1 > t, h^d = g^d if g^d <= t, h^d > max(t, base) if g^d > t}
+
+    # the theorem covers the post-period of the first event only
+    if(t < g1_val - p$anticipation){return(NULL)}
+
+    base_period <- g1_val - 1 - p$anticipation
+    if(base_period == t){return(NULL)}
+    min_control_cohort <- ifelse(p$double_control_option == "never", Inf, max(t,base_period)+p$anticipation+1)
+    min_conf_cohort <- max(t, base_period) + p$anticipation2 + 1
+
+    tp <- group_time[,.I == ggt]
+    tb <- group_time[,G == gg & time == base_period]
+
+    # control: h^1 not yet treated, and for every confounding event either the same
+    # timing as the target (g^d <= t), or no event at all yet (g^d > t). without the
+    # second rule a control can carry an event the target does not have.
+    c <- group_time[, G1 >= min_control_cohort & G1 != g1_val]
+    for(d in 2:M_val){
+      g_d <- gd(gg, d)
+      Gd_vals <- group_time[[paste0("G", d)]]
+      if(g_d <= t){  # this confounding event has already occurred for the target cohort
+        c <- c & (Gd_vals == g_d)
+      } else {       # the target is not confounded by it, so the control must not be either
+        c <- c & (Gd_vals >= min_conf_cohort)
+      }
+    }
+    if(p$control_option == "notyet"){
+      c[group_time[, is.infinite(G1)]] <- FALSE
+    }
+    cp <- group_time[, c & time == t]
+    cb <- group_time[, c & time == base_period]
+
+    #if any group have no available cohort, skip
+    if(sum(tp) == 0 || sum(tb) == 0 || sum(cp) == 0 || sum(cb) == 0){return(NULL)}
+
+    common <- intersect_control(group_time, cp, cb, gg, t, base_period)
+    if(is.null(common)){return(NULL)}
+    cp <- common$cp
+    cb <- common$cb
+
+    #assign the weights
+    group_time[tp, det_weight := 1]
+    group_time[tb, det_weight := -1]
+    group_time[cp, sto_weight := -pg/sum(pg)]
+    group_time[cb, sto_weight := pg/sum(pg)]
+
+  }
+
+  if(all(group_time[, det_weight+sto_weight] == 0)){return(NULL)} #not redundant!
+  return(list(det = group_time[, det_weight], sto = group_time[, sto_weight]))
+
+}
 
 #' Simulate a Difference-in-Differences (DiD) dataset
 #'
@@ -2033,9 +2475,38 @@ validate_argument <- function(dt, p) {
   }
 
   if (add_base_period == TRUE) {
-    if (result_type != "dynamic") {
-      stop("add_base_period is only possible with result_type == 'dynamic'")
+    if (!result_type %in% c("dynamic", "dynamic_event")) {
+      stop("add_base_period is only possible with result_type == 'dynamic' or 'dynamic_event'")
     }
+  }
+
+  # the effect model of the second stage
+  check_set_arg(effect_model, "os formula | match", .choices = c("parallel", "unrestricted"), .up = 1)
+  check_set_arg(effect_fit, "match", .choices = c("separate", "joint", "ordered"), .up = 1)
+  if (effect_kind != "parallel") {
+    if (allNA(cohortvar2)) {
+      stop("effect_model needs multiple events: set cohortvar2.")
+    }
+    if (!event_specific) {
+      stop("effect_model needs event_specific = TRUE.")
+    }
+    if (base_period != "universal") {
+      stop("effect_model needs base_period = 'universal'. a varying base period makes the pre-period cells short differences.")
+    }
+    if (double_control_option != "both" || control_option == "notyet") {
+      warning("effect_model does not restrict the fit set: double_control_option and control_option = 'notyet' do not apply to the second stage.")
+    }
+  }
+  if (effect_fit != "separate") {
+    if (effect_kind != "formula") {
+      stop("effect_fit = '", effect_fit, "' needs a formula in effect_model.")
+    }
+  }
+  if (effect_fit == "ordered" && anticipation != anticipation2) {
+    stop("effect_fit = 'ordered' models one event kind, so anticipation and anticipation2 must be equal.")
+  }
+  if (result_type == "dynamic_event" && effect_fit != "ordered") {
+    stop("result_type 'dynamic_event' needs effect_fit = 'ordered'.")
   }
   
   # Validate only_est_min / only_est_max
@@ -2058,7 +2529,8 @@ validate_argument <- function(dt, p) {
   }
 
   # Validate result_type for double DiD
-  if (result_type %in% c("group_group_time", "dynamic_stagger")) {
+  check_set_arg(result_type, "match", .choices = c("group_time", "time", "group", "simple", "dynamic", "group_group_time", "dynamic_stagger", "dynamic_event"), .up = 1)
+  if (result_type %in% c("group_group_time", "dynamic_stagger", "dynamic_event")) {
     if (allNA(cohortvar2)) {
       stop("result_type '", result_type, "' can only be used with double DiD (cohortvar2 must be specified)")
     }
@@ -2124,6 +2596,20 @@ validate_dt <- function(dt, p) {
   }
   if (length(gcol2) > 0 && nrow(dt) == 0) {
     stop("no observations remain after the confounding cohorts are screened.")
+  }
+
+  # the k-th occurrence of one event: the dates must increase, and Inf is a suffix
+  if (p$effect_fit == "ordered") {
+    gcols <- c("G", gcol2)
+    for (k in seq_len(length(gcols) - 1)) {
+      a <- dt[[gcols[k]]]
+      b <- dt[[gcols[k + 1]]]
+      ok <- is.infinite(b) | (is.finite(a) & b > a)
+      if (any(!ok)) {
+        stop("effect_fit = 'ordered' needs g1 < g2 < ... for every unit, with Inf only after every finite date. ",
+             dt[!ok, uniqueN(unit)], " units break the order between event ", k, " and event ", k + 1, ".")
+      }
+    }
   }
 
   # change to int

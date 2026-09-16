@@ -28,17 +28,19 @@ plot_did_dynamics <- function(x, margin = "event_time") {
   if (margin == "event_time") {
     et_range <- min(x[, event_time]):max(x[, event_time])
     base_time <- et_range[!et_range %in% x[, unique(event_time)]]
-    if (length(base_time) != 1) {
+    if (length(base_time) > 1) {
       stop("missing more than one period")
     }
 
-    # add the base period
-    if ("outcome" %in% names(x)) {
-      base_row <- data.table(att = 0, se = 0, event_time = base_time, outcome = x[, unique(outcome)], att_ciub = 0, att_cilb = 0)
-    } else {
-      base_row <- data.table(att = 0, se = 0, event_time = base_time, att_ciub = 0, att_cilb = 0)
+    # add the base period; a result with post periods only has none to add
+    if (length(base_time) == 1) {
+      if ("outcome" %in% names(x)) {
+        base_row <- data.table(att = 0, se = 0, event_time = base_time, outcome = x[, unique(outcome)], att_ciub = 0, att_cilb = 0)
+      } else {
+        base_row <- data.table(att = 0, se = 0, event_time = base_time, att_ciub = 0, att_cilb = 0)
+      }
+      x <- x |> rbind(base_row, fill = TRUE)
     }
-    x <- x |> rbind(base_row, fill = TRUE)
   } else {
     x <- x[type == "post"]
   }

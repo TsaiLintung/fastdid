@@ -14,6 +14,9 @@ aggregate_gt <- function(all_gt_result, aux, p) {
     }),
     es_weight_matrix = lapply(results, function(x) {
       x$es_weight
+    }),
+    effect_diag = lapply(results, function(x) {
+      x$effect_diag
     })
   ))
 }
@@ -25,12 +28,14 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
 
   # the second stage runs before the aggregation, on the first-stage cells
   es_weight <- NULL
+  effect_diag <- NULL
   if (p$event_specific && !allNA(p$cohortvar2)) {
     ss <- second_stage(cells, att, inf_func, aux, p)
     cells <- ss$cells # some gt may not have an identified effect (ex: g1 == g2)
     att <- ss$att
     inf_func <- ss$inf_func
     es_weight <- ss$weight
+    effect_diag <- ss$diag
   }
 
   # get aggregation scheme from cells to target parameters
@@ -60,7 +65,8 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
     result = result,
     inf_func = inf_matrix,
     weight_matrix = agg_sch$agg_weights,
-    es_weight = es_weight
+    es_weight = es_weight,
+    effect_diag = effect_diag
   ))
 }
 
@@ -107,7 +113,8 @@ get_agg_targets <- function(group_time, p) {
     simple = group_time[, target := post],
     group_time = group_time[, target := paste0(g1(G), ".", time)],
     group_group_time = group_time[, target := paste0(G, ".", time)],
-    dynamic_stagger = group_time[, target := paste0(time - g1(G), ".", g1(G) - gprime(G))]
+    dynamic_stagger = group_time[, target := paste0(time - g1(G), ".", g1(G) - gprime(G))],
+    dynamic_event = group_time[, target := e] # the event time of the modeled event
   )
 
   # allow custom aggregation scheme, this overides other stuff
@@ -167,7 +174,9 @@ get_weight_influence <- function(att, group, agg_weights, aux, p, by_period = FA
     for(d in seq_len(M)){
       group[, (paste0("G", d)) := gd(G, d)]
     }
-    do.call(setorderv, c(list(group), list(c("time", "mg", gcol_w)))) # sort
+    sortcols <- c("time", "mg", gcol_w)
+    if ("event" %in% names(group)) sortcols <- c(sortcols, "event") # one row per event in a stacked fit
+    do.call(setorderv, c(list(group), list(sortcols))) # sort
   }
 
   if (!p$parallel) {

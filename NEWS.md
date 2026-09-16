@@ -1,3 +1,13 @@
+# fastdid 1.1.0
+
+- Separated the second stage from the first stage. The first stage is Callaway-Sant'Anna on the cohort label. The second stage reads the cell table only and returns weights over the first-stage cells (`R/second_stage.R`). Existing results are unchanged
+- Added `effect_model`: a formula for the second stage. It models one component of a cell (the pure target effect or the confounding effect) as a linear function of the cell features, fits it by weighted least squares on the clean cells, and imputes it into the confounded cells. A cell is reported when it is estimable. `"parallel"` (the default) is the current estimator, `"unrestricted"` reports the clean cells only
+- Added `effect_fit`: `"separate"` (one fit per component), `"joint"` (stacked additive fit on every cell), and `"ordered"` (the k-th occurrence of one event kind, where the stacked sum holds by telescoping)
+- Added `result_type = "dynamic_event"`: the average effect of every event at each event time, for the ordered fit
+- Added `effect_diag` to the full result: the weight of every first-stage cell in every reported cell, the estimability and the extrapolation gap of every candidate cell, the fit residuals, and an over-identification test
+- Added the `exper` option `effect_tol`
+- `plot_did_dynamics()` accepts a result with no missing base period
+
 # fastdid 1.0.7
 
 - Fixed the double DiD control set of the DiD case: with M >= 3 events a control cohort with an event that the target cohort does not have was used, which biased `ATT^1`. A control must now be not yet confounded by every such event

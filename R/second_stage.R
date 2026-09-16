@@ -43,21 +43,43 @@ get_cell_table <- function(gt_result, aux, p) {
 #'   weight matrix over the first-stage cells.
 #' @noRd
 second_stage <- function(cells, att, inf_func, aux, p) {
-  sch <- get_es_scheme(cells, aux, p)
+  if (p$effect_kind == "parallel") {
+    sch <- get_es_scheme(cells, aux, p)
+  } else {
+    sch <- get_effect_scheme(cells, att, inf_func, aux, p)
+  }
   det_weight <- as.matrix(sch$es_det_weight)
   sto_weight <- as.matrix(sch$es_sto_weight)
   es_weight <- det_weight + sto_weight
 
   # the share weights are signed, and each period is normalized on its own
-  pre_cells <- copy(cells)
-  pre_cells[, pg := NULL] # get_weight_influence merges the shares itself
-  es_inf_weights <- get_weight_influence(att, pre_cells, sto_weight, aux, p, by_period = TRUE)
+  if (any(sto_weight != 0)) {
+    pre_cells <- copy(cells)
+    pre_cells[, pg := NULL] # get_weight_influence merges the shares itself
+    es_inf_weights <- get_weight_influence(att, pre_cells, sto_weight, aux, p, by_period = TRUE)
+  } else {
+    es_inf_weights <- 0
+  }
+
+  out_cells <- sch$group_time
+  att <- es_weight %*% att
+  inf_func <- (inf_func %*% t(es_weight)) + es_inf_weights
+
+  # a stacked fit reports every event; the event-1 rows serve the other result types
+  if ("event" %in% names(out_cells) && p$result_type != "dynamic_event" && is.na(p$exper$aggregate_scheme)) {
+    keep <- out_cells[, event == 1L]
+    out_cells <- out_cells[keep]
+    att <- att[keep, , drop = FALSE]
+    inf_func <- inf_func[, keep, drop = FALSE]
+    es_weight <- es_weight[keep, , drop = FALSE]
+  }
 
   return(list(
-    cells = sch$group_time,
-    att = es_weight %*% att,
-    inf_func = (inf_func %*% t(es_weight)) + es_inf_weights,
-    weight = es_weight
+    cells = out_cells,
+    att = att,
+    inf_func = inf_func,
+    weight = es_weight,
+    diag = sch$diag
   ))
 }
 

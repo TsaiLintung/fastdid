@@ -28,9 +28,11 @@ Key `fastdid()` parameters:
 | `data` | a data.table, or an object that coerces to one |
 | `timevar`, `cohortvar`, `unitvar`, `outcomevar` | column names, as strings |
 | `control_option` | `"both"`, `"never"`, or `"notyet"` |
-| `result_type` | `"group_time"`, `"time"`, `"group"`, `"simple"`, `"dynamic"`, `"group_group_time"`, or `"dynamic_stagger"` |
+| `result_type` | `"group_time"`, `"time"`, `"group"`, `"simple"`, `"dynamic"`, `"group_group_time"`, `"dynamic_stagger"`, or `"dynamic_event"` |
 | `control_type` | `"ipw"`, `"reg"`, or `"dr"` (doubly robust) |
-| `cohortvar2` | the second treatment, for double DiD |
+| `cohortvar2` | the confounding events, one column name per event, for the two-stage estimator |
+| `effect_model` | the second-stage model: `"parallel"`, `"unrestricted"`, or a one-sided formula on the cell features |
+| `effect_fit` | how a formula is fit: `"separate"`, `"joint"`, or `"ordered"` |
 | `boot` | bootstrap standard errors. The default is 1000 iterations |
 | `base_period` | `"universal"` or `"varying"` |
 | `covariatesvar`, `varycovariatesvar` | time-invariant and time-varying covariates |
@@ -52,6 +54,7 @@ R/
 ├── estimate_did.R     the 2x2 engine: IPW, OR, doubly robust, influence functions
 ├── aggregate_gt.R     aggregates the cells to the target parameters, and their SEs
 ├── second_stage.R     the cell table, and the second stage as weights over first-stage cells
+├── effect_model.R     the formula-based second stage: design, WLS, estimability, diagnostics
 ├── double_did.R       multiple events: the G-string label helpers and the coercion
 ├── sim_did.R          data simulation
 ├── generics.R         S3 methods for the fastdid_result class
@@ -93,6 +96,13 @@ fastdid()
    timing of g1 and g', and implements Theorem 3 of Tsai (2026).
 7. **IPW caching.** When several outcomes share the same covariates, the
    propensity scores are computed once and reused.
+8. **Effect models.** A formula in `effect_model` states a linear model for one
+   component of a cell. `effect_model.R` fits it by weighted least squares on
+   the clean cells, checks that each target row lies in the row space of the
+   fit design, and writes the imputed value as a weight row over first-stage
+   cells. The WLS weights are the cohort shares and are treated as fixed in
+   the influence function. The `"parallel"` preset dispatches to the original
+   scheme, so it is bit-identical to earlier versions.
 
 ## Dependencies
 
