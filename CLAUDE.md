@@ -13,13 +13,15 @@ seconds.
 
 ## Public API
 
-fastdid exports three functions:
+fastdid exports five functions:
 
 | Function | What it does |
 |---|---|
 | `fastdid()` | the main estimator |
 | `plot_did_dynamics()` | an event-study plot through ggplot2 |
 | `sim_did()` | simulates a staggered DiD dataset for testing |
+| `fastdid_cells()` | the no-covariate mode: the not-yet-treated cells on the cohort vector, from cohort means |
+| `combine_cells()` | linear combinations of those cells and cohort means, with analytic standard errors |
 
 Key `fastdid()` parameters:
 
@@ -55,6 +57,7 @@ R/
 ├── aggregate_gt.R     aggregates the cells to the target parameters, and their SEs
 ├── second_stage.R     the cell table, and the second stage as weights over first-stage cells
 ├── effect_model.R     the formula-based second stage: design, WLS, estimability, diagnostics
+├── cells.R            the no-covariate mode: fastdid_cells() and combine_cells()
 ├── double_did.R       multiple events: the G-string label helpers and the coercion
 ├── sim_did.R          data simulation
 ├── generics.R         S3 methods for the fastdid_result class
@@ -103,6 +106,18 @@ fastdid()
    cells. The WLS weights are the cohort shares and are treated as fixed in
    the influence function. The `"parallel"` preset dispatches to the original
    scheme, so it is bit-identical to earlier versions.
+
+9. **The no-covariate mode.** `fastdid_cells()` does not go through
+   `fastdid()`. Without covariates, every cell is a linear function of the
+   cohort-by-period means, so it keeps the means, the comparison shares by
+   period, and the outcome matrix, and stores no influence function per cell.
+   `combine_cells()` maps a target over cells to a weight on the means, and the
+   influence function of the target is `N / n_g` times the weighted residual
+   of the unit from its cohort mean. The memory grows with the units times the
+   periods, not with the cells, so the mode serves a panel of millions of
+   units with thousands of cohorts. The cohort sizes are held fixed in the
+   influence function, and the standard errors have no small-group inflation,
+   so they are about 0.2% below those of `fastdid()` on the same cells.
 
 ## Dependencies
 
