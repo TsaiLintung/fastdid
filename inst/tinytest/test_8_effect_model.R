@@ -189,3 +189,51 @@ truth_off <- sapply(off[, e], function(e2) {
 expect_equal(off[, att], truth_off, tolerance = tol, info = "state fit recovers the switch-off effect")
 expect_error(run(dt_ord, result_type = "dynamic_event", cohortvar2 = "G2", effect_model = ~ 0 + factor(foo),
                  effect_fit = "state"), pattern = "available variables", info = "state fit rejects an unknown variable")
+
+# state fit: a multi-valued treatment ------------------------------------------
+
+# G is the switch to level 1, G2 to level 2, G3 back to level 0. the cell is the
+# profile of the current level in the time since the last switch
+make_levels <- function(cohorts, TT = 8, n = 400, seed = 9) {
+  set.seed(seed)
+  prof <- list(`0` = function(e) 0.8 * 0.5^e, `1` = function(e) 1 + 0.5 * e, `2` = function(e) 3 + 0.2 * e)
+  lev <- c(1, 2, 0)
+  dt <- data.table::rbindlist(lapply(seq_along(cohorts), function(i) {
+    g <- cohorts[[i]]
+    d <- data.table::CJ(unit = (i - 1) * n + seq_len(n), time = seq_len(TT))[, `:=`(G = g[1], G2 = g[2], G3 = g[3])]
+    d[, eff := sapply(time, function(s) {
+      on <- which(g <= s)
+      if (length(on) == 0) return(0)
+      last <- on[which.max(g[on])]
+      prof[[as.character(lev[last])]](s - g[last])
+    })]
+    d
+  }))
+  dt[, y := unit / 100 + time * 0.3 + stats::rnorm(.N, 0, 0.01) + eff]
+  dt[]
+}
+dt_lev <- make_levels(list(c(2, 4, Inf), c(2, Inf, 5), c(Inf, 3, Inf), c(5, 3, Inf), c(Inf, 3, 6),
+                           c(2, Inf, Inf), c(Inf, Inf, Inf)))
+res_lev <- run(dt_lev, result_type = "dynamic_event", cohortvar2 = c("G2", "G3"),
+               effect_model = ~ 0 + factor(level):factor(e), effect_fit = "state",
+               exper = list(event_level = c(1, 2, 0), aggregate_scheme = "paste0(level_prev, '-', level, '.', e)"))
+res_lev[, `:=`(move = sub("\\..*", "", target), e = as.integer(sub(".*\\.", "", target)))]
+up1 <- res_lev[move == "0-1" & e >= 0]
+expect_equal(up1[, att], 1 + 0.5 * up1[, e], tolerance = tol, info = "levels: the move from 0 to 1 recovers the profile of level 1")
+up2 <- res_lev[move == "0-2" & e >= 0]
+expect_equal(up2[, att], 3 + 0.2 * up2[, e], tolerance = tol, info = "levels: the first switch can be any cohort column")
+# one cohort moves from 1 to 2, at period 4 after two periods at level 1
+mid <- res_lev[move == "1-2"]
+expect_equal(mid[, att], 3 + 0.2 * mid[, e] - (1 + 0.5 * (mid[, e] + 2)), tolerance = tol,
+             info = "levels: the move from 1 to 2 is the change of profile")
+expect_equal(sort(unique(res_lev[, move])), c("0-1", "0-2", "1-0", "1-2", "2-0", "2-1"), info = "levels: one target per move")
+
+expect_error(run(dt_lev, result_type = "dynamic_event", cohortvar2 = c("G2", "G3"), effect_model = ~ 0 + factor(level):factor(e),
+                 effect_fit = "state", exper = list(event_level = c(1, 1, 0))),
+             pattern = "change the level", info = "levels: a switch must change the level")
+expect_error(run(dt_lev, result_type = "dynamic_event", cohortvar2 = c("G2", "G3"), effect_model = ~ 0 + factor(level):factor(e),
+                 effect_fit = "state", exper = list(event_level = c(1, 2))),
+             pattern = "one level for cohortvar", info = "levels: one level per cohort column")
+expect_error(run(dt_lev, result_type = "group_group_time", cohortvar2 = c("G2", "G3"), effect_model = ~ 0 + factor(level):factor(e),
+                 effect_fit = "state", exper = list(event_level = c(1, 2, 0))),
+             pattern = "dynamic_event", info = "levels: the other result types read the first cohort column")

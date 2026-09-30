@@ -79,6 +79,20 @@ validate_argument <- function(dt, p) {
   if (result_type == "dynamic_event" && !effect_fit %in% c("ordered", "state")) {
     stop("result_type 'dynamic_event' needs effect_fit = 'ordered' or 'state'.")
   }
+
+  # a multi-valued treatment: one level per cohort column
+  if (!allNA(exper$event_level)) {
+    if (!effect_fit %in% c("ordered", "state")) {
+      stop("event_level needs effect_fit = 'ordered' or 'state'.")
+    }
+    if (!is.numeric(exper$event_level) || anyNA(exper$event_level) || length(exper$event_level) != 1L + length(cohortvar2)) {
+      stop("event_level must be a numeric vector with one level for cohortvar and one for each column of cohortvar2.")
+    }
+    # the other result types read the target event from the first cohort column
+    if (result_type != "dynamic_event" && is.na(exper$aggregate_scheme)) {
+      stop("event_level needs result_type = 'dynamic_event' or an aggregate_scheme.")
+    }
+  }
   
   # Validate only_est_min / only_est_max
   has_est_min <- !is.na(exper$only_est_min)
@@ -169,8 +183,10 @@ validate_dt <- function(dt, p) {
     stop("no observations remain after the confounding cohorts are screened.")
   }
 
-  # the k-th occurrence of one event: the dates must increase, and Inf is a suffix
-  if (p$effect_fit %in% c("ordered", "state")) {
+  # a multi-valued treatment: the k-th switch of a unit is its k-th date
+  if (!allNA(p$exper$event_level)) {
+    validate_level_path(dt, c("G", gcol2), p$exper$event_level)
+  } else if (p$effect_fit %in% c("ordered", "state")) { # the k-th occurrence of one event: the dates must increase, and Inf is a suffix
     gcols <- c("G", gcol2)
     for (k in seq_len(length(gcols) - 1)) {
       a <- dt[[gcols[k]]]
@@ -301,4 +317,33 @@ validate_dt <- function(dt, p) {
 
 
   return(dt)
+}
+
+#' Check the level path of every cohort of a multi-valued treatment.
+#'
+#' Each cohort column is one event "switch to this level". A unit starts at
+#' level 0, so its path is the levels of its finite dates in the order of the
+#' dates. Two switches cannot share a date, and a switch must change the level.
+#' @param gcols the cohort columns, in the order of `event_level`.
+#' @return `NULL`. It stops on the first rule that a cohort breaks.
+#' @noRd
+validate_level_path <- function(dt, gcols, event_level) {
+  cohorts <- unique(dt[, c("unit", gcols), with = FALSE])
+  paths <- cohorts[, .(n_unit = .N), by = gcols]
+  dates <- as.matrix(paths[, gcols, with = FALSE])
+  bad_date <- bad_level <- 0L
+  for (i in seq_len(nrow(dates))) {
+    fin <- which(is.finite(dates[i, ]))
+    if (anyDuplicated(dates[i, fin]) > 0) bad_date <- bad_date + paths[i, n_unit]
+    path <- c(0, event_level[fin[order(dates[i, fin])]])
+    if (any(diff(path) == 0)) bad_level <- bad_level + paths[i, n_unit]
+  }
+  if (bad_date > 0) {
+    stop("event_level needs one switch per period for every unit. ", bad_date, " units have two events on one date.")
+  }
+  if (bad_level > 0) {
+    stop("event_level needs every switch to change the level, from level 0 before the first switch. ",
+         bad_level, " units have a switch to the level that they are at.")
+  }
+  return(NULL)
 }

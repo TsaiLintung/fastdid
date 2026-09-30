@@ -106,8 +106,19 @@ fastdid()
    cells. The WLS weights are the cohort shares and are treated as fixed in
    the influence function. The `"parallel"` preset dispatches to the original
    scheme, so it is bit-identical to earlier versions.
+9. **Switches and levels.** The ordered and the state fit model the k-th
+   switch of one treatment. `add_switch_columns()` adds the date `S_k` and the
+   level `L_k` of the k-th switch to the cell table. Without
+   `exper$event_level` the cohort columns are in the order of the switches and
+   the level is the parity. With it, each cohort column is one event "switch
+   to this level", and the k-th switch is the k-th date of the cohort. The
+   columns `G1..GM` stay in the order of the cohort label, because
+   `get_weight_influence()` sorts the rows by them. Do not overwrite them with
+   the sorted dates. The other result types read the target event from the
+   first cohort column, so `event_level` needs `dynamic_event` or an
+   `aggregate_scheme`.
 
-9. **The no-covariate mode.** `fastdid_cells()` does not go through
+10. **The no-covariate mode.** `fastdid_cells()` does not go through
    `fastdid()`. Without covariates, every cell is a linear function of the
    cohort-by-period means, so it keeps the means, the comparison shares by
    period, and the outcome matrix, and stores no influence function per cell.

@@ -96,6 +96,7 @@ fastdid(
   \item{`aggregate_scheme`}{character, a custom aggregation expression evaluated as `group_time[, target := <expr>]`.}
   \item{`max_control_cohort_diff`}{numeric, maximum cohort difference between treated and control groups.}
   \item{`effect_tol`}{numeric, the relative tolerance of the rank and estimability checks of an effect model. Default is 1e-7.}
+  \item{`event_level`}{numeric vector, for a multi-valued treatment with `effect_fit = "ordered"` or `"state"`. Each cohort column is one event "switch to this level", and `event_level` gives that level, first for `cohortvar`, then for each column of `cohortvar2`. Every unit starts at level 0. The k-th switch of a unit is its k-th date, so the cohort columns need no order. A path that visits a level twice needs one column per visit. It needs `result_type = "dynamic_event"` or an `aggregate_scheme`, which can use `level` and `level_prev`.}
 }}
 
 \item{full}{logical, whether to return the full result (influence function, call, weighting scheme, etc,.).}
@@ -133,13 +134,14 @@ Performs Difference-in-Differences (DID) estimation.
   \describe{
     \item{`gvec`}{the cohort vector, as the string `"g1-g2-...-gM"`}
     \item{`t`}{the period}
-    \item{`g1`, ..., `gM`, `e1`, ..., `eM`}{the date and the event time of each event}
+    \item{`G1`, ..., `GM`, `e1`, ..., `eM`}{the date and the event time of each event}
     \item{`event`}{the modeled event: 1 for the target, 2 for the confounding bundle, k in the stacked fits}
     \item{`gown`}{the date of the modeled event (the confounding profile for the bundle)}
     \item{`gactive`}{the dates of the modeled events that are active at `t`}
     \item{`ghist`}{the cohort vector truncated at the modeled event}
     \item{`e`}{the event time of the modeled event}
-    \item{`nact`, `status`}{in the state fit: the number of active events, and its parity (1 for the "on" state of an on-and-off treatment)}
+    \item{`level`, `level_prev`}{in the ordered and the state fit: the level of the treatment after the modeled switch and before it. Without `event_level` the level is the parity of the switch, the status of an on-and-off treatment}
+    \item{`nact`, `status`}{in the state fit: the number of active events, and the status (1 when the level is not zero, the "on" state of an on-and-off treatment)}
   }
 The model `~ factor(gvec) + factor(gactive):factor(t)` is the parallel treatment effects assumption of `"parallel"`, fit on every clean cell at once. `~ factor(gvec) + poly(e, 2)` is a quadratic profile in event time with a cohort level. With `effect_fit = "separate"`, the target component is modeled for cohorts treated before they are confounded, and the confounding component for cohorts confounded before they are treated; the reported effect is the pure effect in the first case and the interacted effect in the second. With `effect_fit = "joint"` or `"ordered"`, each event block models the marginal effect of that event given the events before it, the design row of a cell is the sum over its active events, and a formula can share parameters across events, for example `~ 0 + factor(gvec):factor(event) + factor(e)`. Use `~ 0 + ...` in a stacked fit, because an intercept counts once per active event. An on-and-off treatment is the ordered case with alternating switches: `effect_fit = "state"` with `~ 0 + factor(status):factor(e)` gives one profile in time since the switch for the on state and one for the off state, and the reported effect of switch k is the change of state that it causes. `result_type = "dynamic_event"` averages the effect of every event at each event time, with cohort-size weights. The weights of the fit are treated as fixed in the influence function. `double_control_option` and `control_option = "notyet"` do not restrict the fit set of a formula. With `full = TRUE`, `effect_diag` returns the weight of every first-stage cell in every reported cell, the estimability of every candidate cell, the fit residuals, and an over-identification test.
 }

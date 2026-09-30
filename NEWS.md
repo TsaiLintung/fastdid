@@ -6,6 +6,7 @@
 - Added `result_type = "dynamic_event"`: the average effect of every event at each event time, for the ordered fit
 - Added `effect_diag` to the full result: the weight of every first-stage cell in every reported cell, the estimability and the extrapolation gap of every candidate cell, the fit residuals, and an over-identification test
 - Added the `exper` option `effect_tol`
+- Added the `exper` option `event_level`, for a multi-valued treatment in the ordered and the state fit. Each cohort column is one event "switch to this level", the k-th switch of a unit is its k-th date, and a formula can use `level` and `level_prev`. `~ 0 + factor(level):factor(e)` with `effect_fit = "state"` is the effect of the current level. An on-and-off treatment is the case with levels 0 and 1
 - `plot_did_dynamics()` accepts a result with no missing base period
 - Added `fastdid_cells()` and `combine_cells()`, a mode without covariates for a large panel with many cohorts. `fastdid_cells()` computes the not-yet-treated cells on the cohort vector of any number of event columns from the cohort-by-period means. `combine_cells()` estimates any linear combination of the cells and the means, with an analytic influence function that needs no influence function per cell
 

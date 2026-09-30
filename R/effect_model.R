@@ -27,8 +27,9 @@ get_effect_scheme <- function(cells, att, inf_func, aux, p) {
   K <- nrow(tab)
 
   # the direct rows: a clean cell is the pure target effect, pre-periods included
-  direct <- tab[clean1 == TRUE & is.finite(G1)]
-  direct[, `:=`(event = 1L, e = e1, component = "direct", estimable = TRUE, leverage = 0, e_gap = 0)]
+  direct <- tab[clean1 == TRUE & is.finite(first)]
+  direct[, `:=`(event = 1L, e = t - first, component = "direct", estimable = TRUE, leverage = 0, e_gap = 0)]
+  if (p$effect_fit %in% c("ordered", "state")) direct[, `:=`(level = L1, level_prev = 0)]
   rep_rows <- direct
   det <- unit_rows(direct[, cell], K)
   fits <- list()
@@ -132,7 +133,7 @@ finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
   if (!any(keep)) {
     stop("no cell is estimable under the effect model.")
   }
-  if (!rep_rows[keep, any(time >= G1 - p$anticipation)]) {
+  if (!rep_rows[keep, any(event == 1L & e >= -p$anticipation)]) {
     warning("no event-specific post-period effect is identified for any cohort. ",
             "check that some cohort has the first event at a different time than the confounding events.")
   }
@@ -148,7 +149,10 @@ finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
     overid = lapply(fits, get_effect_overid, att, inf_func)
   )
 
-  out <- rep_rows[keep, c("G", "time", "pg", "mg", gcol, "event", "e", "component"), with = FALSE]
+  # the levels of a switch serve a custom aggregation, for example one target per move
+  out_cols <- c("G", "time", "pg", "mg", gcol, "event", "e", "component")
+  if (!allNA(p$exper$event_level)) out_cols <- c(out_cols, "level", "level_prev")
+  out <- rep_rows[keep, out_cols, with = FALSE]
   return(list(group_time = out, es_det_weight = det_keep, es_sto_weight = det_keep * 0, diag = diag))
 }
 
@@ -159,7 +163,9 @@ finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
 #' Adds the cell index, the event times `e1..eM`, the earliest confounding
 #' date `gp`, the confounding profile `gconf`, and the windows: `active1` and
 #' `clean1` for the target effect, `activec` and `cleanc` for the confounding
-#' effect. The windows use the anticipation of each event.
+#' effect. The windows use the anticipation of each event. `first` is the date
+#' of the target event. With ordered events the target event is the first
+#' switch, and `clean1` ends at the second switch.
 #' @noRd
 build_effect_table <- function(cells, p) {
   tab <- copy(cells)
@@ -175,11 +181,56 @@ build_effect_table <- function(cells, p) {
   tab[, gconf := str_split_fixed(G, "-", 2)[, 2]]
   a1 <- p$anticipation
   a2 <- p$anticipation2
-  tab[, active1 := t >= G1 - a1]
+  tab[, first := G1]
+  if (p$effect_fit %in% c("ordered", "state")) {
+    add_switch_columns(tab, M, p$exper$event_level)
+    tab[, `:=`(first = S1, gp = S2)]
+  }
+  tab[, active1 := t >= first - a1]
   tab[, clean1 := t < gp - a2]
   tab[, activec := t >= gp - a2]
-  tab[, cleanc := t < G1 - a1]
+  tab[, cleanc := t < first - a1]
   return(tab)
+}
+
+#' The switches of an ordered treatment, by reference.
+#'
+#' Adds the date `S_k` of the k-th switch and the level `L_k` that it moves
+#' the treatment to. Without `event_level` the cohort columns are in the order
+#' of the switches and the level is the parity, the status of an on-and-off
+#' treatment. With `event_level` a cohort column is one event "switch to this
+#' level", so the k-th switch of a cohort is its k-th date.
+#' @noRd
+add_switch_columns <- function(tab, M, event_level) {
+  dates <- as.matrix(tab[, paste0("G", seq_len(M)), with = FALSE])
+  if (allNA(event_level)) {
+    sw <- matrix(seq_len(M), nrow(tab), M, byrow = TRUE)
+    event_level <- seq_len(M) %% 2L
+  } else {
+    sw <- t(apply(dates, 1, order))
+  }
+  # `set` reads no column of `tab`, so a local name cannot collide with one
+  for (k in seq_len(M)) {
+    set(tab, j = paste0("S", k), value = dates[cbind(seq_len(nrow(tab)), sw[, k])])
+    set(tab, j = paste0("L", k), value = event_level[sw[, k]])
+  }
+  return(invisible(tab))
+}
+
+#' Add the features of switch `k` to its rows, by reference: the date, the
+#' event time, the level after the switch and before it, and the history.
+#' With `event_level` the history holds the level of each switch as well.
+#' @noRd
+set_switch_features <- function(r, k, p) {
+  r[, `:=`(event = as.integer(k), gown = as.character(get(paste0("S", k))), e = t - get(paste0("S", k)),
+           level = get(paste0("L", k)), level_prev = if (k == 1L) 0 else get(paste0("L", k - 1L)))]
+  r[, gactive := gown]
+  hist <- lapply(seq_len(k), function(j) {
+    if (allNA(p$exper$event_level)) return(r[, as.character(get(paste0("S", j)))])
+    r[, paste0(get(paste0("S", j)), ":", get(paste0("L", j)))]
+  })
+  r[, ghist := do.call(paste, c(hist, list(sep = "-")))]
+  return(invisible(r))
 }
 
 #' One row per cell and modeled component, for the separate fit.
@@ -218,12 +269,18 @@ build_component_rows <- function(tab, p) {
 #'
 #' The design row of a cell is the sum of its event rows. `ghist` is the
 #' cohort vector truncated at the event, so a formula can stratify on the
-#' history of earlier events.
+#' history of earlier events. In the ordered fit the event is the k-th switch.
 #' @noRd
 build_event_rows <- function(tab, p) {
   M <- 1L + length(p$cohortvar2)
   a <- c(p$anticipation, rep(p$anticipation2, M - 1))
   rows <- rbindlist(lapply(seq_len(M), function(d) {
+    if (p$effect_fit == "ordered") {
+      r <- tab[t >= get(paste0("S", d)) - a[d]]
+      if (nrow(r) == 0) return(NULL)
+      r[, component := "joint"]
+      return(set_switch_features(r, d, p))
+    }
     r <- tab[t >= get(paste0("G", d)) - a[d]]
     if (nrow(r) == 0) return(NULL)
     r[, `:=`(component = "joint", event = as.integer(d), gown = as.character(get(paste0("G", d))),
@@ -241,12 +298,12 @@ build_event_rows <- function(tab, p) {
 #' One row per cell and number of active events, for the state fit.
 #'
 #' The cell is a function of its state: the number of active events `nact`,
-#' the parity `status` (1 when an odd number of events is active, the "on"
-#' state of an on-and-off treatment), and the time since the last active
-#' event `e`. The row of event `k` describes the state after the first `k`
-#' events. The actual state of the cell is its fit row, and the marginal
-#' effect of event `k` is the difference between the states after `k` and
-#' after `k - 1` events.
+#' the current `level` of the treatment, the `status` (1 when the level is not
+#' zero, the "on" state of an on-and-off treatment), and the time since the
+#' last active event `e`. The row of event `k` describes the state after the
+#' first `k` events. The actual state of the cell is its fit row, and the
+#' marginal effect of event `k` is the difference between the states after `k`
+#' and after `k - 1` events.
 #' @noRd
 build_state_rows <- function(tab, p) {
   M <- 1L + length(p$cohortvar2)
@@ -256,10 +313,9 @@ build_state_rows <- function(tab, p) {
   rows <- rbindlist(lapply(seq_len(M), function(k) {
     r <- tab[nact_cell >= k]
     if (nrow(r) == 0) return(NULL)
-    r[, `:=`(component = "state", event = as.integer(k), nact = as.integer(k), status = as.integer(k %% 2L),
-             gown = as.character(get(paste0("G", k))), e = get(paste0("e", k)))]
-    r[, gactive := gown]
-    r[, ghist := do.call(paste, c(lapply(seq_len(k), function(j) as.character(get(paste0("G", j)))), list(sep = "-")))]
+    r[, `:=`(component = "state", nact = as.integer(k))]
+    set_switch_features(r, k, p)
+    r[, status := as.integer(level != 0)]
     r
   }))
   rows[, fit := event == nact_cell]
@@ -278,7 +334,8 @@ build_design <- function(formula, long) {
   bad <- setdiff(vars, allowed)
   if (length(bad) > 0) {
     stop("the effect model uses ", paste(bad, collapse = ", "), ". the available variables are: ",
-         "gvec, t, event, e, gown, gactive, ghist, g1..gM, e1..eM, and status, nact in the state fit.")
+         "gvec, t, event, e, gown, gactive, ghist, G1..GM, e1..eM, level and level_prev in the ordered ",
+         "and the state fit, and status, nact in the state fit.")
   }
   X <- tryCatch({
     mf <- stats::model.frame(formula, data = long, na.action = stats::na.pass)
