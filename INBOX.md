@@ -48,3 +48,42 @@ not-yet-treated units (needs a joint fit of the baseline and the effect
 model), continuous treatment, distributional parameters, fuzzy designs.
 
 
+
+---
+
+## 2026-09-17 — the over-identification test over-rejects under a true model with many cells
+
+Source: Claude Code session with the author, from the ordered-events Monte
+Carlo of `project/doubledid/scripts/5c-ordered-sim.R` (fastdid working tree,
+branch `effect-model`, 1.1.0). `get_effect_overid()` in `R/effect_model.R`
+computes the residual quadratic form in the pseudo-inverse of the
+influence-function variance, with the degrees of freedom of the null space.
+With N = 2,000 units, T = 10, and a stacked fit on about 150 cells (about
+125 restrictions), the test rejects a true model far above the nominal 5%:
+OVERID-NUMBERS. It has power (the no-carryover model under a carryover is
+rejected in every draw), so the statistic is not broken, but the size is.
+The likely cause is the many-restrictions problem: the n-by-n variance of
+the fit residuals is estimated from N units and inverted. Candidates: a
+finite-sample correction, a test on a low-dimensional set of contrasts (for
+example the mean residual per state), or a multiplier bootstrap of the
+statistic. Until then, document the test as a diagnostic, not a size-correct
+test, in `R/fastdid.R` and in paper2's Proposition `prop:overid`. The
+per-draw p-values are in `project/doubledid/est/osim_draws.csv`, column
+`overid_p`.
+
+## 2026-09-17 — the share influence of a stacked fit uses the fitted cells
+
+Source: the same session. Under a stacked fit (`effect_fit = "state"` or
+`"ordered"`), the aggregate of the reported contrasts over the fit cells with
+the `pg` weights equals the aggregate of the raw cells whenever the columns
+of the model span the indicator of those cells (the fit is a weighted
+projection). The point estimate is then unbiased even when the cell-level
+model is wrong. The influence of the cohort shares in the aggregation,
+however, is computed from the fitted cell estimates, which vary less across
+cohorts than the raw cells under a cohort-level misspecification, so the
+standard error understates in that case (seen with a carryover level by
+switch-off cohort under the state model: Monte Carlo s.d. about 0.32 against
+an average s.e. of 0.19 at 10 replications). Decide whether the share
+influence must use the raw cells, or whether the documentation states that
+the standard error assumes the model. The design that showed it is not in
+the paper; see `agent/ISSUES.md` at the mono root.
