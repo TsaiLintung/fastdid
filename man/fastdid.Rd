@@ -56,7 +56,7 @@ fastdid(
 
 \item{balanced_event_time}{number, max event time to balance the cohort composition.}
 
-\item{control_type}{character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), or "dr" (doubly-robust).}
+\item{control_type}{character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), "dr" (doubly-robust), or "strata" (the DiD within each value of `covariatesvar`, averaged with the shares of the treated cohort; it equals "reg" with one dummy for each value, and it computes every cell from the means by cohort, value, and period, so it stores no influence function per cell and serves a large panel with many cohorts. Use [combine_cells()] for a target with its own weights).}
 
 \item{allow_unbalance_panel}{logical, allow unbalance panel as input or coerce dataset into one.}
 

@@ -23,7 +23,7 @@ validate_argument <- function(dt, p) {
   check_set_arg(weightvar, clustervar, "NA | match", .choices = dt_names, .message = checkvar_message, .up = 1)
 
   check_set_arg(control_option, double_control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) # kinda bad names since did's notyet include both notyet and never
-  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1)
+  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr", "strata"), .up = 1)
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
   check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, add_base_period, "scalar logical", .up = 1)
   check_arg(anticipation, anticipation2, alpha, "scalar numeric", .up = 1)
@@ -121,6 +121,17 @@ validate_argument <- function(dt, p) {
     }
   }
   
+  # the strata path reads the means of a balanced panel, with equal unit weights
+  if (control_type == "strata") {
+    if (allow_unbalance_panel) stop("control_type = 'strata' needs a balanced panel.")
+    if (!is.na(weightvar)) stop("control_type = 'strata' does not support weightvar.")
+    if (!allNA(varycovariatesvar)) stop("control_type = 'strata' does not support varycovariatesvar.")
+    if (!is.na(exper$filtervar) || !is.na(exper$filtervar_post)) stop("control_type = 'strata' does not support filtervar.")
+    if (!allNA(cohortvar2) && anticipation != anticipation2) {
+      stop("control_type = 'strata' needs anticipation and anticipation2 to be equal.")
+    }
+  }
+
   if (allow_unbalance_panel == TRUE && control_type == "dr") {
     stop("fastdid does not support DR when allowing for unbalanced panels.")
   }
@@ -260,7 +271,8 @@ validate_dt <- function(dt, p) {
         novar <- fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1
       }
       if (novar) stop(cov, " have no variation")
-      if (!(is.numeric(dt[, get(cov)]) || is.integer(dt[, get(cov)]))) {
+      # a stratum can be any value, a regression covariate must be a number
+      if (p$control_type != "strata" && !(is.numeric(dt[, get(cov)]) || is.integer(dt[, get(cov)]))) {
         stop(cov, " is not numeric or integer, do not support fixed effects.")
       }
     }

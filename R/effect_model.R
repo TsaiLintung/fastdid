@@ -420,7 +420,9 @@ get_effect_overid <- function(fit, att, inf_func) {
   n <- length(fit$cells)
   H <- fit$X %*% fit$pinv %*% (t(fit$X) * rep(fit$w, each = ncol(fit$X)))
   R <- diag(n) - H
-  IF <- inf_func[, fit$cells, drop = FALSE] %*% t(R)
+  sel <- matrix(0, n_cells(inf_func), n)
+  sel[fit$cells, ] <- t(R)
+  IF <- apply_inf(inf_func, sel)
   V <- crossprod(IF) / nrow(IF)^2
   r <- fit$resid
   df <- n - fit$rank

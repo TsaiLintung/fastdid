@@ -13,13 +13,14 @@ seconds.
 
 ## Public API
 
-fastdid exports three functions:
+fastdid exports four functions:
 
 | Function | What it does |
 |---|---|
 | `fastdid()` | the main estimator |
 | `plot_did_dynamics()` | an event-study plot through ggplot2 |
 | `sim_did()` | simulates a staggered DiD dataset for testing |
+| `combine_cells()` | a target with its own weights on the cells of a `control_type = "strata"` result |
 
 Key `fastdid()` parameters:
 
@@ -29,7 +30,7 @@ Key `fastdid()` parameters:
 | `timevar`, `cohortvar`, `unitvar`, `outcomevar` | column names, as strings |
 | `control_option` | `"both"`, `"never"`, or `"notyet"` |
 | `result_type` | `"group_time"`, `"time"`, `"group"`, `"simple"`, `"dynamic"`, `"group_group_time"`, `"dynamic_stagger"`, or `"dynamic_event"` |
-| `control_type` | `"ipw"`, `"reg"`, or `"dr"` (doubly robust) |
+| `control_type` | `"ipw"`, `"reg"`, `"dr"` (doubly robust), or `"strata"` (the DiD within each value of the covariates, from means) |
 | `cohortvar2` | the confounding events, one column name per event, for the two-stage estimator |
 | `effect_model` | the second-stage model: `"parallel"`, `"unrestricted"`, or a one-sided formula on the cell features |
 | `effect_fit` | how a formula is fit: `"separate"`, `"joint"`, `"ordered"`, or `"state"` |
@@ -55,6 +56,7 @@ R/
 ├── aggregate_gt.R     aggregates the cells to the target parameters, and their SEs
 ├── second_stage.R     the cell table, and the second stage as weights over first-stage cells
 ├── effect_model.R     the formula-based second stage: design, WLS, estimability, diagnostics
+├── strata.R           the strata first stage from means, its influence function, combine_cells()
 ├── double_did.R       multiple events: the G-string label helpers and the coercion
 ├── sim_did.R          data simulation
 ├── generics.R         S3 methods for the fastdid_result class
@@ -68,7 +70,8 @@ fastdid()
   -> validate_argument() + validate_dt()
   -> coerce_dt()        normalize time and cohort to 1,2,3...; store time_offset, time_step
   -> get_auxdata()      fast-access structures, clustered by time period
-  -> estimate_gtatt()   per outcome: cohorts x times, then estimate_did()
+  -> estimate_gtatt()   per outcome: cohorts x times, then estimate_did(), or
+                        estimate_gtatt_outcome_strata() for control_type = "strata"
   -> aggregate_gt()     per outcome: get_cell_table(), second_stage(), then the targets and the SEs
   -> convert_targets()  map back to the original time and cohort scales
 ```
@@ -114,6 +117,23 @@ fastdid()
    the sorted dates. The other result types read the target event from the
    first cohort column, so `event_level` needs `dynamic_event` or an
    `aggregate_scheme`.
+10. **The strata path.** `control_type = "strata"` replaces the loop of 2x2
+   estimates with `estimate_gtatt_outcome_strata()`. A stratum is one value of
+   `covariatesvar`. Every cell is a function of the sums of the outcome by
+   cohort row, stratum, and period, and the control cohorts of a cell are a
+   range of rows, so prefix sums over the rows give every control mean. The
+   influence function is a `strata_inf` object, not a matrix. The second stage
+   and the aggregation only multiply it on the right by a weight matrix,
+   through `apply_inf()`, which forms the influence function of each target
+   in one pass over the outcomes. The terms are those of `estimate_did_bp()`
+   with `control_type = "reg"` and one dummy for each stratum, with its
+   small-group inflation, so the two paths agree to 1e-8
+   (`inst/tinytest/test_9_strata.R`). Everything else is shared: validation,
+   coercion, the base period, `get_control_range()`, the skip rules, the cell
+   table, the second stage, and the standard errors. A result type with one
+   target per cell (`group_time`) still builds a matrix of the targets times
+   the cells, so a large panel needs a result type with few targets and
+   `combine_cells()`.
 
 ## Dependencies
 

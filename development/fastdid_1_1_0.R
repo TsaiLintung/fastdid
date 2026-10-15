@@ -1,5 +1,5 @@
-#2026-09-15
-message('loading fastdid source ver. ver: 1.1.0 date: 2026-09-15')
+#2026-10-15
+message('loading fastdid source ver. ver: 1.1.0 date: 2026-10-15')
 require(data.table);
  require(stringr);
  require(BMisc);
@@ -54,7 +54,7 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
   # get influence function matrix
 
   inf_weights <- get_weight_influence(att, agg_sch$group_time, agg_sch$agg_weights, aux, p)
-  inf_matrix <- (inf_func %*% t(agg_sch$agg_weights)) + inf_weights
+  inf_matrix <- apply_inf(inf_func, t(agg_sch$agg_weights)) + inf_weights
 
   # get se
   agg_se <- get_se(inf_matrix, aux, p)
@@ -90,18 +90,13 @@ get_agg_sch <- function(group_time, p) {
   group_time <- tg$group_time
   targets <- tg$targets
 
-  # get aggregation weights
-  agg_weights <- data.table()
-  for (tar in targets) { # the order matters
-
-    group_time[, weight := 0] # weight is 0 if not a target
-    group_time[target == tar & used, weight := pg / sum(pg)]
-    target_weights <- group_time[, .(weight)] |> transpose()
-    agg_weights <- rbind(agg_weights, target_weights)
+  # get aggregation weights, one row per target in the order of the targets
+  agg_weights <- matrix(0, length(targets), nrow(group_time))
+  for (i in seq_along(targets)) {
+    sel <- group_time[, which(target == targets[i] & used)]
+    agg_weights[i, sel] <- group_time[sel, pg / sum(pg)]
   }
   group_time[, pg := NULL]
-
-  agg_weights <- as.matrix(agg_weights)
   return(list(
     agg_weights = agg_weights, # a matrix of each target and gt's weight in it
     targets = targets,
@@ -222,10 +217,11 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p, by_pe
   signs <- sign(agg_weights[keepers])
   att_keep <- as.vector(gt_att)[keepers]
 
-  # moving this outside will create a g*t*id matrix, not really worth the memory
-  keepers_matrix <- as.matrix(aux$weights * sapply(seq_len(nrow(group)), function(g) {
-    as.integer(aux$dt_inv[, G] == group[g, G]) - group[g, pg]
-  }))
+  # the share of a cell moves with the units of its cohort, so the influence of
+  # a unit depends only on its cohort: no matrix of the units times the cells
+  unit_cohort <- match(aux$dt_inv[, G], aux$cohort_sizes[, G])
+  cell_cohort <- match(group[, G], aux$cohort_sizes[, G])
+  n_cohort <- nrow(aux$cohort_sizes)
 
   blocks <- if (by_period) group[, time] else rep(1L, nrow(group))
 
@@ -234,14 +230,25 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p, by_pe
   for (b in unique(blocks)) {
     idx <- which(blocks == b)
     pg_b <- group[idx, pg]
-    block_matrix <- keepers_matrix[, idx, drop = FALSE]
-    if1 <- block_matrix / sum(pg_b) # numerator
-    if2 <- rowSums(block_matrix) %*% t(pg_b) / (sum(pg_b)^2) # denominator
-    inf_weight <- inf_weight + (if1 - if2) %*% (signs[idx] * att_keep[idx])
+    v <- signs[idx] * att_keep[idx]
+    # the sums over the cells of the block that belong to the unit's cohort
+    own_v <- tabulate_sum(cell_cohort[idx], v, n_cohort)[unit_cohort]
+    own_n <- tabulate_sum(cell_cohort[idx], rep(1, length(idx)), n_cohort)[unit_cohort]
+    pv <- sum(pg_b * v)
+    inf_weight <- inf_weight + aux$weights * ((own_v - pv) / sum(pg_b) - (own_n - sum(pg_b)) * pv / sum(pg_b)^2)
   }
 
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps) * 10] <- 0 # fill zero
   return(inf_weight)
+}
+
+#' The sum of `x` by an integer index in `1..n`, zero for an absent index.
+#' @noRd
+tabulate_sum <- function(index, x, n) {
+  out <- numeric(n)
+  agg <- rowsum(x, index)
+  out[as.integer(rownames(agg))] <- agg[, 1]
+  out
 }
 
 # se -------------------------------------------------------------------
@@ -725,10 +732,12 @@ coerce_dt_doub <- function(dt, p){
 #' value is then a linear combination of first-stage cells, so the weights slot
 #' into the same contract as `get_es_scheme()`.
 #'
-#' Three fit modes: `"separate"` fits one component on its clean cells,
-#' `"joint"` stacks the events additively and fits on every cell, `"ordered"`
-#' does the same for the k-th occurrence of one event kind, where the stacked
-#' sum holds by telescoping.
+#' Fit modes: `"separate"` fits one component on its clean cells. `"joint"`
+#' models the sequential marginal effect of every event in the order of the
+#' cohort columns and fits on every cell; the cell is the telescoping sum of
+#' the marginal effects of its active events, so no additivity is assumed.
+#' `"ordered"` is the same for the k-th occurrence of one event kind, and
+#' `"state"` models the cell by its state.
 #'
 #' @param cells the cell table from `get_cell_table()`.
 #' @param att,inf_func the first-stage estimates and influence functions.
@@ -740,15 +749,22 @@ get_effect_scheme <- function(cells, att, inf_func, aux, p) {
   K <- nrow(tab)
 
   # the direct rows: a clean cell is the pure target effect, pre-periods included
-  direct <- tab[clean1 == TRUE & is.finite(G1)]
-  direct[, `:=`(event = 1L, e = e1, component = "direct", estimable = TRUE, leverage = 0, e_gap = 0)]
+  direct <- tab[clean1 == TRUE & is.finite(first)]
+  direct[, `:=`(event = 1L, e = t - first, component = "direct", estimable = TRUE, leverage = 0, e_gap = 0)]
+  if (p$effect_fit %in% c("ordered", "state")) direct[, `:=`(level = L1, level_prev = 0)]
   rep_rows <- direct
   det <- unit_rows(direct[, cell], K)
   fits <- list()
 
   if (p$effect_kind != "unrestricted") {
-    long <- if (p$effect_fit == "separate") build_component_rows(tab, p) else build_event_rows(tab, p)
+    long <- switch(p$effect_fit,
+                   separate = build_component_rows(tab, p),
+                   state = build_state_rows(tab, p),
+                   build_event_rows(tab, p))
     long[, lid := .I] # a cell has one row per modeled event, so the cell index is not unique
+    if (p$effect_fit == "state") { # the state before event k is the row of event k - 1
+      long[, lid_prev := lid[match(paste(cell, event - 1L), paste(cell, event))]]
+    }
     X <- build_design(p$effect_model, long)
 
     # fit each component, and collect the weight of each modeled row
@@ -780,6 +796,12 @@ get_effect_scheme <- function(cells, att, inf_func, aux, p) {
       tr <- merge(tr, own_max, by = c("G", "event"), all.x = TRUE, sort = FALSE)
       tr[, e_gap := pmax(e - emax, 0)]
       Xt <- Xc[match(tr[, lid], lr[, lid]), , drop = FALSE]
+      if (comp == "state") { # the marginal effect of event k is the state after it minus the state before it
+        prev <- match(tr[, lid_prev], lr[, lid])
+        Xp <- Xc[ifelse(is.na(prev), 1L, prev), , drop = FALSE]
+        Xp[is.na(prev), ] <- 0
+        Xt <- Xt - Xp
+      }
 
       det_comp <- matrix(0, nrow(tr), K)
       est <- logical(nrow(tr))
@@ -816,7 +838,7 @@ finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
   rep_rows[, ri := .I]
   # a cohort treated and confounded in the same period is tried under both
   # components; the target component wins when both are estimable
-  rep_rows[, prio := match(component, c("direct", "target", "confound", "joint"))]
+  rep_rows[, prio := match(component, c("direct", "target", "confound", "joint", "state"))]
   setorder(rep_rows, cell, event, prio)
   rep_rows[, keep := estimable & !duplicated(paste(cell, event, estimable))]
   do.call(setorderv, c(list(rep_rows), list(c("time", "mg", gcol, "event", "prio"))))
@@ -833,7 +855,7 @@ finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
   if (!any(keep)) {
     stop("no cell is estimable under the effect model.")
   }
-  if (!rep_rows[keep, any(time >= G1 - p$anticipation)]) {
+  if (!rep_rows[keep, any(event == 1L & e >= -p$anticipation)]) {
     warning("no event-specific post-period effect is identified for any cohort. ",
             "check that some cohort has the first event at a different time than the confounding events.")
   }
@@ -849,7 +871,10 @@ finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
     overid = lapply(fits, get_effect_overid, att, inf_func)
   )
 
-  out <- rep_rows[keep, c("G", "time", "pg", "mg", gcol, "event", "e", "component"), with = FALSE]
+  # the levels of a switch serve a custom aggregation, for example one target per move
+  out_cols <- c("G", "time", "pg", "mg", gcol, "event", "e", "component")
+  if (!allNA(p$exper$event_level)) out_cols <- c(out_cols, "level", "level_prev")
+  out <- rep_rows[keep, out_cols, with = FALSE]
   return(list(group_time = out, es_det_weight = det_keep, es_sto_weight = det_keep * 0, diag = diag))
 }
 
@@ -860,7 +885,9 @@ finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
 #' Adds the cell index, the event times `e1..eM`, the earliest confounding
 #' date `gp`, the confounding profile `gconf`, and the windows: `active1` and
 #' `clean1` for the target effect, `activec` and `cleanc` for the confounding
-#' effect. The windows use the anticipation of each event.
+#' effect. The windows use the anticipation of each event. `first` is the date
+#' of the target event. With ordered events the target event is the first
+#' switch, and `clean1` ends at the second switch.
 #' @noRd
 build_effect_table <- function(cells, p) {
   tab <- copy(cells)
@@ -876,11 +903,56 @@ build_effect_table <- function(cells, p) {
   tab[, gconf := str_split_fixed(G, "-", 2)[, 2]]
   a1 <- p$anticipation
   a2 <- p$anticipation2
-  tab[, active1 := t >= G1 - a1]
+  tab[, first := G1]
+  if (p$effect_fit %in% c("ordered", "state")) {
+    add_switch_columns(tab, M, p$exper$event_level)
+    tab[, `:=`(first = S1, gp = S2)]
+  }
+  tab[, active1 := t >= first - a1]
   tab[, clean1 := t < gp - a2]
   tab[, activec := t >= gp - a2]
-  tab[, cleanc := t < G1 - a1]
+  tab[, cleanc := t < first - a1]
   return(tab)
+}
+
+#' The switches of an ordered treatment, by reference.
+#'
+#' Adds the date `S_k` of the k-th switch and the level `L_k` that it moves
+#' the treatment to. Without `event_level` the cohort columns are in the order
+#' of the switches and the level is the parity, the status of an on-and-off
+#' treatment. With `event_level` a cohort column is one event "switch to this
+#' level", so the k-th switch of a cohort is its k-th date.
+#' @noRd
+add_switch_columns <- function(tab, M, event_level) {
+  dates <- as.matrix(tab[, paste0("G", seq_len(M)), with = FALSE])
+  if (allNA(event_level)) {
+    sw <- matrix(seq_len(M), nrow(tab), M, byrow = TRUE)
+    event_level <- seq_len(M) %% 2L
+  } else {
+    sw <- t(apply(dates, 1, order))
+  }
+  # `set` reads no column of `tab`, so a local name cannot collide with one
+  for (k in seq_len(M)) {
+    set(tab, j = paste0("S", k), value = dates[cbind(seq_len(nrow(tab)), sw[, k])])
+    set(tab, j = paste0("L", k), value = event_level[sw[, k]])
+  }
+  return(invisible(tab))
+}
+
+#' Add the features of switch `k` to its rows, by reference: the date, the
+#' event time, the level after the switch and before it, and the history.
+#' With `event_level` the history holds the level of each switch as well.
+#' @noRd
+set_switch_features <- function(r, k, p) {
+  r[, `:=`(event = as.integer(k), gown = as.character(get(paste0("S", k))), e = t - get(paste0("S", k)),
+           level = get(paste0("L", k)), level_prev = if (k == 1L) 0 else get(paste0("L", k - 1L)))]
+  r[, gactive := gown]
+  hist <- lapply(seq_len(k), function(j) {
+    if (allNA(p$exper$event_level)) return(r[, as.character(get(paste0("S", j)))])
+    r[, paste0(get(paste0("S", j)), ":", get(paste0("L", j)))]
+  })
+  r[, ghist := do.call(paste, c(hist, list(sep = "-")))]
+  return(invisible(r))
 }
 
 #' One row per cell and modeled component, for the separate fit.
@@ -919,12 +991,18 @@ build_component_rows <- function(tab, p) {
 #'
 #' The design row of a cell is the sum of its event rows. `ghist` is the
 #' cohort vector truncated at the event, so a formula can stratify on the
-#' history of earlier events.
+#' history of earlier events. In the ordered fit the event is the k-th switch.
 #' @noRd
 build_event_rows <- function(tab, p) {
   M <- 1L + length(p$cohortvar2)
   a <- c(p$anticipation, rep(p$anticipation2, M - 1))
   rows <- rbindlist(lapply(seq_len(M), function(d) {
+    if (p$effect_fit == "ordered") {
+      r <- tab[t >= get(paste0("S", d)) - a[d]]
+      if (nrow(r) == 0) return(NULL)
+      r[, component := "joint"]
+      return(set_switch_features(r, d, p))
+    }
     r <- tab[t >= get(paste0("G", d)) - a[d]]
     if (nrow(r) == 0) return(NULL)
     r[, `:=`(component = "joint", event = as.integer(d), gown = as.character(get(paste0("G", d))),
@@ -935,6 +1013,34 @@ build_event_rows <- function(tab, p) {
   }))
   rows[, fit := TRUE]
   # a clean cell of event 1 is reported as it is
+  rows[, target := !(event == 1L & clean1)]
+  return(rows)
+}
+
+#' One row per cell and number of active events, for the state fit.
+#'
+#' The cell is a function of its state: the number of active events `nact`,
+#' the current `level` of the treatment, the `status` (1 when the level is not
+#' zero, the "on" state of an on-and-off treatment), and the time since the
+#' last active event `e`. The row of event `k` describes the state after the
+#' first `k` events. The actual state of the cell is its fit row, and the
+#' marginal effect of event `k` is the difference between the states after `k`
+#' and after `k - 1` events.
+#' @noRd
+build_state_rows <- function(tab, p) {
+  M <- 1L + length(p$cohortvar2)
+  a <- p$anticipation
+  nact <- Reduce(`+`, lapply(seq_len(M), function(d) as.integer(tab[, t >= get(paste0("G", d)) - a])))
+  tab[, nact_cell := nact]
+  rows <- rbindlist(lapply(seq_len(M), function(k) {
+    r <- tab[nact_cell >= k]
+    if (nrow(r) == 0) return(NULL)
+    r[, `:=`(component = "state", nact = as.integer(k))]
+    set_switch_features(r, k, p)
+    r[, status := as.integer(level != 0)]
+    r
+  }))
+  rows[, fit := event == nact_cell]
   rows[, target := !(event == 1L & clean1)]
   return(rows)
 }
@@ -950,7 +1056,8 @@ build_design <- function(formula, long) {
   bad <- setdiff(vars, allowed)
   if (length(bad) > 0) {
     stop("the effect model uses ", paste(bad, collapse = ", "), ". the available variables are: ",
-         "gvec, t, event, e, gown, gactive, ghist, g1..gM, e1..eM.")
+         "gvec, t, event, e, gown, gactive, ghist, G1..GM, e1..eM, level and level_prev in the ordered ",
+         "and the state fit, and status, nact in the state fit.")
   }
   X <- tryCatch({
     mf <- stats::model.frame(formula, data = long, na.action = stats::na.pass)
@@ -1035,7 +1142,9 @@ get_effect_overid <- function(fit, att, inf_func) {
   n <- length(fit$cells)
   H <- fit$X %*% fit$pinv %*% (t(fit$X) * rep(fit$w, each = ncol(fit$X)))
   R <- diag(n) - H
-  IF <- inf_func[, fit$cells, drop = FALSE] %*% t(R)
+  sel <- matrix(0, n_cells(inf_func), n)
+  sel[fit$cells, ] <- t(R)
+  IF <- apply_inf(inf_func, sel)
   V <- crossprod(IF) / nrow(IF)^2
   r <- fit$resid
   df <- n - fit$rank
@@ -1461,9 +1570,15 @@ estimate_did_rc <- function(dt_did, covvars, p, cache){
 estimate_gtatt <- function(aux, p){
   caches <- list()
   outcome_results <- list()
+  # the strata path shares the units, the cohorts, and the strata across outcomes
+  sx <- if(p$control_type == "strata") get_strata_setup(aux, p) else NULL
   for(outcol in p$outcomevar){
     y <- aux$outcomes_list[[outcol]]
-    out_result <- estimate_gtatt_outcome(y, aux, p, caches)
+    if(!is.null(sx)){
+      out_result <- list(est = estimate_gtatt_outcome_strata(y, sx, aux, p), caches = caches)
+    } else {
+      out_result <- estimate_gtatt_outcome(y, aux, p, caches)
+    }
     out_result$est$outname <- outcol
     outcome_results[[outcol]] <- out_result$est
     caches <- out_result$caches
@@ -1582,14 +1697,9 @@ get_base_period <- function(g,t,p){
 
 get_did_setup <- function(g, t, base_period, aux, p){
 
-  treated_cohorts <- aux$cohorts[!is.infinite(ming(aux$cohorts))]
-
-  min_control_cohort <- ifelse(p$control_option == "never", Inf, max(t, base_period)+p$anticipation+1)
-  max_control_cohort <- ifelse(p$control_option == "notyet", max(ming(treated_cohorts)), Inf) 
-
-  if(!is.na(p$exper$max_control_cohort_diff)){
-    max_control_cohort <- min(g+p$exper$max_control_cohort_diff, max_control_cohort)
-  } 
+  range <- get_control_range(ming(g), t, base_period, aux, p)
+  min_control_cohort <- range$min
+  max_control_cohort <- range$max
   
   #select the control and treated cohorts
   did_setup <- rep(NA, aux$id_size)
@@ -1614,6 +1724,27 @@ get_did_setup <- function(g, t, base_period, aux, p){
   if(length(did_setup) != aux$id_size){stop("internal bug: something wrong with did setup (again?)")}
   
   return(did_setup)
+}
+
+#' The range of the first event of the control cohorts.
+#'
+#' A cohort is a control of the cell if its first event lies in
+#' `[min, max]`. The 2x2 path and the strata path both read the range. The
+#' arguments can be vectors, one element per cell.
+#'
+#' @param g_first the first event of the treated cohort.
+#' @param t,base_period the two periods of the 2x2.
+#' @return a list: `min` and `max`.
+#' @noRd
+get_control_range <- function(g_first, t, base_period, aux, p){
+  treated_first <- ming(aux$cohorts)
+  treated_first <- treated_first[is.finite(treated_first)]
+  min_control_cohort <- if(p$control_option == "never") rep(Inf, length(t)) else pmax(t, base_period)+p$anticipation+1
+  max_control_cohort <- rep(if(p$control_option == "notyet") max(treated_first) else Inf, length(t))
+  if(!is.na(p$exper$max_control_cohort_diff)){
+    max_control_cohort <- pmin(g_first+p$exper$max_control_cohort_diff, max_control_cohort)
+  }
+  return(list(min = min_control_cohort, max = max_control_cohort))
 }
 
 get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){
@@ -1713,7 +1844,7 @@ get_covvars <- function(base_period, t, aux, p){
 #' @param control_option character, control units used for the DiD estimates, options are "both", "never", or "notyet".
 #' @param result_type character, type of result to return, options are "group_time", "time", "group", "simple", "dynamic" (time since event), "group_group_time", "dynamic_stagger", or "dynamic_event" (the average effect of every event at each event time, for `effect_fit = "ordered"`).
 #' @param balanced_event_time number, max event time to balance the cohort composition.
-#' @param control_type character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), or "dr" (doubly-robust).
+#' @param control_type character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), "dr" (doubly-robust), or "strata" (the DiD within each value of `covariatesvar`, averaged with the shares of the treated cohort; it equals "reg" with one dummy for each value, and it computes every cell from the means by cohort, value, and period, so it stores no influence function per cell and serves a large panel with many cohorts. Use [combine_cells()] for a target with its own weights).
 #' @param allow_unbalance_panel logical, allow unbalance panel as input or coerce dataset into one.
 #' @param boot logical, whether to use bootstrap standard error.
 #' @param biters number, bootstrap iterations. Default is 1000.
@@ -1737,6 +1868,7 @@ get_covvars <- function(base_period, t, aux, p){
 #'     \item{`aggregate_scheme`}{character, a custom aggregation expression evaluated as `group_time[, target := <expr>]`.}
 #'     \item{`max_control_cohort_diff`}{numeric, maximum cohort difference between treated and control groups.}
 #'     \item{`effect_tol`}{numeric, the relative tolerance of the rank and estimability checks of an effect model. Default is 1e-7.}
+#'     \item{`event_level`}{numeric vector, for a multi-valued treatment with `effect_fit = "ordered"` or `"state"`. Each cohort column is one event "switch to this level", and `event_level` gives that level, first for `cohortvar`, then for each column of `cohortvar2`. Every unit starts at level 0. The k-th switch of a unit is its k-th date, so the cohort columns need no order. A path that visits a level twice needs one column per visit. It needs `result_type = "dynamic_event"` or an `aggregate_scheme`, which can use `level` and `level_prev`.}
 #'   }
 #' @param base_period character, type of base period in pre-preiods, options are "universal", or "varying".
 #' @param full logical, whether to return the full result (influence function, call, weighting scheme, etc,.).
@@ -1746,7 +1878,7 @@ get_covvars <- function(base_period, t, aux, p){
 #' @param double_control_option character, control units used for the double DiD, options are "both", "never", or "notyet". "notyet" keeps a control cohort only if every confounding event is finite and later than the period, so the control must be confounded eventually by all of them. With M >= 3 events this can leave very few control cohorts, and "both" is the recommended option.
 #' @param add_base_period logical, whether to add a placeholder base period in dynamic results.
 #' @param effect_model the second-stage model of the treatment effects, for multiple events. `"parallel"` (the default) is the parallel treatment effects estimator. `"unrestricted"` reports the clean cells only. A one-sided formula models one component of the cell as a linear function of the cell features, see Details.
-#' @param effect_fit character, how a formula is fit. `"separate"` fits the modeled component on its clean cells. `"joint"` stacks the events additively and fits on every cell. `"ordered"` does the same for the k-th occurrence of one event kind, where the cohort dates must increase.
+#' @param effect_fit character, how a formula is fit. `"separate"` models one block (the target effect, or the confounding bundle) and leaves the other unmodeled, so the fit set is that block's clean cells; both orders are tried. `"joint"` models the sequential marginal effect of every event, in the order of the cohort columns, and fits on every cell; the cell is the sum of the marginal effects of its active events, so no additivity is assumed. `"ordered"` is the same fit for the k-th occurrence of one event kind, and checks that the cohort dates increase. `"state"` models the cell as a function of its state (the number of active events `nact`, its parity `status`, and the time since the last event `e`), and reports the marginal effect of event k as the state after k events minus the state after k-1 events; the dates must increase.
 #'
 #' @import data.table stringr dreamerr ggplot2
 #' @importFrom stats quantile vcov sd binomial fitted qnorm rnorm as.formula weighted.mean model.frame model.matrix na.pass pchisq setNames
@@ -1771,14 +1903,16 @@ get_covvars <- function(base_period, t, aux, p){
 #'   \describe{
 #'     \item{`gvec`}{the cohort vector, as the string `"g1-g2-...-gM"`}
 #'     \item{`t`}{the period}
-#'     \item{`g1`, ..., `gM`, `e1`, ..., `eM`}{the date and the event time of each event}
+#'     \item{`G1`, ..., `GM`, `e1`, ..., `eM`}{the date and the event time of each event}
 #'     \item{`event`}{the modeled event: 1 for the target, 2 for the confounding bundle, k in the stacked fits}
 #'     \item{`gown`}{the date of the modeled event (the confounding profile for the bundle)}
 #'     \item{`gactive`}{the dates of the modeled events that are active at `t`}
 #'     \item{`ghist`}{the cohort vector truncated at the modeled event}
 #'     \item{`e`}{the event time of the modeled event}
+#'     \item{`level`, `level_prev`}{in the ordered and the state fit: the level of the treatment after the modeled switch and before it. Without `event_level` the level is the parity of the switch, the status of an on-and-off treatment}
+#'     \item{`nact`, `status`}{in the state fit: the number of active events, and the status (1 when the level is not zero, the "on" state of an on-and-off treatment)}
 #'   }
-#' The model `~ factor(gvec) + factor(gactive):factor(t)` is the parallel treatment effects assumption of `"parallel"`, fit on every clean cell at once. `~ factor(gvec) + poly(e, 2)` is a quadratic profile in event time with a cohort level. With `effect_fit = "separate"`, the target component is modeled for cohorts treated before they are confounded, and the confounding component for cohorts confounded before they are treated; the reported effect is the pure effect in the first case and the interacted effect in the second. With `effect_fit = "joint"` or `"ordered"`, the design row of a cell is the sum over its active events, so a formula can share parameters across events, for example `~ 0 + factor(gvec):factor(event) + factor(e)`. Use `~ 0 + ...` in a stacked fit, because an intercept counts once per active event. `result_type = "dynamic_event"` averages the effect of every event at each event time, with cohort-size weights. The weights of the fit are treated as fixed in the influence function. `double_control_option` and `control_option = "notyet"` do not restrict the fit set of a formula. With `full = TRUE`, `effect_diag` returns the weight of every first-stage cell in every reported cell, the estimability of every candidate cell, the fit residuals, and an over-identification test.
+#' The model `~ factor(gvec) + factor(gactive):factor(t)` is the parallel treatment effects assumption of `"parallel"`, fit on every clean cell at once. `~ factor(gvec) + poly(e, 2)` is a quadratic profile in event time with a cohort level. With `effect_fit = "separate"`, the target component is modeled for cohorts treated before they are confounded, and the confounding component for cohorts confounded before they are treated; the reported effect is the pure effect in the first case and the interacted effect in the second. With `effect_fit = "joint"` or `"ordered"`, each event block models the marginal effect of that event given the events before it, the design row of a cell is the sum over its active events, and a formula can share parameters across events, for example `~ 0 + factor(gvec):factor(event) + factor(e)`. Use `~ 0 + ...` in a stacked fit, because an intercept counts once per active event. An on-and-off treatment is the ordered case with alternating switches: `effect_fit = "state"` with `~ 0 + factor(status):factor(e)` gives one profile in time since the switch for the on state and one for the off state, and the reported effect of switch k is the change of state that it causes. `result_type = "dynamic_event"` averages the effect of every event at each event time, with cohort-size weights. The weights of the fit are treated as fixed in the influence function. `double_control_option` and `control_option = "notyet"` do not restrict the fit set of a formula. With `full = TRUE`, `effect_diag` returns the weight of every first-stage cell in every reported cell, the estimability of every candidate cell, the fit residuals, and an over-identification test.
 #'
 #' @examples
 #' # simulated data
@@ -1829,7 +1963,7 @@ fastdid <- function(data,
   exper_args <- c(
     "filtervar", "filtervar_post", "only_balance_2by2",
     "aggregate_scheme", "max_control_cohort_diff",
-    "only_est_min", "only_est_max", "effect_tol"
+    "only_est_min", "only_est_max", "effect_tol", "event_level"
   )
   p$exper <- get_exper_default(p$exper, exper_args)
   class(p) <- "locked" # no more changes!
@@ -1871,7 +2005,8 @@ fastdid <- function(data,
       agg_inf_func = agg_result$inf_func,
       agg_weight_matrix = agg_result$agg_weight_matrix,
       es_weight_matrix = agg_result$es_weight_matrix,
-      effect_diag = agg_result$effect_diag
+      effect_diag = agg_result$effect_diag,
+      time_info = coerce_result$t
     )
     class(full_result) <- c("fastdid_result", class(full_result))
     return(full_result)
@@ -1961,7 +2096,8 @@ utils::globalVariables(c(
     "det_weight", "sto_weight", "add_base_period", "cohortvar2", "exper",
     "effect_model", "effect_fit", "effect_kind", "cell", "ord", "gvec", "t", "gp", "gconf",
     "active1", "clean1", "activec", "cleanc", "component", "estimable", "leverage", "e_gap",
-    "gown", "gactive", "ghist", "e", "e1", "fit", "emax", "resid", "ri", "prio", "keep", "lid"
+    "gown", "gactive", "ghist", "e", "e1", "fit", "emax", "resid", "ri", "prio", "keep", "lid", "lid_prev", "nact", "nact_cell", "status", "event_specific",
+    "r", "b", "ra", "rb", "excl", "n_g", "n_c", "overlap", "first", "tt", "k", "i.cell", "w"
 ))
 
 # cell table -------------------------------------------------------------------
@@ -2029,7 +2165,7 @@ second_stage <- function(cells, att, inf_func, aux, p) {
 
   out_cells <- sch$group_time
   att <- es_weight %*% att
-  inf_func <- (inf_func %*% t(es_weight)) + es_inf_weights
+  inf_func <- apply_inf(inf_func, t(es_weight)) + es_inf_weights
 
   # a stacked fit reports every event; the event-1 rows serve the other result types
   if ("event" %in% names(out_cells) && p$result_type != "dynamic_event" && is.na(p$exper$aggregate_scheme)) {
@@ -2427,6 +2563,386 @@ sim_did <- function(sample_size, time_period, untreated_prop = 0.3, epsilon_size
   return(list(dt = dt, att = att))
 }
 
+# the strata first stage --------------------------------------------------------
+
+#' The units, the cohorts, and the strata of the strata path.
+#'
+#' `control_type = "strata"` computes every cell from the means of the outcome
+#' by cohort, stratum, and period. A stratum is one value of `covariatesvar`
+#' (one combination, for several columns), and without covariates every unit is
+#' in one stratum. A group is a cohort row of `aux$cohort_sizes` and a stratum.
+#' The cohort rows are sorted by the first event, so the control cohorts of a
+#' cell are a contiguous range of rows, as in `get_control_pos()`.
+#'
+#' @return a list: the number of rows `R` and strata `S`, the first event of
+#'   each row, the group of each unit (`r + (x - 1) R`), the group sizes as an
+#'   `R x S` matrix, and their prefix sums over the rows.
+#' @noRd
+get_strata_setup <- function(aux, p) {
+  cs <- aux$cohort_sizes
+  R <- nrow(cs)
+  unit_row <- match(aux$dt_inv[, G], cs[, G])
+  if (allNA(p$covariatesvar)) {
+    unit_x <- rep(1L, aux$id_size)
+  } else {
+    unit_x <- GRP(aux$covariates, sort = TRUE)$group.id
+  }
+  S <- max(unit_x)
+  unit_k <- unit_row + (unit_x - 1L) * R
+  n_rs <- matrix(tabulate(unit_k, R * S), R, S)
+  strata <- if (allNA(p$covariatesvar)) NULL else GRP(aux$covariates, sort = TRUE)$groups
+  list(R = R, S = S, first = ming(cs[, G]), unit_k = unit_k, n_rs = n_rs,
+       pn = rbind(0, col_cumsum(n_rs)), strata = as.data.table(strata))
+}
+
+#' The cells of one outcome from the stratified means.
+#'
+#' A cell is the DiD within each stratum, averaged with the stratum shares of
+#' the treated cohort,
+#' \deqn{ATT(g, t) = \sum_x \pi_{gx} [\Delta\bar Y_{gx} - \Delta\bar Y_{Cx}],}
+#' where `C` is the control set of `get_control_range()`. This equals
+#' `control_type = "reg"` with one dummy for each stratum. The cells follow
+#' the rules of `estimate_gtatt_outcome()`: the same base periods, the same
+#' cells skipped, and the same order.
+#'
+#' @param y the outcome, a list of one vector per period.
+#' @param sx the output of `get_strata_setup()`.
+#' @return a list: `gt`, `att`, and `inf_func`, a `strata_inf` object that
+#'   stores no influence function per cell (see `apply_inf()`).
+#' @noRd
+estimate_gtatt_outcome_strata <- function(y, sx, aux, p) {
+  R <- sx$R
+  S <- sx$S
+  TT <- length(aux$time_periods)
+
+  # the sums of the outcome by group and period, and their prefix sums over the rows
+  sum_y <- vapply(seq_len(TT), function(tt) tabulate_sum(sx$unit_k, y[[tt]], R * S), numeric(R * S))
+  sum_y <- matrix(sum_y, R * S, TT)
+  py <- rbind(0, col_cumsum(matrix(sum_y, R, S * TT)))
+
+  # every cohort and period, first loop t then g, as in estimate_gtatt_outcome()
+  treated <- which(is.finite(sx$first))
+  cells <- CJ(t = aux$time_periods, r = treated, sorted = FALSE)
+  setorder(cells, t, r)
+  cells[, first := sx$first[r]]
+  cells[, b := get_base_period(first, t, p)]
+  cells <- cells[t != b & b %in% aux$time_periods]
+  event_time <- cells[, t - first]
+  if (!is.na(p$exper$only_est_min)) cells <- cells[event_time >= p$exper$only_est_min]
+  event_time <- cells[, t - first]
+  if (!is.na(p$exper$only_est_max)) cells <- cells[event_time <= p$exper$only_est_max]
+
+  # the control cohorts: rows ra to rb, less the treated cohort if it is in range
+  range <- get_control_range(cells$first, cells$t, cells$b, aux, p)
+  cells[, ra := findInterval(range$min, sx$first, left.open = TRUE) + 1L]
+  cells[, rb := findInterval(range$max, sx$first)]
+  cells[, excl := r >= ra & r <= rb]
+
+  parts <- strata_cell_parts(cells, sx, sum_y, py)
+  cells[, `:=`(att = parts$att, n_g = parts$n_g, n_c = parts$n_c, overlap = parts$overlap)]
+
+  # the rules of the 2x2 path: no treated or no control unit, then a treated
+  # stratum with no control unit (a coefficient of the regression is NA), then
+  # a group of fewer than 2 units
+  cells <- cells[n_g > 0 & n_c > 0]
+  if (any(!cells$overlap)) {
+    warning(sum(!cells$overlap), " group-time(s) skipped: a stratum of the treated cohort has no control unit")
+    cells <- cells[overlap == TRUE]
+  }
+  small <- cells[, n_g < 2 | n_c < 2]
+  if (any(small)) {
+    warning(sum(small), " group-time(s) skipped: a group has fewer than 2 effective units, so the variance is not estimable")
+    cells <- cells[!small]
+  }
+  if (nrow(cells) == 0) stop("no valid group-times att to compute")
+
+  G <- aux$cohort_sizes[, G][cells$r]
+  gt <- data.table(G = G, time = as.integer(cells$t))
+  att <- matrix(cells$att, ncol = 1, dimnames = list(paste0(G, ".", cells$t), NULL))
+  inf_func <- structure(list(cells = cells[, .(r, t, b, ra, rb, excl, att, n_g, n_c)],
+                             y = y, sx = sx, sum_y = sum_y, py = py, N = aux$id_size,
+                             cohorts = aux$cohort_sizes[, G], cluster = aux$cluster),
+                        class = "strata_inf")
+  list(gt = gt, att = att, inf_func = inf_func)
+}
+
+#' The stratum parts of a set of cells.
+#'
+#' @param cells a table with the treated row `r`, the periods `t` and `b`, and
+#'   the control rows `ra`, `rb`, `excl`.
+#' @param keep_strata keep the `m x S` matrices, else only the vectors.
+#' @return a list: the vectors `att`, `n_g`, `n_c`, and `overlap` (every
+#'   treated stratum has a control unit), and with `keep_strata` the `m x S`
+#'   matrices `n_gx` (treated units), `n_cx` (control units), `d` (the change of
+#'   the treated), and `c` (the change of the controls).
+#' @noRd
+strata_cell_parts <- function(cells, sx, sum_y, py, keep_strata = FALSE) {
+  # chunks of about a million stratum cells keep the index vectors small
+  size <- max(1L, floor(1e6 / sx$S))
+  chunks <- split(seq_len(nrow(cells)), ceiling(seq_len(nrow(cells)) / size))
+  out <- lapply(chunks, function(i) strata_cell_parts_chunk(cells[i], sx, sum_y, py, keep_strata))
+  vec <- c("att", "n_g", "n_c", "overlap")
+  res <- lapply(setNames(vec, vec), function(v) unlist(lapply(out, `[[`, v), use.names = FALSE))
+  if (keep_strata) {
+    mat <- c("n_gx", "n_cx", "d", "c")
+    res <- c(res, lapply(setNames(mat, mat), function(v) do.call(rbind, lapply(out, `[[`, v))))
+  }
+  res
+}
+
+#' @noRd
+strata_cell_parts_chunk <- function(cells, sx, sum_y, py, keep_strata) {
+  R <- sx$R
+  S <- sx$S
+  m <- nrow(cells)
+  xs <- rep(seq_len(S), each = m)
+  r <- rep(cells$r, S)
+  ra <- rep(cells$ra, S)
+  rb <- rep(cells$rb, S)
+  excl <- rep(cells$excl, S)
+  k <- r + (xs - 1L) * R
+
+  n_gx <- sx$n_rs[cbind(r, xs)]
+  n_cx <- sx$pn[cbind(rb + 1L, xs)] - sx$pn[cbind(ra, xs)] - excl * n_gx
+  # the sum of the controls at a period: the prefix sums of the range, less the treated
+  csum <- function(tt) {
+    tt <- rep(tt, S)
+    col <- xs + (tt - 1L) * S
+    py[cbind(rb + 1L, col)] - py[cbind(ra, col)] - excl * sum_y[cbind(k, tt)]
+  }
+  d <- (sum_y[cbind(k, rep(cells$t, S))] - sum_y[cbind(k, rep(cells$b, S))]) / n_gx
+  cc <- (csum(cells$t) - csum(cells$b)) / n_cx
+
+  n_gx <- matrix(n_gx, m, S)
+  n_cx <- matrix(n_cx, m, S)
+  d <- matrix(d, m, S)
+  cc <- matrix(cc, m, S)
+  n_g <- rowSums(n_gx)
+  # a stratum with no treated unit has no weight in the cell
+  gap <- ifelse(n_gx > 0, n_gx * (d - cc), 0)
+  out <- list(att = rowSums(gap) / n_g, n_g = n_g, n_c = rowSums(n_cx),
+              overlap = rowSums(n_gx > 0 & n_cx == 0) == 0)
+  if (keep_strata) out <- c(out, list(n_gx = n_gx, n_cx = n_cx, d = d, c = cc))
+  out
+}
+
+#' The cumulative sums of the columns of a matrix.
+#' @noRd
+col_cumsum <- function(x) {
+  if (nrow(x) == 1L) return(x)
+  apply(x, 2, cumsum)
+}
+
+# the influence function without a column per cell ------------------------------
+
+#' The influence functions of linear combinations of the cells.
+#'
+#' The first stage returns `inf_func`, a matrix of the units times the cells,
+#' or a `strata_inf` object on the strata path. The second stage and the
+#' aggregation only multiply it on the right by a weight matrix, so the strata
+#' path forms the influence function of each combination directly.
+#'
+#' @param inf_func the influence functions of the cells.
+#' @param weights a matrix of the cells times the combinations.
+#' @return a matrix of the units times the combinations.
+#' @noRd
+apply_inf <- function(inf_func, weights) {
+  if (!inherits(inf_func, "strata_inf")) return(inf_func %*% weights)
+  weights <- as.matrix(weights)
+  out <- matrix(0, inf_func$N, ncol(weights))
+  for (j in seq_len(ncol(weights))) {
+    nz <- which(weights[, j] != 0)
+    out[, j] <- strata_inf_target(inf_func, nz, weights[nz, j])
+  }
+  out
+}
+
+#' The number of cells of an influence function.
+#' @noRd
+n_cells <- function(inf_func) {
+  if (inherits(inf_func, "strata_inf")) nrow(inf_func$cells) else ncol(inf_func)
+}
+
+#' The influence function of one linear combination on the strata path.
+#'
+#' For the cell of the treated cohort g, a unit i of the cohort in stratum x
+#' has the influence `(N / n_g) infl_g (dY_i - dY_Cx - ATT)`, and a control unit
+#' j in stratum x has `-N [pi_gx / n_Cx + (infl_C - 1) / n_C] (dY_j - dY_Cx)`.
+#' These are the terms of the regression path of `estimate_did_bp()` with one
+#' dummy for each stratum, with its small-group inflation `infl`. The influence
+#' of a unit is then linear in its outcomes, with coefficients that depend only
+#' on its group, so the function builds the coefficients by group and period,
+#' and reads the outcomes once. The control coefficients cover a range of rows,
+#' so they go through a difference array over the rows.
+#'
+#' @param obj a `strata_inf` object.
+#' @param idx,w the cells of the combination and their weights.
+#' @param wm an optional weight on the group means: a table with the group `k`,
+#'   the period `tt`, and `w`.
+#' @return the influence function, one value per unit.
+#' @noRd
+strata_inf_target <- function(obj, idx, w, wm = NULL) {
+  sx <- obj$sx
+  R <- sx$R
+  S <- sx$S
+  K <- R * S
+  TT <- ncol(obj$sum_y)
+  N <- obj$N
+  A <- numeric(K * TT)       # the coefficient on the outcome, by group and period
+  B <- numeric(K)            # the constant, by group
+  DA <- numeric((R + 1) * S * TT)
+  DB <- numeric((R + 1) * S)
+
+  if (length(idx) > 0) {
+    cs <- obj$cells[idx]
+    pr <- strata_cell_parts(cs, sx, obj$sum_y, obj$py, keep_strata = TRUE)
+    m <- nrow(cs)
+    xs <- rep(seq_len(S), each = m)
+    k <- rep(cs$r, S) + (xs - 1L) * R
+    t_ <- rep(cs$t, S)
+    b_ <- rep(cs$b, S)
+    cx <- as.vector(pr$c)
+
+    # the treated cohort, in each stratum with a treated unit
+    a <- rep(w * N * sqrt(cs$n_g / (cs$n_g - 1)) / cs$n_g, S)
+    has_g <- as.vector(pr$n_gx) > 0
+    A <- add_at(A, c(k + (t_ - 1L) * K, k + (b_ - 1L) * K)[c(has_g, has_g)], c(a, -a)[c(has_g, has_g)])
+    B <- add_at(B, k[has_g], (-a * (cx + rep(cs$att, S)))[has_g])
+
+    # the control cohorts, rows ra to rb in each stratum with a control unit
+    infl_c <- sqrt(cs$n_c / (cs$n_c - 1))
+    q <- -rep(w, S) * N * (as.vector(pr$n_gx / cs$n_g / pr$n_cx) + rep((infl_c - 1) / cs$n_c, S))
+    has_c <- as.vector(pr$n_cx) > 0
+    q[!has_c] <- 0
+    cx[!has_c] <- 0
+    ra <- rep(cs$ra, S)
+    rb1 <- rep(cs$rb, S) + 1L
+    da <- function(row, tt) row + (xs - 1L) * (R + 1L) + (tt - 1L) * (R + 1L) * S
+    DA <- add_at(DA, c(da(ra, t_), da(rb1, t_), da(ra, b_), da(rb1, b_)), c(q, -q, -q, q))
+    db <- function(row) row + (xs - 1L) * (R + 1L)
+    DB <- add_at(DB, c(db(ra), db(rb1)), c(-q * cx, q * cx))
+    # the treated cohort is not its own control
+    ex <- rep(cs$excl, S) & has_c
+    A <- add_at(A, c(k + (t_ - 1L) * K, k + (b_ - 1L) * K)[c(ex, ex)], c(-q, q)[c(ex, ex)])
+    B <- add_at(B, k[ex], (q * cx)[ex])
+  }
+
+  # a weight on the group means: (N / n_k) (Y_it - M_kt)
+  if (!is.null(wm) && nrow(wm) > 0) {
+    n_k <- as.vector(sx$n_rs)[wm$k]
+    v <- wm$w * N / n_k
+    A <- add_at(A, wm$k + (wm$tt - 1L) * K, v)
+    B <- add_at(B, wm$k, -v * obj$sum_y[cbind(wm$k, wm$tt)] / n_k)
+  }
+
+  A <- A + as.vector(col_cumsum(matrix(DA, R + 1L, S * TT))[seq_len(R), , drop = FALSE])
+  B <- B + as.vector(col_cumsum(matrix(DB, R + 1L, S))[seq_len(R), , drop = FALSE])
+
+  # read the outcomes once, in the periods with a coefficient
+  A <- matrix(A, K, TT)
+  psi <- B[sx$unit_k]
+  for (tt in which(colSums(A != 0) > 0)) {
+    psi <- psi + A[sx$unit_k, tt] * obj$y[[tt]]
+  }
+  psi
+}
+
+#' Add the values `val` at the positions `idx` of `vec`, duplicates summed.
+#' @noRd
+add_at <- function(vec, idx, val) {
+  if (length(idx) == 0) return(vec)
+  vec + tabulate_sum(idx, val, length(vec))
+}
+
+# linear combinations of the cells ----------------------------------------------
+
+#' Linear combinations of the cells of the strata path
+#'
+#' Estimates targets that are linear in the cells of
+#' `fastdid(control_type = "strata", full = TRUE)`, and in the means of the
+#' outcome by cohort, stratum, and period, with their influence functions.
+#' The strata path stores no influence function per cell, so a target with
+#' its own weights goes through this function instead of `agg_inf_func`. The
+#' influence function of a target is the same combination of the influence
+#' functions of the cells that `fastdid()` aggregates. The weights are fixed.
+#'
+#' @param result the output of `fastdid(control_type = "strata", full = TRUE)`.
+#' @param w_cell a data.table with the columns `target`, the cohort columns of
+#'   the call (`cohortvar` and `cohortvar2`), the period column (`timevar`),
+#'   and `w`, all on the scale of the data. A weight on a cell before the first
+#'   event of its cohort has no effect: that cell is zero by no anticipation.
+#' @param w_mean an optional data.table with the same columns, and the columns
+#'   of `covariatesvar` if the call has strata: the weight of each target on the
+#'   mean of a cohort and a stratum at a period.
+#' @param outcome the outcome, a name or a position.
+#' @param return_if if `TRUE`, also return the influence functions, one column
+#'   per target, with the convention `estimate - truth = mean(psi)`.
+#' @return a data.table with `target`, `estimate`, and `se`; with `return_if`,
+#'   a list of that table and the matrix `inf_func`.
+#' @examples
+#' dt <- sim_did(1e+03, 5, seed = 1)$dt
+#' res <- fastdid(dt, "time", "G", "unit", "y", control_type = "strata", full = TRUE)
+#' w <- data.table::data.table(target = "sum", G = 3, time = 3:4, w = 1)
+#' combine_cells(res, w)
+#' @importFrom collapse GRP
+#' @export
+combine_cells <- function(result, w_cell, w_mean = NULL, outcome = 1, return_if = FALSE) {
+  obj <- if (inherits(result, "fastdid_result")) result$gt_estimate[[outcome]]$inf_func else NULL
+  if (!inherits(obj, "strata_inf")) {
+    stop("combine_cells needs the output of fastdid(control_type = \"strata\", full = TRUE).")
+  }
+  p <- result$call
+  ti <- result$time_info
+  sx <- obj$sx
+  evs <- c(p$cohortvar, if (!allNA(p$cohortvar2)) p$cohortvar2)
+  cols <- c("target", evs, p$timevar, "w")
+  norm <- function(x) (x - 1 - ti$time_offset) / ti$time_step + 1
+
+  # the cohort rows on the scale of the data
+  keys <- data.table(r = seq_len(sx$R))
+  for (d in seq_along(evs)) keys[, (evs[d]) := recover_time(gd(obj$cohorts, d), ti)]
+  map <- function(w, extra = character(0)) {
+    miss <- setdiff(c(cols, extra), names(w))
+    if (length(miss)) stop("the weights need the columns ", paste(miss, collapse = ", "), ".")
+    w <- merge(as.data.table(w)[, c(cols, extra), with = FALSE], keys, by = evs, all.x = TRUE)
+    if (anyNA(w$r)) stop(sum(is.na(w$r)), " weights name a cohort that is not in the data.")
+    w[, tt := as.integer(round(norm(get(p$timevar))))]
+    w
+  }
+
+  wc <- map(w_cell)
+  targets <- unique(c(wc$target, if (!is.null(w_mean)) w_mean$target))
+  wc <- wc[tt >= sx$first[r]] # the cells before the first event are zero
+  wc[obj$cells[, .(r, t, cell = .I)], cell := i.cell, on = c(r = "r", tt = "t")]
+  if (anyNA(wc$cell)) stop(sum(is.na(wc$cell)), " weights name a cell that fastdid() did not estimate.")
+
+  if (!is.null(w_mean)) {
+    xcols <- if (allNA(p$covariatesvar)) character(0) else p$covariatesvar
+    wm <- map(w_mean, xcols)
+    if (length(xcols)) {
+      xkey <- copy(sx$strata)[, x := .I]
+      wm <- merge(wm, xkey, by = xcols, all.x = TRUE)
+      if (anyNA(wm$x)) stop(sum(is.na(wm$x)), " mean weights name a stratum that is not in the data.")
+    } else {
+      wm[, x := 1L]
+    }
+    wm[, k := r + (x - 1L) * sx$R]
+  }
+
+  psi <- matrix(0, obj$N, length(targets), dimnames = list(NULL, targets))
+  est <- numeric(length(targets))
+  for (j in seq_along(targets)) {
+    x <- wc[target == targets[j], .(w = sum(w)), by = cell]
+    y <- if (!is.null(w_mean)) wm[target == targets[j], .(w = sum(w)), by = .(k, tt)] else NULL
+    est[j] <- sum(x$w * obj$cells$att[x$cell]) +
+      if (is.null(y)) 0 else sum(y$w * obj$sum_y[cbind(y$k, y$tt)] / as.vector(sx$n_rs)[y$k])
+    psi[, j] <- strata_inf_target(obj, x$cell, x$w, y)
+  }
+  se <- get_se(psi, list(cluster = obj$cluster), p)$se
+  res <- data.table(target = targets, estimate = est, se = se)
+  if (return_if) list(estimates = res, inf_func = psi) else res
+}
+
 validate_argument <- function(dt, p) {
   if (!p$validate) {
     return(NULL)
@@ -2452,7 +2968,7 @@ validate_argument <- function(dt, p) {
   check_set_arg(weightvar, clustervar, "NA | match", .choices = dt_names, .message = checkvar_message, .up = 1)
 
   check_set_arg(control_option, double_control_option, "match", .choices = c("both", "never", "notyet"), .up = 1) # kinda bad names since did's notyet include both notyet and never
-  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr"), .up = 1)
+  check_set_arg(control_type, "match", .choices = c("ipw", "reg", "dr", "strata"), .up = 1)
   check_set_arg(base_period, "match", .choices = c("varying", "universal"), .up = 1)
   check_arg(copy, validate, boot, allow_unbalance_panel, cband, parallel, add_base_period, "scalar logical", .up = 1)
   check_arg(anticipation, anticipation2, alpha, "scalar numeric", .up = 1)
@@ -2482,7 +2998,7 @@ validate_argument <- function(dt, p) {
 
   # the effect model of the second stage
   check_set_arg(effect_model, "os formula | match", .choices = c("parallel", "unrestricted"), .up = 1)
-  check_set_arg(effect_fit, "match", .choices = c("separate", "joint", "ordered"), .up = 1)
+  check_set_arg(effect_fit, "match", .choices = c("separate", "joint", "ordered", "state"), .up = 1)
   if (effect_kind != "parallel") {
     if (allNA(cohortvar2)) {
       stop("effect_model needs multiple events: set cohortvar2.")
@@ -2502,11 +3018,25 @@ validate_argument <- function(dt, p) {
       stop("effect_fit = '", effect_fit, "' needs a formula in effect_model.")
     }
   }
-  if (effect_fit == "ordered" && anticipation != anticipation2) {
-    stop("effect_fit = 'ordered' models one event kind, so anticipation and anticipation2 must be equal.")
+  if (effect_fit %in% c("ordered", "state") && anticipation != anticipation2) {
+    stop("effect_fit = '", effect_fit, "' models ordered events, so anticipation and anticipation2 must be equal.")
   }
-  if (result_type == "dynamic_event" && effect_fit != "ordered") {
-    stop("result_type 'dynamic_event' needs effect_fit = 'ordered'.")
+  if (result_type == "dynamic_event" && !effect_fit %in% c("ordered", "state")) {
+    stop("result_type 'dynamic_event' needs effect_fit = 'ordered' or 'state'.")
+  }
+
+  # a multi-valued treatment: one level per cohort column
+  if (!allNA(exper$event_level)) {
+    if (!effect_fit %in% c("ordered", "state")) {
+      stop("event_level needs effect_fit = 'ordered' or 'state'.")
+    }
+    if (!is.numeric(exper$event_level) || anyNA(exper$event_level) || length(exper$event_level) != 1L + length(cohortvar2)) {
+      stop("event_level must be a numeric vector with one level for cohortvar and one for each column of cohortvar2.")
+    }
+    # the other result types read the target event from the first cohort column
+    if (result_type != "dynamic_event" && is.na(exper$aggregate_scheme)) {
+      stop("event_level needs result_type = 'dynamic_event' or an aggregate_scheme.")
+    }
   }
   
   # Validate only_est_min / only_est_max
@@ -2536,6 +3066,17 @@ validate_argument <- function(dt, p) {
     }
   }
   
+  # the strata path reads the means of a balanced panel, with equal unit weights
+  if (control_type == "strata") {
+    if (allow_unbalance_panel) stop("control_type = 'strata' needs a balanced panel.")
+    if (!is.na(weightvar)) stop("control_type = 'strata' does not support weightvar.")
+    if (!allNA(varycovariatesvar)) stop("control_type = 'strata' does not support varycovariatesvar.")
+    if (!is.na(exper$filtervar) || !is.na(exper$filtervar_post)) stop("control_type = 'strata' does not support filtervar.")
+    if (!allNA(cohortvar2) && anticipation != anticipation2) {
+      stop("control_type = 'strata' needs anticipation and anticipation2 to be equal.")
+    }
+  }
+
   if (allow_unbalance_panel == TRUE && control_type == "dr") {
     stop("fastdid does not support DR when allowing for unbalanced panels.")
   }
@@ -2598,15 +3139,17 @@ validate_dt <- function(dt, p) {
     stop("no observations remain after the confounding cohorts are screened.")
   }
 
-  # the k-th occurrence of one event: the dates must increase, and Inf is a suffix
-  if (p$effect_fit == "ordered") {
+  # a multi-valued treatment: the k-th switch of a unit is its k-th date
+  if (!allNA(p$exper$event_level)) {
+    validate_level_path(dt, c("G", gcol2), p$exper$event_level)
+  } else if (p$effect_fit %in% c("ordered", "state")) { # the k-th occurrence of one event: the dates must increase, and Inf is a suffix
     gcols <- c("G", gcol2)
     for (k in seq_len(length(gcols) - 1)) {
       a <- dt[[gcols[k]]]
       b <- dt[[gcols[k + 1]]]
       ok <- is.infinite(b) | (is.finite(a) & b > a)
       if (any(!ok)) {
-        stop("effect_fit = 'ordered' needs g1 < g2 < ... for every unit, with Inf only after every finite date. ",
+        stop("effect_fit = '", p$effect_fit, "' needs g1 < g2 < ... for every unit, with Inf only after every finite date. ",
              dt[!ok, uniqueN(unit)], " units break the order between event ", k, " and event ", k + 1, ".")
       }
     }
@@ -2673,7 +3216,8 @@ validate_dt <- function(dt, p) {
         novar <- fnunique(dt[, get(cov)[1], by = "unit"][, V1]) == 1
       }
       if (novar) stop(cov, " have no variation")
-      if (!(is.numeric(dt[, get(cov)]) || is.integer(dt[, get(cov)]))) {
+      # a stratum can be any value, a regression covariate must be a number
+      if (p$control_type != "strata" && !(is.numeric(dt[, get(cov)]) || is.integer(dt[, get(cov)]))) {
         stop(cov, " is not numeric or integer, do not support fixed effects.")
       }
     }
@@ -2730,5 +3274,34 @@ validate_dt <- function(dt, p) {
 
 
   return(dt)
+}
+
+#' Check the level path of every cohort of a multi-valued treatment.
+#'
+#' Each cohort column is one event "switch to this level". A unit starts at
+#' level 0, so its path is the levels of its finite dates in the order of the
+#' dates. Two switches cannot share a date, and a switch must change the level.
+#' @param gcols the cohort columns, in the order of `event_level`.
+#' @return `NULL`. It stops on the first rule that a cohort breaks.
+#' @noRd
+validate_level_path <- function(dt, gcols, event_level) {
+  cohorts <- unique(dt[, c("unit", gcols), with = FALSE])
+  paths <- cohorts[, .(n_unit = .N), by = gcols]
+  dates <- as.matrix(paths[, gcols, with = FALSE])
+  bad_date <- bad_level <- 0L
+  for (i in seq_len(nrow(dates))) {
+    fin <- which(is.finite(dates[i, ]))
+    if (anyDuplicated(dates[i, fin]) > 0) bad_date <- bad_date + paths[i, n_unit]
+    path <- c(0, event_level[fin[order(dates[i, fin])]])
+    if (any(diff(path) == 0)) bad_level <- bad_level + paths[i, n_unit]
+  }
+  if (bad_date > 0) {
+    stop("event_level needs one switch per period for every unit. ", bad_date, " units have two events on one date.")
+  }
+  if (bad_level > 0) {
+    stop("event_level needs every switch to change the level, from level 0 before the first switch. ",
+         bad_level, " units have a switch to the level that they are at.")
+  }
+  return(NULL)
 }
 

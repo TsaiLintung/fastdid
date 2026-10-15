@@ -1,9 +1,15 @@
 estimate_gtatt <- function(aux, p){
   caches <- list()
   outcome_results <- list()
+  # the strata path shares the units, the cohorts, and the strata across outcomes
+  sx <- if(p$control_type == "strata") get_strata_setup(aux, p) else NULL
   for(outcol in p$outcomevar){
     y <- aux$outcomes_list[[outcol]]
-    out_result <- estimate_gtatt_outcome(y, aux, p, caches)
+    if(!is.null(sx)){
+      out_result <- list(est = estimate_gtatt_outcome_strata(y, sx, aux, p), caches = caches)
+    } else {
+      out_result <- estimate_gtatt_outcome(y, aux, p, caches)
+    }
     out_result$est$outname <- outcol
     outcome_results[[outcol]] <- out_result$est
     caches <- out_result$caches
@@ -122,14 +128,9 @@ get_base_period <- function(g,t,p){
 
 get_did_setup <- function(g, t, base_period, aux, p){
 
-  treated_cohorts <- aux$cohorts[!is.infinite(ming(aux$cohorts))]
-
-  min_control_cohort <- ifelse(p$control_option == "never", Inf, max(t, base_period)+p$anticipation+1)
-  max_control_cohort <- ifelse(p$control_option == "notyet", max(ming(treated_cohorts)), Inf) 
-
-  if(!is.na(p$exper$max_control_cohort_diff)){
-    max_control_cohort <- min(g+p$exper$max_control_cohort_diff, max_control_cohort)
-  } 
+  range <- get_control_range(ming(g), t, base_period, aux, p)
+  min_control_cohort <- range$min
+  max_control_cohort <- range$max
   
   #select the control and treated cohorts
   did_setup <- rep(NA, aux$id_size)
@@ -154,6 +155,27 @@ get_did_setup <- function(g, t, base_period, aux, p){
   if(length(did_setup) != aux$id_size){stop("internal bug: something wrong with did setup (again?)")}
   
   return(did_setup)
+}
+
+#' The range of the first event of the control cohorts.
+#'
+#' A cohort is a control of the cell if its first event lies in
+#' `[min, max]`. The 2x2 path and the strata path both read the range. The
+#' arguments can be vectors, one element per cell.
+#'
+#' @param g_first the first event of the treated cohort.
+#' @param t,base_period the two periods of the 2x2.
+#' @return a list: `min` and `max`.
+#' @noRd
+get_control_range <- function(g_first, t, base_period, aux, p){
+  treated_first <- ming(aux$cohorts)
+  treated_first <- treated_first[is.finite(treated_first)]
+  min_control_cohort <- if(p$control_option == "never") rep(Inf, length(t)) else pmax(t, base_period)+p$anticipation+1
+  max_control_cohort <- rep(if(p$control_option == "notyet") max(treated_first) else Inf, length(t))
+  if(!is.na(p$exper$max_control_cohort_diff)){
+    max_control_cohort <- pmin(g_first+p$exper$max_control_cohort_diff, max_control_cohort)
+  }
+  return(list(min = min_control_cohort, max = max_control_cohort))
 }
 
 get_control_pos <- function(cohort_sizes, start_cohort, end_cohort = start_cohort){

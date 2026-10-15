@@ -47,7 +47,7 @@ aggregate_gt_outcome <- function(gt_result, aux, p) {
   # get influence function matrix
 
   inf_weights <- get_weight_influence(att, agg_sch$group_time, agg_sch$agg_weights, aux, p)
-  inf_matrix <- (inf_func %*% t(agg_sch$agg_weights)) + inf_weights
+  inf_matrix <- apply_inf(inf_func, t(agg_sch$agg_weights)) + inf_weights
 
   # get se
   agg_se <- get_se(inf_matrix, aux, p)
@@ -83,18 +83,13 @@ get_agg_sch <- function(group_time, p) {
   group_time <- tg$group_time
   targets <- tg$targets
 
-  # get aggregation weights
-  agg_weights <- data.table()
-  for (tar in targets) { # the order matters
-
-    group_time[, weight := 0] # weight is 0 if not a target
-    group_time[target == tar & used, weight := pg / sum(pg)]
-    target_weights <- group_time[, .(weight)] |> transpose()
-    agg_weights <- rbind(agg_weights, target_weights)
+  # get aggregation weights, one row per target in the order of the targets
+  agg_weights <- matrix(0, length(targets), nrow(group_time))
+  for (i in seq_along(targets)) {
+    sel <- group_time[, which(target == targets[i] & used)]
+    agg_weights[i, sel] <- group_time[sel, pg / sum(pg)]
   }
   group_time[, pg := NULL]
-
-  agg_weights <- as.matrix(agg_weights)
   return(list(
     agg_weights = agg_weights, # a matrix of each target and gt's weight in it
     targets = targets,
@@ -215,10 +210,11 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p, by_pe
   signs <- sign(agg_weights[keepers])
   att_keep <- as.vector(gt_att)[keepers]
 
-  # moving this outside will create a g*t*id matrix, not really worth the memory
-  keepers_matrix <- as.matrix(aux$weights * sapply(seq_len(nrow(group)), function(g) {
-    as.integer(aux$dt_inv[, G] == group[g, G]) - group[g, pg]
-  }))
+  # the share of a cell moves with the units of its cohort, so the influence of
+  # a unit depends only on its cohort: no matrix of the units times the cells
+  unit_cohort <- match(aux$dt_inv[, G], aux$cohort_sizes[, G])
+  cell_cohort <- match(group[, G], aux$cohort_sizes[, G])
+  n_cohort <- nrow(aux$cohort_sizes)
 
   blocks <- if (by_period) group[, time] else rep(1L, nrow(group))
 
@@ -227,14 +223,25 @@ get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p, by_pe
   for (b in unique(blocks)) {
     idx <- which(blocks == b)
     pg_b <- group[idx, pg]
-    block_matrix <- keepers_matrix[, idx, drop = FALSE]
-    if1 <- block_matrix / sum(pg_b) # numerator
-    if2 <- rowSums(block_matrix) %*% t(pg_b) / (sum(pg_b)^2) # denominator
-    inf_weight <- inf_weight + (if1 - if2) %*% (signs[idx] * att_keep[idx])
+    v <- signs[idx] * att_keep[idx]
+    # the sums over the cells of the block that belong to the unit's cohort
+    own_v <- tabulate_sum(cell_cohort[idx], v, n_cohort)[unit_cohort]
+    own_n <- tabulate_sum(cell_cohort[idx], rep(1, length(idx)), n_cohort)[unit_cohort]
+    pv <- sum(pg_b * v)
+    inf_weight <- inf_weight + aux$weights * ((own_v - pv) / sum(pg_b) - (own_n - sum(pg_b)) * pv / sum(pg_b)^2)
   }
 
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps) * 10] <- 0 # fill zero
   return(inf_weight)
+}
+
+#' The sum of `x` by an integer index in `1..n`, zero for an absent index.
+#' @noRd
+tabulate_sum <- function(index, x, n) {
+  out <- numeric(n)
+  agg <- rowsum(x, index)
+  out[as.integer(rownames(agg))] <- agg[, 1]
+  out
 }
 
 # se -------------------------------------------------------------------

@@ -63,7 +63,7 @@ second_stage <- function(cells, att, inf_func, aux, p) {
 
   out_cells <- sch$group_time
   att <- es_weight %*% att
-  inf_func <- (inf_func %*% t(es_weight)) + es_inf_weights
+  inf_func <- apply_inf(inf_func, t(es_weight)) + es_inf_weights
 
   # a stacked fit reports every event; the event-1 rows serve the other result types
   if ("event" %in% names(out_cells) && p$result_type != "dynamic_event" && is.na(p$exper$aggregate_scheme)) {

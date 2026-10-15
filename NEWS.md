@@ -8,6 +8,10 @@
 - Added the `exper` option `effect_tol`
 - Added the `exper` option `event_level`, for a multi-valued treatment in the ordered and the state fit. Each cohort column is one event "switch to this level", the k-th switch of a unit is its k-th date, and a formula can use `level` and `level_prev`. `~ 0 + factor(level):factor(e)` with `effect_fit = "state"` is the effect of the current level. An on-and-off treatment is the case with levels 0 and 1
 - `plot_did_dynamics()` accepts a result with no missing base period
+- Added `control_type = "strata"`: the DiD within each value of `covariatesvar`, averaged with the shares of the treated cohort. It equals `control_type = "reg"` with one dummy for each value, standard errors included. It computes every cell from the means by cohort, value, and period, and it forms the influence function of a target only when the aggregation asks for it, so the memory grows with the units times the periods, not with the cells. Without covariates it is the estimator without covariates
+- Added `combine_cells()`: a target with its own weights on the cells and on the means of a `control_type = "strata"` result, with its standard error
+- The full result has `time_info`, the offset and the step of the time normalization
+- The influence of the aggregation weights and the aggregation matrix no longer build a matrix of the units times the cells
 
 # fastdid 1.0.7
 

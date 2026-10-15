@@ -10,7 +10,7 @@
 #' @param control_option character, control units used for the DiD estimates, options are "both", "never", or "notyet".
 #' @param result_type character, type of result to return, options are "group_time", "time", "group", "simple", "dynamic" (time since event), "group_group_time", "dynamic_stagger", or "dynamic_event" (the average effect of every event at each event time, for `effect_fit = "ordered"`).
 #' @param balanced_event_time number, max event time to balance the cohort composition.
-#' @param control_type character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), or "dr" (doubly-robust).
+#' @param control_type character, estimator for controlling for covariates, options are "ipw" (inverse probability weighting), "reg" (outcome regression), "dr" (doubly-robust), or "strata" (the DiD within each value of `covariatesvar`, averaged with the shares of the treated cohort; it equals "reg" with one dummy for each value, and it computes every cell from the means by cohort, value, and period, so it stores no influence function per cell and serves a large panel with many cohorts. Use [combine_cells()] for a target with its own weights).
 #' @param allow_unbalance_panel logical, allow unbalance panel as input or coerce dataset into one.
 #' @param boot logical, whether to use bootstrap standard error.
 #' @param biters number, bootstrap iterations. Default is 1000.
@@ -171,7 +171,8 @@ fastdid <- function(data,
       agg_inf_func = agg_result$inf_func,
       agg_weight_matrix = agg_result$agg_weight_matrix,
       es_weight_matrix = agg_result$es_weight_matrix,
-      effect_diag = agg_result$effect_diag
+      effect_diag = agg_result$effect_diag,
+      time_info = coerce_result$t
     )
     class(full_result) <- c("fastdid_result", class(full_result))
     return(full_result)
