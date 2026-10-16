@@ -161,6 +161,15 @@ data.table::setDTthreads(0)
 tinytest::run_test_dir("inst/tinytest")
 ```
 
+The same suite runs one test file per worker, in about half the time. The mono
+deploy script and its CI use this form:
+
+```bash
+Rscript development/run_tests.R
+```
+
+A test file runs in its own worker, so it must not need another test file.
+
 CI runs R-CMD-check on macOS, Windows, and Ubuntu, plus coverage and pkgdown.
 The workflows are in `.github/workflows/`.
 
