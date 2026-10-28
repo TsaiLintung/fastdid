@@ -1,5 +1,5 @@
-#2026-10-15
-message('loading fastdid source ver. ver: 1.1.0 date: 2026-10-15')
+#2026-10-28
+message('loading fastdid source ver. ver: 1.1.0 date: 2026-10-28')
 require(data.table);
  require(stringr);
  require(BMisc);
