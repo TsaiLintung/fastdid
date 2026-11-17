@@ -18,11 +18,12 @@
 #' `"state"` models the cell by its state.
 #'
 #' @param cells the cell table from `get_cell_table()`.
-#' @param att,inf_func the first-stage estimates and influence functions.
+#' @param att the first-stage estimates.
+#' @param fs the first stage, for the over-identification test.
 #' @return a list: `group_time` (the reported rows), `es_det_weight`,
 #'   `es_sto_weight` (zero), and `diag` (weights, cells, fit, overid).
 #' @noRd
-get_effect_scheme <- function(cells, att, inf_func, aux, p) {
+get_effect_scheme <- function(cells, att, fs, p) {
   tab <- build_effect_table(cells, p)
   K <- nrow(tab)
 
@@ -104,13 +105,13 @@ get_effect_scheme <- function(cells, att, inf_func, aux, p) {
     }
   }
 
-  return(finish_effect_scheme(rep_rows, det, tab, fits, p, att, inf_func))
+  return(finish_effect_scheme(rep_rows, det, tab, fits, p, att, fs))
 }
 
 #' Order the reported rows, drop the cells that are not estimable, and build
 #' the diagnostics.
 #' @noRd
-finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
+finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, fs) {
   M <- 1L + length(p$cohortvar2)
   gcol <- paste0("G", seq_len(M))
   rep_rows[, ri := .I]
@@ -146,7 +147,7 @@ finish_effect_scheme <- function(rep_rows, det, tab, fits, p, att, inf_func) {
     weights = det_keep,
     cells = rep_rows[, .(G, time, event, component, estimable, leverage, e_gap)],
     fit = lapply(fits, function(f) fit_summary(f, att, tab)),
-    overid = lapply(fits, get_effect_overid, att, inf_func)
+    overid = lapply(fits, get_effect_overid, fs)
   )
 
   # the levels of a switch serve a custom aggregation, for example one target per move
@@ -412,18 +413,17 @@ fit_summary <- function(fit, att, tab) {
 #' The over-identification test of one fit.
 #'
 #' The residual of the fit cells is a linear combination of first-stage cells,
-#' so its variance comes from the influence functions. The statistic is the
+#' so its variance comes from the first stage. The statistic is the
 #' residual quadratic form in the pseudo-inverse of that variance, with the
 #' degrees of freedom of the null space. The bootstrap does not cover it.
 #' @noRd
-get_effect_overid <- function(fit, att, inf_func) {
+get_effect_overid <- function(fit, fs) {
   n <- length(fit$cells)
   H <- fit$X %*% fit$pinv %*% (t(fit$X) * rep(fit$w, each = ncol(fit$X)))
   R <- diag(n) - H
-  sel <- matrix(0, n_cells(inf_func), n)
-  sel[fit$cells, ] <- t(R)
-  IF <- apply_inf(inf_func, sel)
-  V <- crossprod(IF) / nrow(IF)^2
+  W <- matrix(0, n, nrow(fs$cells))
+  W[, fit$cells] <- R
+  V <- lin_vcov(fs, list(W = W))
   r <- fit$resid
   df <- n - fit$rank
   if (df <= 0) return(list(stat = 0, df = 0, pvalue = NA_real_))

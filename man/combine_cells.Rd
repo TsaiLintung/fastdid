@@ -31,10 +31,9 @@ a data.table with `target`, `estimate`, and `se`; with `return_if`,
 Estimates targets that are linear in the cells of
 `fastdid(control_type = "strata", full = TRUE)`, and in the means of the
 outcome by cohort, stratum, and period, with their influence functions.
-The strata path stores no influence function per cell, so a target with
-its own weights goes through this function instead of `agg_inf_func`. The
-influence function of a target is the same combination of the influence
-functions of the cells that `fastdid()` aggregates. The weights are fixed.
+It is `double_did()` with `w_cell` and `w_mean` on the first stage of the
+call with its units, so it can also return the influence functions. The
+weights are fixed.
 }
 \examples{
 dt <- sim_did(1e+03, 5, seed = 1)$dt

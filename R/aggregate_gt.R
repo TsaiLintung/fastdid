@@ -1,7 +1,9 @@
 # high level -------------------------------------------------------------------
 
-aggregate_gt <- function(all_gt_result, aux, p) {
-  results <- lapply(all_gt_result, aggregate_gt_outcome, aux, p)
+#' The second stage and the aggregation of every outcome, one first stage each.
+#' @noRd
+aggregate_gt <- function(fs_list, p) {
+  results <- lapply(fs_list, run_double_did, p)
   return(list(
     est = rbindlist(lapply(results, function(x) {
       x$result
@@ -18,55 +20,6 @@ aggregate_gt <- function(all_gt_result, aux, p) {
     effect_diag = lapply(results, function(x) {
       x$effect_diag
     })
-  ))
-}
-
-aggregate_gt_outcome <- function(gt_result, aux, p) {
-  cells <- get_cell_table(gt_result, aux, p)
-  att <- gt_result$att
-  inf_func <- gt_result$inf_func
-
-  # the second stage runs before the aggregation, on the first-stage cells
-  es_weight <- NULL
-  effect_diag <- NULL
-  if (p$event_specific && !allNA(p$cohortvar2)) {
-    ss <- second_stage(cells, att, inf_func, aux, p)
-    cells <- ss$cells # some gt may not have an identified effect (ex: g1 == g2)
-    att <- ss$att
-    inf_func <- ss$inf_func
-    es_weight <- ss$weight
-    effect_diag <- ss$diag
-  }
-
-  # get aggregation scheme from cells to target parameters
-  agg_sch <- get_agg_sch(cells, p)
-
-  # get att
-  agg_att <- agg_sch$agg_weights %*% att
-
-  # get influence function matrix
-
-  inf_weights <- get_weight_influence(att, agg_sch$group_time, agg_sch$agg_weights, aux, p)
-  inf_matrix <- apply_inf(inf_func, t(agg_sch$agg_weights)) + inf_weights
-
-  # get se
-  agg_se <- get_se(inf_matrix, aux, p)
-
-  # post process
-  result <- data.table(agg_sch$targets, agg_att, agg_se$se)
-  names(result) <- c("target", "att", "se")
-  result[, `:=`(
-    outcome = gt_result$outname,
-    att_ciub = att + se * agg_se$crit_val,
-    att_cilb = att - se * agg_se$crit_val
-  )]
-
-  return(list(
-    result = result,
-    inf_func = inf_matrix,
-    weight_matrix = agg_sch$agg_weights,
-    es_weight = es_weight,
-    effect_diag = effect_diag
   ))
 }
 
@@ -152,10 +105,16 @@ get_agg_targets <- function(group_time, p) {
 
 # influence function ------------------------------------------------------------
 
-get_weight_influence <- function(att, group, agg_weights, aux, p, by_period = FALSE) {
-  id_dt <- data.table(weight = aux$weights / sum(aux$weights), G = aux$dt_inv[, G])
-  pg_dt <- id_dt[, .(pg = sum(weight)), by = "G"]
-  group <- group |> merge(pg_dt, by = "G", sort = FALSE)
+#' The influence of the estimated cohort shares in the weights.
+#'
+#' @param group the cells of the weights, in the order of `att`.
+#' @param agg_weights the weights, one row per target.
+#' @param fs the first stage: the shares `pg` by cohort, and the cohort labels.
+#' @return a matrix of the cohorts times the targets: the influence of a unit is
+#'   its weight times the entry of its cohort (see `lin_inf()`).
+#' @noRd
+get_weight_influence <- function(att, group, agg_weights, fs, p, by_period = FALSE) {
+  group <- group |> merge(fs$shares, by = "G", sort = FALSE)
 
   group[, time := as.integer(time)]
 
@@ -174,17 +133,19 @@ get_weight_influence <- function(att, group, agg_weights, aux, p, by_period = FA
     do.call(setorderv, c(list(group), list(sortcols))) # sort
   }
 
+  n_cohort <- length(fs$cohorts)
+  rows <- asplit(agg_weights, 1)
   if (!p$parallel) {
-    inf_weights <- sapply(asplit(agg_weights, 1), function(x) {
-      get_weight_influence_param(x, group, att, aux, p, by_period)
-    })
+    inf_weights <- vapply(rows, function(x) {
+      get_weight_influence_param(x, group, att, fs$cohorts, by_period)
+    }, numeric(n_cohort))
   } else {
-    inf_weights <- matrix(unlist(mclapply(asplit(agg_weights, 1), function(x) {
-      get_weight_influence_param(x, group, att, aux, p, by_period)
-    })), ncol = dim(agg_weights)[1])
+    inf_weights <- unlist(mclapply(rows, function(x) {
+      get_weight_influence_param(x, group, att, fs$cohorts, by_period)
+    }))
   }
 
-  return(inf_weights)
+  return(matrix(inf_weights, n_cohort, nrow(agg_weights)))
 }
 
 #' Influence from the weight calculation.
@@ -198,37 +159,37 @@ get_weight_influence <- function(att, group, agg_weights, aux, p, by_period = FA
 #' @param agg_weights numeric vector, the weight of each row of `group`.
 #' @param group the group-time table, with the cohort share `pg`.
 #' @param gt_att the g-t estimates.
+#' @param cohorts the cohort labels of the first stage.
 #' @param by_period logical, normalize each period on its own.
-#' @return a column of the influence function for the weights.
+#' @return the influence of a unit of weight 1 in each cohort.
 #' @noRd
-get_weight_influence_param <- function(agg_weights, group, gt_att, aux, p, by_period = FALSE) {
+get_weight_influence_param <- function(agg_weights, group, gt_att, cohorts, by_period = FALSE) {
+  n_cohort <- length(cohorts)
   keepers <- which(agg_weights != 0)
   if (length(keepers) == 0) {
-    return(rep(0, length(aux$weights)))
+    return(rep(0, n_cohort))
   } # for direct double did
   group <- group[keepers, ]
   signs <- sign(agg_weights[keepers])
   att_keep <- as.vector(gt_att)[keepers]
 
   # the share of a cell moves with the units of its cohort, so the influence of
-  # a unit depends only on its cohort: no matrix of the units times the cells
-  unit_cohort <- match(aux$dt_inv[, G], aux$cohort_sizes[, G])
-  cell_cohort <- match(group[, G], aux$cohort_sizes[, G])
-  n_cohort <- nrow(aux$cohort_sizes)
+  # a unit depends only on its cohort
+  cell_cohort <- match(group[, G], cohorts)
 
   blocks <- if (by_period) group[, time] else rep(1L, nrow(group))
 
   # one normalized share for each block: d(pgi / sum(pgi))
-  inf_weight <- rep(0, length(aux$weights))
+  inf_weight <- rep(0, n_cohort)
   for (b in unique(blocks)) {
     idx <- which(blocks == b)
     pg_b <- group[idx, pg]
     v <- signs[idx] * att_keep[idx]
-    # the sums over the cells of the block that belong to the unit's cohort
-    own_v <- tabulate_sum(cell_cohort[idx], v, n_cohort)[unit_cohort]
-    own_n <- tabulate_sum(cell_cohort[idx], rep(1, length(idx)), n_cohort)[unit_cohort]
+    # the sums over the cells of the block that belong to each cohort
+    own_v <- tabulate_sum(cell_cohort[idx], v, n_cohort)
+    own_n <- tabulate_sum(cell_cohort[idx], rep(1, length(idx)), n_cohort)
     pv <- sum(pg_b * v)
-    inf_weight <- inf_weight + aux$weights * ((own_v - pv) / sum(pg_b) - (own_n - sum(pg_b)) * pv / sum(pg_b)^2)
+    inf_weight <- inf_weight + (own_v - pv) / sum(pg_b) - (own_n - sum(pg_b)) * pv / sum(pg_b)^2
   }
 
   inf_weight[abs(inf_weight) < sqrt(.Machine$double.eps) * 10] <- 0 # fill zero

@@ -1,5 +1,12 @@
 # auxilary steps in the main fastdid function
 
+#' The names of the experimental options of `exper`.
+#' @noRd
+exper_arg_names <- function() {
+  return(c("filtervar", "filtervar_post", "only_balance_2by2", "aggregate_scheme",
+           "max_control_cohort_diff", "only_est_min", "only_est_max", "effect_tol", "event_level"))
+}
+
 get_exper_default <- function(exper, exper_args){
   for(arg in exper_args){
     if(is.null(exper[[arg]])){

@@ -126,12 +126,7 @@ fastdid <- function(data,
   p$data <- NULL
   p$dt <- NULL
 
-  exper_args <- c(
-    "filtervar", "filtervar_post", "only_balance_2by2",
-    "aggregate_scheme", "max_control_cohort_diff",
-    "only_est_min", "only_est_max", "effect_tol", "event_level"
-  )
-  p$exper <- get_exper_default(p$exper, exper_args)
+  p$exper <- get_exper_default(p$exper, exper_arg_names())
   class(p) <- "locked" # no more changes!
   validate_argument(dt, p)
 
@@ -154,7 +149,9 @@ fastdid <- function(data,
   # main estimation  -------------------------------------------------
 
   gt_result_list <- estimate_gtatt(aux, p)
-  agg_result <- aggregate_gt(gt_result_list, aux, p)
+  fs_list <- lapply(gt_result_list, new_first_stage, aux, p, coerce_result$t)
+  names(fs_list) <- vapply(gt_result_list, \(x) x$outname, character(1))
+  agg_result <- aggregate_gt(fs_list, p)
 
   # post process -------------------------------------------
 
@@ -168,6 +165,7 @@ fastdid <- function(data,
       call = p,
       estimate = est_results,
       gt_estimate = gt_result_list,
+      first_stage = fs_list,
       agg_inf_func = agg_result$inf_func,
       agg_weight_matrix = agg_result$agg_weight_matrix,
       es_weight_matrix = agg_result$es_weight_matrix,

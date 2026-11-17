@@ -34,51 +34,52 @@ get_cell_table <- function(gt_result, aux, p) {
 #' The second stage is a linear combination of first-stage cells. The scheme
 #' gives one weight row per identified cell, split into a deterministic part and
 #' a part that depends on the estimated cohort shares. The estimate is the
-#' weighted sum, and its influence function is the same combination of the
-#' first-stage influence functions plus the influence of the shares.
+#' weighted sum. Its influence function is the same combination of the
+#' first-stage influence functions plus the influence of the shares, which
+#' `lin_compose()` carries to the targets.
 #'
-#' @param cells the cell table from `get_cell_table()`.
-#' @param att,inf_func the first-stage estimates and influence functions.
-#' @return a list: the identified cells, their `att` and `inf_func`, and the
-#'   weight matrix over the first-stage cells.
+#' @param fs the first stage, from `new_first_stage()` or `as_first_stage()`.
+#' @return a list: the identified cells, their `att`, the weight matrix over
+#'   the first-stage cells, the share influence `cc` (cohorts times cells, or
+#'   NULL), and the diagnostics.
 #' @noRd
-second_stage <- function(cells, att, inf_func, aux, p) {
+second_stage <- function(fs, p) {
+  cells <- fs$cells
+  att <- fs$att
   if (p$effect_kind == "parallel") {
-    sch <- get_es_scheme(cells, aux, p)
+    sch <- get_es_scheme(cells, p)
   } else {
-    sch <- get_effect_scheme(cells, att, inf_func, aux, p)
+    sch <- get_effect_scheme(cells, att, fs, p)
   }
   det_weight <- as.matrix(sch$es_det_weight)
   sto_weight <- as.matrix(sch$es_sto_weight)
   es_weight <- det_weight + sto_weight
 
   # the share weights are signed, and each period is normalized on its own
+  cc <- NULL
   if (any(sto_weight != 0)) {
     pre_cells <- copy(cells)
     pre_cells[, pg := NULL] # get_weight_influence merges the shares itself
-    es_inf_weights <- get_weight_influence(att, pre_cells, sto_weight, aux, p, by_period = TRUE)
-  } else {
-    es_inf_weights <- 0
+    cc <- get_weight_influence(att, pre_cells, sto_weight, fs, p, by_period = TRUE)
   }
 
   out_cells <- sch$group_time
   att <- es_weight %*% att
-  inf_func <- apply_inf(inf_func, t(es_weight)) + es_inf_weights
 
   # a stacked fit reports every event; the event-1 rows serve the other result types
   if ("event" %in% names(out_cells) && p$result_type != "dynamic_event" && is.na(p$exper$aggregate_scheme)) {
     keep <- out_cells[, event == 1L]
     out_cells <- out_cells[keep]
     att <- att[keep, , drop = FALSE]
-    inf_func <- inf_func[, keep, drop = FALSE]
     es_weight <- es_weight[keep, , drop = FALSE]
+    if (!is.null(cc)) cc <- cc[, keep, drop = FALSE]
   }
 
   return(list(
     cells = out_cells,
     att = att,
-    inf_func = inf_func,
     weight = es_weight,
+    cc = cc,
     diag = sch$diag
   ))
 }
@@ -87,7 +88,7 @@ second_stage <- function(cells, att, inf_func, aux, p) {
 
 #' The scheme for the event-specific effect.
 #' @noRd
-get_es_scheme <- function(group_time, aux, p){
+get_es_scheme <- function(group_time, p){
 
   es_group_time <- copy(group_time) #group_time with available es effect
   #create lookup (columns already populated by get_cell_table)
@@ -95,9 +96,9 @@ get_es_scheme <- function(group_time, aux, p){
 
   ggt <- as.list(seq_len(nrow(group_time)))
   if(!p$parallel){
-    es_weight_list <- lapply(ggt, get_es_ggt_weight, group_time, aux, p)
+    es_weight_list <- lapply(ggt, get_es_ggt_weight, group_time, p)
   } else {
-    es_weight_list <- mclapply(ggt, get_es_ggt_weight, group_time, aux, p, mc.cores = getDTthreads())
+    es_weight_list <- mclapply(ggt, get_es_ggt_weight, group_time, p, mc.cores = getDTthreads())
   }
 
   valid_ggt <- which(!sapply(es_weight_list, is.null))
@@ -142,7 +143,7 @@ intersect_control <- function(group_time, cp, cb, gg, t, base_period){
 #' The scheme for the group-group-time estimates.
 #' Implements Theorem 3 of Tsai (2026) for M >= 2 events.
 #' @noRd
-get_es_ggt_weight <- function(ggt, group_time, aux, p){
+get_es_ggt_weight <- function(ggt, group_time, p){
 
   group_time <- copy(group_time) #avoid accidental modification
 

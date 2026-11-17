@@ -43,7 +43,7 @@ get_strata_setup <- function(aux, p) {
 #' @param y the outcome, a list of one vector per period.
 #' @param sx the output of `get_strata_setup()`.
 #' @return a list: `gt`, `att`, and `inf_func`, a `strata_inf` object that
-#'   stores no influence function per cell (see `apply_inf()`).
+#'   stores no influence function per cell (see `lin_inf()`).
 #' @noRd
 estimate_gtatt_outcome_strata <- function(y, sx, aux, p) {
   R <- sx$R
@@ -170,35 +170,7 @@ col_cumsum <- function(x) {
 
 # the influence function without a column per cell ------------------------------
 
-#' The influence functions of linear combinations of the cells.
-#'
-#' The first stage returns `inf_func`, a matrix of the units times the cells,
-#' or a `strata_inf` object on the strata path. The second stage and the
-#' aggregation only multiply it on the right by a weight matrix, so the strata
-#' path forms the influence function of each combination directly.
-#'
-#' @param inf_func the influence functions of the cells.
-#' @param weights a matrix of the cells times the combinations.
-#' @return a matrix of the units times the combinations.
-#' @noRd
-apply_inf <- function(inf_func, weights) {
-  if (!inherits(inf_func, "strata_inf")) return(inf_func %*% weights)
-  weights <- as.matrix(weights)
-  out <- matrix(0, inf_func$N, ncol(weights))
-  for (j in seq_len(ncol(weights))) {
-    nz <- which(weights[, j] != 0)
-    out[, j] <- strata_inf_target(inf_func, nz, weights[nz, j])
-  }
-  out
-}
-
-#' The number of cells of an influence function.
-#' @noRd
-n_cells <- function(inf_func) {
-  if (inherits(inf_func, "strata_inf")) nrow(inf_func$cells) else ncol(inf_func)
-}
-
-#' The influence function of one linear combination on the strata path.
+#' The coefficients of the influence function of one linear combination.
 #'
 #' For the cell of the treated cohort g, a unit i of the cohort in stratum x
 #' has the influence `(N / n_g) infl_g (dY_i - dY_Cx - ATT)`, and a control unit
@@ -206,17 +178,19 @@ n_cells <- function(inf_func) {
 #' These are the terms of the regression path of `estimate_did_bp()` with one
 #' dummy for each stratum, with its small-group inflation `infl`. The influence
 #' of a unit is then linear in its outcomes, with coefficients that depend only
-#' on its group, so the function builds the coefficients by group and period,
-#' and reads the outcomes once. The control coefficients cover a range of rows,
+#' on its group, so the function builds the coefficients by group and period.
+#' The control coefficients cover a range of rows,
 #' so they go through a difference array over the rows.
 #'
 #' @param obj a `strata_inf` object.
 #' @param idx,w the cells of the combination and their weights.
 #' @param wm an optional weight on the group means: a table with the group `k`,
 #'   the period `tt`, and `w`.
-#' @return the influence function, one value per unit.
+#' @return a list: `A`, the coefficient on the outcome by group and period
+#'   (a `K x TT` matrix), and `B`, the constant by group. They read no unit
+#'   data, so the moments of the groups give the variance (`strata_vcov`).
 #' @noRd
-strata_inf_target <- function(obj, idx, w, wm = NULL) {
+strata_coef <- function(obj, idx, w, wm = NULL) {
   sx <- obj$sx
   R <- sx$R
   S <- sx$S
@@ -272,12 +246,24 @@ strata_inf_target <- function(obj, idx, w, wm = NULL) {
 
   A <- A + as.vector(col_cumsum(matrix(DA, R + 1L, S * TT))[seq_len(R), , drop = FALSE])
   B <- B + as.vector(col_cumsum(matrix(DB, R + 1L, S))[seq_len(R), , drop = FALSE])
+  list(A = matrix(A, K, TT), B = B)
+}
 
+#' The influence function of one linear combination on the strata path.
+#'
+#' The influence of a unit in group k is `B_k + sum_t A_kt Y_it`.
+#'
+#' @param obj a `strata_inf` object.
+#' @param cf the coefficients of `strata_coef()`.
+#' @return the influence function, one value per unit.
+#' @noRd
+strata_unit_eval <- function(obj, cf) {
+  A <- cf$A
+  unit_k <- obj$sx$unit_k
   # read the outcomes once, in the periods with a coefficient
-  A <- matrix(A, K, TT)
-  psi <- B[sx$unit_k]
+  psi <- cf$B[unit_k]
   for (tt in which(colSums(A != 0) > 0)) {
-    psi <- psi + A[sx$unit_k, tt] * obj$y[[tt]]
+    psi <- psi + A[unit_k, tt] * obj$y[[tt]]
   }
   psi
 }
@@ -296,10 +282,9 @@ add_at <- function(vec, idx, val) {
 #' Estimates targets that are linear in the cells of
 #' `fastdid(control_type = "strata", full = TRUE)`, and in the means of the
 #' outcome by cohort, stratum, and period, with their influence functions.
-#' The strata path stores no influence function per cell, so a target with
-#' its own weights goes through this function instead of `agg_inf_func`. The
-#' influence function of a target is the same combination of the influence
-#' functions of the cells that `fastdid()` aggregates. The weights are fixed.
+#' It is `double_did()` with `w_cell` and `w_mean` on the first stage of the
+#' call with its units, so it can also return the influence functions. The
+#' weights are fixed.
 #'
 #' @param result the output of `fastdid(control_type = "strata", full = TRUE)`.
 #' @param w_cell a data.table with the columns `target`, the cohort columns of
@@ -322,58 +307,12 @@ add_at <- function(vec, idx, val) {
 #' @importFrom collapse GRP
 #' @export
 combine_cells <- function(result, w_cell, w_mean = NULL, outcome = 1, return_if = FALSE) {
-  obj <- if (inherits(result, "fastdid_result")) result$gt_estimate[[outcome]]$inf_func else NULL
-  if (!inherits(obj, "strata_inf")) {
+  fs <- if (inherits(result, "fastdid_result")) result$first_stage[[outcome]] else NULL
+  if (is.null(fs) || !inherits(fs$unc, "strata_inf")) {
     stop("combine_cells needs the output of fastdid(control_type = \"strata\", full = TRUE).")
   }
-  p <- result$call
-  ti <- result$time_info
-  sx <- obj$sx
-  evs <- c(p$cohortvar, if (!allNA(p$cohortvar2)) p$cohortvar2)
-  cols <- c("target", evs, p$timevar, "w")
-  norm <- function(x) (x - 1 - ti$time_offset) / ti$time_step + 1
-
-  # the cohort rows on the scale of the data
-  keys <- data.table(r = seq_len(sx$R))
-  for (d in seq_along(evs)) keys[, (evs[d]) := recover_time(gd(obj$cohorts, d), ti)]
-  map <- function(w, extra = character(0)) {
-    miss <- setdiff(c(cols, extra), names(w))
-    if (length(miss)) stop("the weights need the columns ", paste(miss, collapse = ", "), ".")
-    w <- merge(as.data.table(w)[, c(cols, extra), with = FALSE], keys, by = evs, all.x = TRUE)
-    if (anyNA(w$r)) stop(sum(is.na(w$r)), " weights name a cohort that is not in the data.")
-    w[, tt := as.integer(round(norm(get(p$timevar))))]
-    w
-  }
-
-  wc <- map(w_cell)
-  targets <- unique(c(wc$target, if (!is.null(w_mean)) w_mean$target))
-  wc <- wc[tt >= sx$first[r]] # the cells before the first event are zero
-  wc[obj$cells[, .(r, t, cell = .I)], cell := i.cell, on = c(r = "r", tt = "t")]
-  if (anyNA(wc$cell)) stop(sum(is.na(wc$cell)), " weights name a cell that fastdid() did not estimate.")
-
-  if (!is.null(w_mean)) {
-    xcols <- if (allNA(p$covariatesvar)) character(0) else p$covariatesvar
-    wm <- map(w_mean, xcols)
-    if (length(xcols)) {
-      xkey <- copy(sx$strata)[, x := .I]
-      wm <- merge(wm, xkey, by = xcols, all.x = TRUE)
-      if (anyNA(wm$x)) stop(sum(is.na(wm$x)), " mean weights name a stratum that is not in the data.")
-    } else {
-      wm[, x := 1L]
-    }
-    wm[, k := r + (x - 1L) * sx$R]
-  }
-
-  psi <- matrix(0, obj$N, length(targets), dimnames = list(NULL, targets))
-  est <- numeric(length(targets))
-  for (j in seq_along(targets)) {
-    x <- wc[target == targets[j], .(w = sum(w)), by = cell]
-    y <- if (!is.null(w_mean)) wm[target == targets[j], .(w = sum(w)), by = .(k, tt)] else NULL
-    est[j] <- sum(x$w * obj$cells$att[x$cell]) +
-      if (is.null(y)) 0 else sum(y$w * obj$sum_y[cbind(y$k, y$tt)] / as.vector(sx$n_rs)[y$k])
-    psi[, j] <- strata_inf_target(obj, x$cell, x$w, y)
-  }
-  se <- get_se(psi, list(cluster = obj$cluster), p)$se
-  res <- data.table(target = targets, estimate = est, se = se)
-  if (return_if) list(estimates = res, inf_func = psi) else res
+  p <- second_stage_params(fs$call, list(event_specific = FALSE))
+  out <- run_double_did(fs, p, w_cell, w_mean)
+  res <- out$result[, .(target, estimate, se)]
+  if (return_if) list(estimates = res, inf_func = out$inf_func) else res
 }
