@@ -246,7 +246,7 @@ strata_coef <- function(obj, idx, w, wm = NULL) {
 
   A <- A + as.vector(col_cumsum(matrix(DA, R + 1L, S * TT))[seq_len(R), , drop = FALSE])
   B <- B + as.vector(col_cumsum(matrix(DB, R + 1L, S))[seq_len(R), , drop = FALSE])
-  list(A = matrix(A, K, TT), B = B)
+  return(list(A = matrix(A, K, TT), B = B))
 }
 
 #' The influence function of one linear combination on the strata path.
@@ -265,7 +265,7 @@ strata_unit_eval <- function(obj, cf) {
   for (tt in which(colSums(A != 0) > 0)) {
     psi <- psi + A[unit_k, tt] * obj$y[[tt]]
   }
-  psi
+  return(psi)
 }
 
 #' Add the values `val` at the positions `idx` of `vec`, duplicates summed.
@@ -314,5 +314,6 @@ combine_cells <- function(result, w_cell, w_mean = NULL, outcome = 1, return_if 
   p <- second_stage_params(fs$call, list(event_specific = FALSE))
   out <- run_double_did(fs, p, w_cell, w_mean)
   res <- out$result[, .(target, estimate, se)]
-  if (return_if) list(estimates = res, inf_func = out$inf_func) else res
+  if (return_if) return(list(estimates = res, inf_func = out$inf_func))
+  return(res)
 }

@@ -19,7 +19,8 @@
 new_first_stage <- function(gt_result, aux, p, t) {
   cells <- get_cell_table(gt_result, aux, p)
   cohorts <- aux$cohort_sizes[, G]
-  shares <- data.table(w = aux$weights / sum(aux$weights), G = aux$dt_inv[, G])[, .(pg = sum(w)), by = "G"]
+  shares <- data.table(w = aux$weights / sum(aux$weights), G = aux$dt_inv[, G])
+  shares <- shares[, .(pg = sum(w)), by = "G"]
   unc <- gt_result$inf_func
   if (!inherits(unc, "strata_inf")) {
     unc <- structure(list(inf = unc, cohort = match(aux$dt_inv[, G], cohorts), w = aux$weights,
@@ -28,8 +29,8 @@ new_first_stage <- function(gt_result, aux, p, t) {
   evs <- c(p$cohortvar, if (!allNA(p$cohortvar2)) p$cohortvar2)
   xcols <- if (allNA(p$covariatesvar)) character(0) else p$covariatesvar
   # lab is the cohort label of fastdid, apart from the cohort columns of the data
-  est <- data.table(kind = "cell", id = seq_len(nrow(cells)), lab = cells$G, tt = as.integer(cells$time),
-                    estimate = as.vector(gt_result$att))
+  est <- data.table(kind = "cell", id = seq_len(nrow(cells)), lab = cells$G,
+                    tt = as.integer(cells$time), estimate = as.vector(gt_result$att))
   if (inherits(unc, "strata_inf")) {
     # the means of each group: a cohort row r and a stratum x
     sx <- unc$sx
@@ -77,7 +78,10 @@ data_keys <- function(G, tt, evs, timevar, t) {
 #' fs <- first_stage(res)
 #' @export
 first_stage <- function(result, outcome = 1) {
-  if (!inherits(result, "fastdid_result")) stop("first_stage needs the output of fastdid(full = TRUE).")
+  check_arg(outcome, "integer scalar GE{1}")
+  if (!inherits(result, "fastdid_result")) {
+    stop("first_stage needs the output of fastdid(full = TRUE).")
+  }
   fs <- result$first_stage[[outcome]]
   if (inherits(fs$unc, "strata_inf")) fs$unc <- strata_factor(fs$unc)
   return(fs)
@@ -107,8 +111,14 @@ first_stage <- function(result, outcome = 1) {
 #'   the influence of the estimated shares.
 #' @return a `fastdid_first_stage` object.
 #' @export
-as_first_stage <- function(cells, shares, cohortvar, timevar, vcov = NULL, inf_func = NULL,
-                           unit_cohort = NULL) {
+as_first_stage <- function(cells, shares, cohortvar, timevar, vcov = NULL,
+                           inf_func = NULL, unit_cohort = NULL) {
+  check_arg(cells, shares, "data.frame")
+  check_arg(cohortvar, "character vector no na")
+  check_arg(timevar, "character scalar")
+  check_arg(vcov, "NULL matrix")
+  check_arg(inf_func, "NULL matrix")
+  check_arg(unit_cohort, "NULL data.frame")
   if (is.null(vcov) == is.null(inf_func)) stop("give one of vcov and inf_func.")
   cells <- as.data.table(cells)
   shares <- as.data.table(shares)
@@ -117,7 +127,9 @@ as_first_stage <- function(cells, shares, cohortvar, timevar, vcov = NULL, inf_f
   miss <- setdiff(c(cohortvar, "share"), names(shares))
   if (length(miss)) stop("shares needs the columns ", paste(miss, collapse = ", "), ".")
   C <- nrow(cells)
-  if (!is.null(vcov) && !all(dim(vcov) == C)) stop("vcov must be a square matrix with one row per cell.")
+  if (!is.null(vcov) && !all(dim(vcov) == C)) {
+    stop("vcov must be a square matrix with one row per cell.")
+  }
   if (!is.null(inf_func) && ncol(inf_func) != C) stop("inf_func must have one column per cell.")
 
   # the periods on the scale 1, 2, ... of coerce_dt()
@@ -132,7 +144,8 @@ as_first_stage <- function(cells, shares, cohortvar, timevar, vcov = NULL, inf_f
   }
 
   M <- length(cohortvar)
-  tab <- data.table(G = label(cells), time = as.integer(round(norm(cells[[timevar]]))), pos = seq_len(C))
+  tab <- data.table(G = label(cells), time = as.integer(round(norm(cells[[timevar]]))),
+                    pos = seq_len(C))
   for (d in seq_len(M)) set(tab, j = paste0("G", d), value = norm(cells[[cohortvar[d]]]))
   tab[, mg := Reduce(pmin, .SD), .SDcols = paste0("G", seq_len(M))]
   sh <- data.table(G = label(shares), pg = shares$share)
@@ -152,7 +165,8 @@ as_first_stage <- function(cells, shares, cohortvar, timevar, vcov = NULL, inf_f
                           w = rep(1, nrow(inf_func)), cluster = NULL), class = "unit_inf")
   }
   p <- default_params(cohortvar, timevar)
-  est <- data.table(kind = "cell", id = seq_len(C), lab = tab$G, tt = tab$time, estimate = as.vector(att))
+  est <- data.table(kind = "cell", id = seq_len(C), lab = tab$G, tt = tab$time,
+                    estimate = as.vector(att))
   est <- cbind(est, data_keys(est$lab, est$tt, cohortvar, timevar, t))
   fs <- list(cells = tab[, c("G", "time", "pg", "mg", paste0("G", seq_len(M))), with = FALSE],
              att = att, unc = unc, shares = sh, cohorts = cohorts, estimates = est, call = p,
@@ -188,14 +202,18 @@ default_params <- function(cohortvar, timevar) {
 #' The parameters of the first stage, with the arguments of the second stage in place.
 #' @noRd
 second_stage_params <- function(base, args) {
-  allowed <- c("result_type", "balanced_event_time", "event_specific", "effect_model", "effect_fit",
-               "double_control_option", "anticipation2", "control_option", "exper", "boot",
-               "biters", "cband", "alpha", "parallel")
+  allowed <- c("result_type", "balanced_event_time", "event_specific", "effect_model",
+               "effect_fit", "double_control_option", "anticipation2", "control_option",
+               "exper", "boot", "biters", "cband", "alpha", "parallel")
   bad <- setdiff(names(args), allowed)
-  if (length(bad)) stop("double_did() does not take the arguments ", paste(bad, collapse = ", "), ".")
+  if (length(bad)) {
+    stop("double_did() does not take the arguments ", paste(bad, collapse = ", "), ".")
+  }
   p <- unclass(base)
   p[names(args)] <- args
-  if (is.character(p$effect_model)) p$effect_model <- match.arg(p$effect_model, c("parallel", "unrestricted"))
+  if (is.character(p$effect_model)) {
+    p$effect_model <- match.arg(p$effect_model, c("parallel", "unrestricted"))
+  }
   p$effect_kind <- if (is.character(p$effect_model)) p$effect_model else "formula"
   p$exper <- get_exper_default(p$exper, exper_arg_names())
   class(p) <- "locked"
@@ -231,7 +249,10 @@ second_stage_params <- function(base, args) {
 #'   `vcov`. Else the estimates of `result_type`, as `fastdid()` returns them.
 #' @export
 double_did <- function(fs, ..., w_cell = NULL, w_mean = NULL) {
-  if (!inherits(fs, "fastdid_first_stage")) stop("double_did needs a first stage: see first_stage().")
+  check_arg(w_cell, w_mean, "NULL data.frame")
+  if (!inherits(fs, "fastdid_first_stage")) {
+    stop("double_did needs a first stage: see first_stage().")
+  }
   p <- second_stage_params(fs$call, list(...))
   out <- run_double_did(fs, p, w_cell, w_mean)
   if (!is.null(w_cell) || !is.null(w_mean)) return(out$result)
@@ -258,7 +279,9 @@ run_double_did <- function(fs, p, w_cell = NULL, w_mean = NULL) {
     effect_diag <- ss$diag
     lin <- lin_compose(lin, ss$weight, ss$cc)
   }
-  if (!is.null(w_cell) || !is.null(w_mean)) return(custom_targets(fs, cells, att, lin, p, w_cell, w_mean))
+  if (!is.null(w_cell) || !is.null(w_mean)) {
+    return(custom_targets(fs, cells, att, lin, p, w_cell, w_mean))
+  }
 
   agg_sch <- get_agg_sch(cells, p)
   agg_att <- agg_sch$agg_weights %*% att
@@ -362,13 +385,16 @@ lin_inf <- function(fs, lin) {
   unc <- fs$unc
   if (inherits(unc, "unit_inf")) {
     out <- if (is.null(lin$W)) unc$inf else unc$inf %*% t(lin$W)
-    if (!is.null(lin$cc) && !is.null(unc$cohort)) out <- out + unc$w * lin$cc[unc$cohort, , drop = FALSE]
+    if (!is.null(lin$cc) && !is.null(unc$cohort)) {
+      out <- out + unc$w * lin$cc[unc$cohort, , drop = FALSE]
+    }
     return(out)
   }
   if (inherits(unc, "strata_inf")) {
     means <- fs$estimates[fs$estimates$kind == "mean"]
     J <- nrow(lin$W)
-    out <- vapply(seq_len(J), \(j) strata_unit_eval(unc, strata_lin_coef(unc, lin, j, means)), numeric(unc$N))
+    out <- vapply(seq_len(J), \(j) strata_unit_eval(unc, strata_lin_coef(unc, lin, j, means)),
+                  numeric(unc$N))
     return(matrix(out, unc$N, J))
   }
   stop("the first stage holds no influence function of the units.")
@@ -409,7 +435,10 @@ lin_se <- function(fs, lin, p) {
     s <- get_se(inf, list(cluster = fs$unc$cluster), p)
     return(list(se = s$se, crit_val = s$crit_val, inf = inf, vcov = crossprod(inf) / nrow(inf)^2))
   }
-  if (p$boot) stop("the bootstrap needs the influence functions of the units, which this first stage does not hold.")
+  if (p$boot) {
+    stop("the bootstrap needs the influence functions of the units, ",
+         "which this first stage does not hold.")
+  }
   V <- lin_vcov(fs, lin)
   return(list(se = sqrt(diag(V)), crit_val = stats::qnorm(1 - p$alpha / 2), inf = NULL, vcov = V))
 }

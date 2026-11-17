@@ -29,8 +29,8 @@ for (cv in list(NA, "x")) {
     cells <- fs$estimates[kind == "cell", .(G, G2, time, estimate)]
     shares <- dt[time == 1, .(share = .N / uniqueN(dt$unit)), by = .(G, G2)]
     dense <- as_first_stage(cells, shares, c("G", "G2"), "time", vcov = vcov(fs))
-    expect_equal(double_did(dense, event_specific = FALSE, w_cell = w), double_did(fs, w_cell = w), tolerance = 1e-10,
-                 info = "the dense path")
+    expect_equal(double_did(dense, event_specific = FALSE, w_cell = w), double_did(fs, w_cell = w),
+                 tolerance = 1e-10, info = "the dense path")
   }
 }
 
@@ -53,7 +53,8 @@ fs <- first_stage(ref <- fastdid(dt, "time", "G", "unit", "y", cohortvar2 = "G2"
 cells <- fs$estimates[kind == "cell", .(G, G2, time, estimate)]
 shares <- data_keys(fs$shares$G, 1L, c("G", "G2"), "time", fs$time_info)[, share := fs$shares$pg]
 unit_cohort <- data_keys(fs$cohorts[fs$unc$cohort], 1L, c("G", "G2"), "time", fs$time_info)
-ext <- as_first_stage(cells, shares, c("G", "G2"), "time", inf_func = fs$unc$inf, unit_cohort = unit_cohort)
+ext <- as_first_stage(cells, shares, c("G", "G2"), "time", inf_func = fs$unc$inf,
+                      unit_cohort = unit_cohort)
 fit <- fastdid(dt, "time", "G", "unit", "y", cohortvar2 = "G2", result_type = "dynamic")
 out <- double_did(ext, result_type = "dynamic")
 expect_equal(out$att, fit$att, tolerance = 1e-10, info = "another estimator, influence functions")
@@ -64,5 +65,6 @@ expect_equal(double_did(ext_v, result_type = "dynamic")$att, fit$att, tolerance 
 expect_error(double_did(ext_v, boot = TRUE), "bootstrap")
 
 # defenses
-expect_error(double_did(fs, w_cell = data.table(target = "no", G = 99, G2 = 99, time = 100, w = 1)), "not in the data")
+bad <- data.table(target = "no", G = 99, G2 = 99, time = 100, w = 1)
+expect_error(double_did(fs, w_cell = bad), "not in the data")
 expect_error(first_stage(fastdid(dt, "time", "G", "unit", "y")), "full = TRUE")

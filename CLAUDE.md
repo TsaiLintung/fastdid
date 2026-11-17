@@ -13,7 +13,7 @@ seconds.
 
 ## Public API
 
-fastdid exports four functions:
+fastdid exports seven functions:
 
 | Function | What it does |
 |---|---|
@@ -21,6 +21,9 @@ fastdid exports four functions:
 | `plot_did_dynamics()` | an event-study plot through ggplot2 |
 | `sim_did()` | simulates a staggered DiD dataset for testing |
 | `combine_cells()` | a target with its own weights on the cells of a `control_type = "strata"` result |
+| `first_stage()` | the first-stage object of a full result: the cells, the shares, and the uncertainty of the cells |
+| `as_first_stage()` | a first-stage object from the cells of another estimator, with the influence functions of its units or a covariance matrix |
+| `double_did()` | the second stage and the aggregation on a first-stage object, or custom weights on its cells and means |
 
 Key `fastdid()` parameters:
 
@@ -53,7 +56,8 @@ R/
 ├── aux_funcs.R        data coercion, aux data structures, locked lists
 ├── estimate_gtatt.R   core loop over cohorts and times
 ├── estimate_did.R     the 2x2 engine: IPW, OR, doubly robust, influence functions
-├── aggregate_gt.R     aggregates the cells to the target parameters, and their SEs
+├── first_stage.R      the first-stage object, double_did(), and the lazy linear map to the targets
+├── aggregate_gt.R     the aggregation schemes and the influence of the aggregation weights
 ├── second_stage.R     the cell table, and the second stage as weights over first-stage cells
 ├── effect_model.R     the formula-based second stage: design, WLS, estimability, diagnostics
 ├── strata.R           the strata first stage from means, its influence function, combine_cells()
@@ -72,7 +76,8 @@ fastdid()
   -> get_auxdata()      fast-access structures, clustered by time period
   -> estimate_gtatt()   per outcome: cohorts x times, then estimate_did(), or
                         estimate_gtatt_outcome_strata() for control_type = "strata"
-  -> aggregate_gt()     per outcome: get_cell_table(), second_stage(), then the targets and the SEs
+  -> new_first_stage()  per outcome: the cell table, the shares, and the uncertainty object
+  -> aggregate_gt()     per outcome: run_double_did(): second_stage(), the targets, and the SEs
   -> convert_targets()  map back to the original time and cohort scales
 ```
 
@@ -122,18 +127,42 @@ fastdid()
    `covariatesvar`. Every cell is a function of the sums of the outcome by
    cohort row, stratum, and period, and the control cohorts of a cell are a
    range of rows, so prefix sums over the rows give every control mean. The
-   influence function is a `strata_inf` object, not a matrix. The second stage
-   and the aggregation only multiply it on the right by a weight matrix,
-   through `apply_inf()`, which forms the influence function of each target
-   in one pass over the outcomes. The terms are those of `estimate_did_bp()`
-   with `control_type = "reg"` and one dummy for each stratum, with its
+   influence function is a `strata_inf` object, not a matrix. Within a group
+   of units with one cohort vector and stratum, it is linear in the outcome
+   path of the unit, so the targets need only its coefficients
+   (`strata_coef()`), never a matrix of the units times the cells. The
+   terms are those of `estimate_did_bp()` with `control_type = "reg"` and
+   one dummy for each stratum, with its
    small-group inflation, so the two paths agree to 1e-8
    (`inst/tinytest/test_9_strata.R`). Everything else is shared: validation,
    coercion, the base period, `get_control_range()`, the skip rules, the cell
    table, the second stage, and the standard errors. A result type with one
    target per cell (`group_time`) still builds a matrix of the targets times
    the cells, so a large panel needs a result type with few targets and
-   `combine_cells()`.
+   custom weights.
+11. **The first stage as an object.** `new_first_stage()` holds the cells,
+   the cohort shares, and one uncertainty object. The second stage reads
+   only this object, so `double_did()` runs on the cells of fastdid or of
+   another estimator. The uncertainty has four classes:
+   - `unit_inf`: the influence functions of the units (the 2x2 path, or
+     `as_first_stage(inf_func =)`).
+   - `strata_inf`: the strata object above.
+   - `strata_vcov`: the factored covariance of the strata path, from
+     `first_stage()`. It needs no unit data.
+   - a dense covariance matrix of the cells (`as_first_stage(vcov =)`). The
+     shares are fixed, and the bootstrap stops with an error.
+
+   The map to the targets is lazy (`lin = list(W, Wm, cc)`): the weights
+   on the cells, the weights on the means, and the influence of the shares,
+   which is constant within a cohort. `lin_compose()` adds each step, and
+   `lin_se()` evaluates the map once, for the targets.
+12. **The factored covariance.** For a group k of the strata path,
+   `strata_moments()` centers the outcome paths at the group mean, forms the
+   moments of `(1, y)`, and keeps the factor `F_k` of their eigen
+   decomposition. `F_k` has at most `min(n_k, T + 1)` rows, so the object is
+   small. The covariance of a target is `sum_k |F_k theta_k|^2 / N^2`. Do
+   not use the moments without the centering: at 150,000 units the standard
+   error then differs by 2e-3 in relative terms.
 
 ## Dependencies
 
